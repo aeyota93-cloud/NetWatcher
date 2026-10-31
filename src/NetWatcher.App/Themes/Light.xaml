@@ -29,6 +29,7 @@
     <SolidColorBrush x:Key="ToastTextBrush" Color="#FFFFFF" />
     <SolidColorBrush x:Key="ToastAccentBrush" Color="#9CCBF5" />
     <SolidColorBrush x:Key="DangerBrush" Color="#C42B1C" />
+    <SolidColorBrush x:Key="DangerSoftBrush" Color="#FDE7E9" />
     <!-- Marker: ThemeService finds our palette by this key (Fluent has its own Light/Dark files). -->
     <sys:String x:Key="NetWatcherPalette">Light</sys:String>
 </ResourceDictionary>

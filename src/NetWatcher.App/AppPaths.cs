@@ -10,6 +10,7 @@ internal static class AppPaths
     public static string Database => Path.Combine(DataDir, "log.db");
     public static string Settings => Path.Combine(DataDir, "settings.json");
     public static string AsnDatabase => Path.Combine(DataDir, Core.Asn.AsnDatabase.FileName);
+    public static string PeeringDbCache => Path.Combine(DataDir, "peeringdb.json");
 
     public static HttpClient Http { get; } = CreateHttp();
 

@@ -14,6 +14,9 @@ public enum QuickFilter
     OnlyNew = 16,
     HideMicrosoft = 32,
     Ipv4 = 64,
+
+    /// <summary>Destinations that do not answer, connect with retries or lose packets.</summary>
+    Problems = 128,
 }
 
 public static class QuickFilters
@@ -49,6 +52,7 @@ public static class QuickFilters
         if (f.HasFlag(QuickFilter.OnlyNew) && !r.IsNew) return false;
         if (f.HasFlag(QuickFilter.HideMicrosoft) && IsMicrosoft(r)) return false;
         if (f.HasFlag(QuickFilter.Ipv4) && r.RemoteIp.AddressFamily != AddressFamily.InterNetwork) return false;
+        if (f.HasFlag(QuickFilter.Problems) && !r.Health.IsProblem) return false;
         return true;
     }
 

@@ -12,7 +12,13 @@ public sealed record Observation(
     string Proto,
     IPAddress RemoteIp,
     int RemotePort,
-    DateTimeOffset Time);
+    DateTimeOffset Time,
+    bool Established = false,
+    int NoAnswer = 0,
+    int Retransmits = 0);
+
+/// <summary>A DNS question that failed: no such domain, no answer, server error, or a blocking answer.</summary>
+public sealed record DnsFailure(string Process, string Domain, int Status, DateTimeOffset Time);
 
 /// <summary>A DNS answer: the process asked for Domain and got Ip.</summary>
 public sealed record DnsObservation(string Process, string Domain, IPAddress Ip, DateTimeOffset Time);
@@ -32,6 +38,17 @@ public sealed class DestinationRow
     public DateTimeOffset FirstSeen { get; init; }
     public DateTimeOffset LastSeen { get; init; }
     public long Hits { get; init; }
+
+    /// <summary>How many times the TCP connection was seen fully open.</summary>
+    public long Established { get; init; }
+
+    /// <summary>Connection attempts left without an answer (stuck in SYN_SENT or retried).</summary>
+    public long NoAnswer { get; init; }
+
+    /// <summary>Packets the system had to send again: a sign of loss.</summary>
+    public long Retransmits { get; init; }
+
+    public Health Health => Health.Of(this);
 
     // Filled after reading from the log.
     public IReadOnlyList<string> Domains { get; set; } = [];
@@ -88,7 +105,7 @@ public sealed class DestinationRow
     private bool Has(string w) =>
         Contains(Process, w) || Contains(Services, w) || Contains(ServicesDisplay, w) || Contains(Path, w)
         || Contains(RemoteIpText, w) || RemotePort.ToString() == w || Contains(Proto, w)
-        || Domains.Any(d => Contains(d, w)) || Contains(OwnerText, w) || Contains(CountryText, w);
+        || Domains.Any(d => Contains(d, w)) || Contains(OwnerText, w) || Contains(Asn?.Owner ?? "", w) || Contains(CountryText, w);
 
     private static bool Contains(string text, string word) =>
         text.Contains(word, StringComparison.OrdinalIgnoreCase);

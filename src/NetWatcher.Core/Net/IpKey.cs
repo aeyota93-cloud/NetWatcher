@@ -66,6 +66,28 @@ public static class IpKey
         return true;
     }
 
+    /// <summary>Home and office networks, carrier NAT and link-local: not the internet.</summary>
+    public static bool IsPrivate(IPAddress ip)
+    {
+        ip = Normalize(ip);
+        if (IPAddress.IsLoopback(ip)) return true;
+        var b = ip.GetAddressBytes();
+        if (ip.AddressFamily == AddressFamily.InterNetwork)
+            return b[0] == 10
+                   || (b[0] == 172 && b[1] >= 16 && b[1] <= 31)
+                   || (b[0] == 192 && b[1] == 168)
+                   || (b[0] == 100 && b[1] >= 64 && b[1] <= 127)
+                   || (b[0] == 169 && b[1] == 254);
+        return (b[0] & 0xFE) == 0xFC || (b[0] == 0xFE && (b[1] & 0xC0) == 0x80);
+    }
+
+    /// <summary>0.0.0.0, 127.x and :: — what DNS filters answer for a blocked name.</summary>
+    public static bool IsSinkhole(IPAddress ip)
+    {
+        ip = Normalize(ip);
+        return ip.Equals(IPAddress.Any) || ip.Equals(IPAddress.IPv6Any) || IPAddress.IsLoopback(ip);
+    }
+
     /// <summary>
     /// Addresses not worth showing as a destination: unspecified, loopback,
     /// multicast and broadcast.

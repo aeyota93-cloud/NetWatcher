@@ -2,7 +2,7 @@
   <PropertyGroup>
     <LangVersion>latest</LangVersion>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <Version>0.1.1</Version>
+    <Version>0.2.0</Version>
     <Company>NetWatcher</Company>
     <Product>NetWatcher</Product>
   </PropertyGroup>

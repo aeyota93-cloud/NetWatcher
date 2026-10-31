@@ -22,6 +22,11 @@ internal sealed class Collector : IDisposable
     private DateTime _servicesAt = DateTime.MinValue;
     private DateTime _purgedAt = DateTime.MinValue;
 
+    // A connection attempt still waiting after this long counts as "no answer".
+    private static readonly TimeSpan SynTimeout = TimeSpan.FromSeconds(3);
+    private readonly Dictionary<(int Pid, int LocalPort, UInt128 Ip, int Port), DateTime> _synSince = [];
+    private readonly HashSet<(int, int, UInt128, int)> _synReported = [];
+
     public ServiceTable Services { get; } = new();
 
     public event Action? Ticked;
@@ -79,26 +84,69 @@ internal sealed class Collector : IDisposable
 
         var seen = new Dictionary<(int Pid, UInt128 Ip, int Port, string Proto), Observation>();
 
-        void Add(int pid, IPAddress ip, int port, string proto)
+        Observation? Add(int pid, IPAddress ip, int port, string proto)
         {
-            if (pid <= 0 || IpKey.IsUninteresting(ip, settings.HideLoopback)) return;
+            if (pid <= 0 || IpKey.IsUninteresting(ip, settings.HideLoopback)) return null;
             var key = (pid, IpKey.From(ip), port, proto);
-            if (seen.ContainsKey(key)) return;
+            if (seen.TryGetValue(key, out var existing)) return existing;
             var p = _processes.Get(pid);
-            seen[key] = new Observation(p.Name, Services.ForPid(pid), p.Path, proto, IpKey.Normalize(ip), port, now);
+            return seen[key] = new Observation(p.Name, Services.ForPid(pid), p.Path, proto, IpKey.Normalize(ip), port, now);
         }
 
+        void Update(int pid, IPAddress ip, int port, string proto, Func<Observation, Observation> change)
+        {
+            if (Add(pid, ip, port, proto) is not { } o) return;
+            seen[(pid, IpKey.From(ip), port, proto)] = change(o);
+        }
+
+        // TCP table: open connections, and attempts stuck without an answer.
+        var stillWaiting = new HashSet<(int, int, UInt128, int)>();
         foreach (var row in TcpTable.Read())
-            if (row.IsActive) Add(row.Pid, row.RemoteIp, row.RemotePort, "TCP");
+        {
+            if (!row.IsActive) continue;
+            Add(row.Pid, row.RemoteIp, row.RemotePort, "TCP");
+            if (row.State == TcpState.Established)
+                Update(row.Pid, row.RemoteIp, row.RemotePort, "TCP", o => o with { Established = true });
+            else if (row.State == TcpState.SynSent)
+            {
+                var key = (row.Pid, row.LocalPort, IpKey.From(row.RemoteIp), row.RemotePort);
+                stillWaiting.Add(key);
+                if (!_synSince.TryGetValue(key, out var since)) _synSince[key] = DateTime.UtcNow;
+                else if (DateTime.UtcNow - since >= SynTimeout && _synReported.Add(key))
+                    Update(row.Pid, row.RemoteIp, row.RemotePort, "TCP", o => o with { NoAnswer = o.NoAnswer + 1 });
+            }
+        }
+        foreach (var key in _synSince.Keys.Where(k => !stillWaiting.Contains(k)).ToList())
+        {
+            _synSince.Remove(key);
+            _synReported.Remove(key);
+        }
 
         foreach (var c in _etw.TakeConnections())
             Add(c.Pid, IpKey.ToAddress(c.Ip), c.Port, c.Proto);
+        foreach (var (c, n) in _etw.TakeReconnects())
+            Update(c.Pid, IpKey.ToAddress(c.Ip), c.Port, "TCP", o => o with { NoAnswer = o.NoAnswer + n });
+        foreach (var (c, n) in _etw.TakeRetransmits())
+            Update(c.Pid, IpKey.ToAddress(c.Ip), c.Port, "TCP", o => o with { Retransmits = o.Retransmits + n });
 
         var dns = new List<DnsObservation>();
+        var failures = new List<DnsFailure>();
         foreach (var d in _etw.TakeDns())
         {
             var process = _processes.Get(d.Pid).Name;
+            if (d.Status != 0)
+            {
+                if (DnsStatus.IsProblem(d.Status, d.Name)) failures.Add(new DnsFailure(process, d.Name, d.Status, d.Time));
+                continue;
+            }
             var (addresses, _) = DnsResultParser.Parse(d.Results);
+            if (addresses.Count > 0 && addresses.All(IpKey.IsSinkhole))
+            {
+                // 0.0.0.0 instead of an address: a DNS filter said "no".
+                if (DnsStatus.IsProblem(DnsStatus.BlockedAnswer, d.Name))
+                    failures.Add(new DnsFailure(process, d.Name, DnsStatus.BlockedAnswer, d.Time));
+                continue;
+            }
             foreach (var ip in addresses)
             {
                 dns.Add(new DnsObservation(process, d.Name, ip, d.Time));
@@ -107,6 +155,7 @@ internal sealed class Collector : IDisposable
         }
 
         _store.Write(seen.Values.ToList(), dns);
+        _store.WriteDnsFailures(failures);
 
         if (DateTime.UtcNow - _purgedAt > TimeSpan.FromHours(1))
         {

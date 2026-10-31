@@ -36,6 +36,10 @@ internal partial class MainWindow : Window
             SearchBox.Focus();
         };
         PreviewKeyDown += OnKey;
+        _vm.Diagnostics.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(DiagnosticsViewModel.IsOpen) && _vm.Diagnostics.IsOpen) FocusCheckBox();
+        };
     }
 
     private void OnKey(object sender, KeyEventArgs e)
@@ -55,6 +59,13 @@ internal partial class MainWindow : Window
         else if (e.Key == Key.F5)
         {
             _vm.RefreshCommand.Execute(null);
+        }
+        else if (ctrl && e.Key == Key.D)
+        {
+            // The selected row, or an empty form to type a site in.
+            if (Grid.SelectedItems.Count > 0) _vm.OpenCheckCommand.Execute(Grid.SelectedItems);
+            else _vm.OpenEmptyCheckCommand.Execute(null);
+            FocusCheckBox();
         }
         else if (ctrl && e.Key == Key.E)
         {
@@ -112,6 +123,25 @@ internal partial class MainWindow : Window
     }
 
     private void OnScrimClick(object sender, MouseButtonEventArgs e) => _vm.Export.IsOpen = false;
+
+    private void OnCheckScrimClick(object sender, MouseButtonEventArgs e) => _vm.Diagnostics.CloseCommand.Execute(null);
+
+    private void FocusCheckBox() =>
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (!_vm.Diagnostics.IsOpen || _vm.Diagnostics.IsRunning) return;
+            CheckBox.Focus();
+            CheckBox.SelectAll();
+        }, System.Windows.Threading.DispatcherPriority.Input);
+
+    /// <summary>The theme button opens its menu on a normal click, under the button.</summary>
+    private void OnThemeMenu(object sender, RoutedEventArgs e)
+    {
+        var menu = ThemeButton.ContextMenu;
+        menu.PlacementTarget = ThemeButton;
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        menu.IsOpen = true;
+    }
 
     private void OnSettings(object sender, RoutedEventArgs e)
     {

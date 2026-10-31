@@ -14,6 +14,8 @@ internal sealed class AppState : IDisposable
     public DnsIndex Dns { get; } = new();
     public Collector Collector { get; }
     public RdapClient Rdap { get; } = new(AppPaths.Http);
+    public PeeringDbClient PeeringDb { get; } = new(AppPaths.Http, AppPaths.PeeringDbCache);
+    public Core.Diagnostics.NetProbe Probe { get; } = new(AppPaths.Http);
 
     private volatile AsnDatabase _asn = AsnDatabase.Empty;
     public AsnDatabase Asn { get => _asn; set => _asn = value; }

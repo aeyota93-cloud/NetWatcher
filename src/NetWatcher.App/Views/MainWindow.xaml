@@ -44,6 +44,8 @@
             <MenuItem Header="Найти всё этой программы" Command="{Binding SearchProgramCommand}"
                       CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
             <Separator />
+            <MenuItem Header="Проверить соединение…" InputGestureText="Ctrl+D" Command="{Binding OpenCheckCommand}"
+                      CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
             <MenuItem Header="Подробно о сети (RDAP)" Command="{Binding RdapCommand}"
                       CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
             <MenuItem Header="Открыть папку программы" Command="{Binding OpenFolderCommand}"
@@ -208,13 +210,40 @@
                     Command="{Binding TogglePauseCommand}" ToolTip="Пауза: экран не обновляется, запись в журнал продолжается" />
 
             <StackPanel Grid.Column="5" Orientation="Horizontal">
+                <Button Style="{StaticResource Btn}" Height="36" Margin="0,0,8,0" Command="{Binding OpenEmptyCheckCommand}"
+                        ToolTip="Проверить, почему сайт или адрес не работает: DNS, подключение, блокировки, задержка, трасса (Ctrl+D)">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE9D9;" Style="{StaticResource Icon}" Margin="0,0,8,0" />
+                        <TextBlock Text="Проверить" />
+                    </StackPanel>
+                </Button>
                 <Button Style="{StaticResource Btn}" Height="36" Command="{Binding OpenExportCommand}" ToolTip="Ctrl+E">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#xE898;" Style="{StaticResource Icon}" Margin="0,0,8,0" />
                         <TextBlock Text="Экспорт списка" />
                     </StackPanel>
                 </Button>
-                <Button Style="{StaticResource BtnIcon}" Margin="8,0,0,0" Content="&#xE706;" Command="{Binding ToggleThemeCommand}" ToolTip="Светлая или тёмная тема" />
+                <Button x:Name="ThemeButton" Style="{StaticResource Btn}" Height="36" Padding="10,0" Margin="8,0,0,0" Click="OnThemeMenu"
+                        ToolTip="{Binding ThemeTitle}" AutomationProperties.Name="Тема оформления">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding ThemeGlyph}" Style="{StaticResource Icon}" FontSize="15" Foreground="{DynamicResource Text2Brush}" />
+                        <TextBlock Text="&#xE70D;" Style="{StaticResource Icon}" FontSize="9" Margin="6,2,0,0" Foreground="{DynamicResource Text3Brush}" />
+                    </StackPanel>
+                    <Button.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Как в Windows" IsCheckable="False" IsChecked="{Binding IsThemeSystem, Mode=OneWay}"
+                                      Command="{Binding SetThemeCommand}" CommandParameter="System">
+                                <MenuItem.Icon><TextBlock Text="&#xE7F4;" FontFamily="{StaticResource IconFont}" /></MenuItem.Icon>
+                            </MenuItem>
+                            <MenuItem Header="Светлая" IsChecked="{Binding IsThemeLight, Mode=OneWay}" Command="{Binding SetThemeCommand}" CommandParameter="Light">
+                                <MenuItem.Icon><TextBlock Text="&#xE706;" FontFamily="{StaticResource IconFont}" /></MenuItem.Icon>
+                            </MenuItem>
+                            <MenuItem Header="Тёмная" IsChecked="{Binding IsThemeDark, Mode=OneWay}" Command="{Binding SetThemeCommand}" CommandParameter="Dark">
+                                <MenuItem.Icon><TextBlock Text="&#xE708;" FontFamily="{StaticResource IconFont}" /></MenuItem.Icon>
+                            </MenuItem>
+                        </ContextMenu>
+                    </Button.ContextMenu>
+                </Button>
                 <Button Style="{StaticResource BtnIcon}" Margin="8,0,0,0" Content="&#xE713;" Click="OnSettings" ToolTip="Настройки" />
             </StackPanel>
         </Grid>
@@ -353,7 +382,16 @@
                                         <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Muted}" FontSize="12" TextTrimming="CharacterEllipsis" />
                                     </StackPanel>
                                     <StackPanel Grid.Column="2" VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding Count}" Style="{StaticResource Muted}" FontSize="12" HorizontalAlignment="Right" />
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                            <Border CornerRadius="8" Padding="5,0" Margin="0,0,6,0" Background="{DynamicResource DangerSoftBrush}"
+                                                    Visibility="{Binding HasProblems, Converter={StaticResource BoolToVis}}"
+                                                    ToolTip="Адреса, которые не отвечают или теряют пакеты (фильтр «Проблемные»)">
+                                                <TextBlock FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource DangerBrush}">
+                                                    <Run Text="&#xE7BA;" FontFamily="{StaticResource IconFont}" FontSize="10" /><Run Text=" " /><Run Text="{Binding Problems, Mode=OneWay}" />
+                                                </TextBlock>
+                                            </Border>
+                                            <TextBlock Text="{Binding Count}" Style="{StaticResource Muted}" FontSize="12" />
+                                        </StackPanel>
                                         <ItemsControl ItemsSource="{Binding Bars}" Height="14" HorizontalAlignment="Right" Margin="0,2,0,0"
                                                       ToolTip="Активность за последние 7 часов">
                                             <ItemsControl.ItemsPanel>
@@ -421,7 +459,13 @@
                                     <TextBlock><Run Text="Все адреса" /><Run Text=" " /><Run Text="{Binding AddressesCount, Mode=OneWay}" FontSize="11" Foreground="{DynamicResource Text3Brush}" FontWeight="Normal" /></TextBlock>
                                 </RadioButton>
                                 <RadioButton Style="{StaticResource Tab}" GroupName="tab" IsChecked="{Binding IsDnsTab}" ToolTip="Какие имена программа спрашивала и какие адреса получила">
-                                    <TextBlock><Run Text="Журнал DNS" /><Run Text=" " /><Run Text="{Binding DnsCount, Mode=OneWay}" FontSize="11" Foreground="{DynamicResource Text3Brush}" FontWeight="Normal" /></TextBlock>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock><Run Text="Журнал DNS" /><Run Text=" " /><Run Text="{Binding DnsCount, Mode=OneWay}" FontSize="11" Foreground="{DynamicResource Text3Brush}" FontWeight="Normal" /></TextBlock>
+                                        <Border CornerRadius="8" Padding="5,0" Margin="6,0,0,0" Background="{DynamicResource DangerSoftBrush}" VerticalAlignment="Center"
+                                                Visibility="{Binding HasDnsErrors, Converter={StaticResource BoolToVis}}" ToolTip="Неудачные DNS-запросы">
+                                            <TextBlock FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource DangerBrush}"><Run Text="ошибок: " /><Run Text="{Binding DnsErrors, Mode=OneWay}" /></TextBlock>
+                                        </Border>
+                                    </StackPanel>
                                 </RadioButton>
                             </StackPanel>
                         </Border>
@@ -442,6 +486,24 @@
                                         <DataGridTemplateColumn.CellTemplate>
                                             <DataTemplate DataType="{x:Type vm:TableItem}">
                                                 <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Width="18" FontFamily="{StaticResource IconFont}" FontSize="13" VerticalAlignment="Center"
+                                                               ToolTip="{Binding HealthReason}">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Text" Value="" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding Health}" Value="Warn">
+                                                                        <Setter Property="Text" Value="&#xE7BA;" />
+                                                                        <Setter Property="Foreground" Value="{DynamicResource WarnBrush}" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding Health}" Value="Fail">
+                                                                        <Setter Property="Text" Value="&#xEA39;" />
+                                                                        <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
                                                     <Grid Width="24">
                                                         <Button Style="{StaticResource BtnGhost}" Width="22" Height="22" FontSize="10" Content="{Binding Chevron}"
                                                                 Command="{Binding Data.ToggleCommand, Source={StaticResource Proxy}}" CommandParameter="{Binding}"
@@ -510,7 +572,7 @@
                                     <DataGridTemplateColumn Header="Владелец" Width="1.5*" SortMemberPath="Owner">
                                         <DataGridTemplateColumn.CellTemplate>
                                             <DataTemplate DataType="{x:Type vm:TableItem}">
-                                                <StackPanel Orientation="Horizontal" ToolTip="{Binding Owner}">
+                                                <StackPanel Orientation="Horizontal" ToolTip="{Binding OwnerRaw}">
                                                     <Border Style="{StaticResource Tag}" Margin="0,0,6,0" Visibility="{Binding HasCountry, Converter={StaticResource BoolToVis}}">
                                                         <TextBlock Text="{Binding Country}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource Text2Brush}" />
                                                     </Border>
@@ -544,7 +606,25 @@
                                     <DataGridTextColumn Header="Домен" Binding="{Binding Domain}" Width="1.6*" FontWeight="SemiBold" />
                                     <DataGridTextColumn Header="Программа" Binding="{Binding Program}" Width="1*"
                                                         Visibility="{Binding Data.ShowProgramColumn, Source={StaticResource Proxy}, Converter={StaticResource BoolToVis}}" />
-                                    <DataGridTextColumn Header="Ответ: адреса" Binding="{Binding Addresses}" Width="2*" FontFamily="{StaticResource MonoFont}" />
+                                    <DataGridTemplateColumn Header="Ответ" Width="2*">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate DataType="{x:Type vm:DnsItem}">
+                                                <TextBlock Text="{Binding Addresses}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Addresses}">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsError}" Value="True">
+                                                                    <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+                                                                    <Setter Property="FontFamily" Value="Segoe UI" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
                                     <DataGridTextColumn Header="Когда" Binding="{Binding When}" Width="92" />
                                 </DataGrid.Columns>
                             </DataGrid>
@@ -741,7 +821,7 @@
                                         <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
                                     <Grid.RowDefinitions>
-                                        <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
+                                        <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
                                     </Grid.RowDefinitions>
                                     <Grid.Resources>
                                         <Style TargetType="TextBlock">
@@ -751,7 +831,7 @@
                                         </Style>
                                     </Grid.Resources>
                                     <TextBlock Text="Владелец" Foreground="{DynamicResource Text3Brush}" />
-                                    <TextBlock Grid.Column="1" Text="{Binding D[Owner]}" />
+                                    <TextBlock Grid.Column="1" Text="{Binding D[Owner]}" ToolTip="{Binding D[OwnerRaw]}" />
                                     <TextBlock Grid.Row="1" Text="Страна" Foreground="{DynamicResource Text3Brush}" />
                                     <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding D[Country]}" />
                                     <TextBlock Grid.Row="2" Text="Протокол" Foreground="{DynamicResource Text3Brush}" />
@@ -760,10 +840,47 @@
                                     <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding D[First]}" />
                                     <TextBlock Grid.Row="4" Text="Последний раз" Foreground="{DynamicResource Text3Brush}" />
                                     <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding D[Last]}" />
+                                    <TextBlock Grid.Row="5" Text="Состояние" Foreground="{DynamicResource Text3Brush}" />
+                                    <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding D[Health]}">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="FontSize" Value="12" />
+                                                <Setter Property="Margin" Value="0,2,14,2" />
+                                                <Setter Property="TextWrapping" Value="Wrap" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding D[HealthLevel]}" Value="Fail">
+                                                        <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+                                                        <Setter Property="FontWeight" Value="SemiBold" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding D[HealthLevel]}" Value="Warn">
+                                                        <Setter Property="Foreground" Value="{DynamicResource WarnBrush}" />
+                                                        <Setter Property="FontWeight" Value="SemiBold" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding D[HealthLevel]}" Value="Ok">
+                                                        <Setter Property="Foreground" Value="{DynamicResource OkBrush}" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
                                 </Grid>
                             </Border>
 
                             <WrapPanel Margin="0,0,0,12">
+                                <Button Style="{StaticResource BtnPrimarySmall}" Margin="0,0,8,8" Command="{Binding OpenCheckCommand}"
+                                        ToolTip="Почему не работает: DNS, подключение, блокировка по имени, задержка, трасса (Ctrl+D)">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE9D9;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,6,0" />
+                                        <TextBlock Text="Проверить соединение" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Style="{StaticResource BtnSmall}" Margin="0,0,8,8" Command="{Binding PeeringDbCommand}"
+                                        ToolTip="Кто владелец сети: название и тип по открытому справочнику PeeringDB">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE779;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,6,0" />
+                                        <TextBlock Text="Владелец (PeeringDB)" />
+                                    </StackPanel>
+                                </Button>
                                 <Button Style="{StaticResource BtnSmall}" Margin="0,0,8,8" Command="{Binding RdapCommand}" ToolTip="Спросить у реестра IP-адресов (RIPE, ARIN…) точный блок и организацию">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="&#xE774;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,6,0" />
@@ -777,6 +894,18 @@
                                     </StackPanel>
                                 </Button>
                             </WrapPanel>
+
+                            <Border Style="{StaticResource Card}" Margin="0,0,0,12" Visibility="{Binding HasPdb, Converter={StaticResource BoolToVis}}">
+                                <DockPanel>
+                                    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                                        <Button DockPanel.Dock="Right" Style="{StaticResource BtnGhost}" Content="&#xE8C8;" ToolTip="Копировать"
+                                                Command="{Binding CopyValueCommand}" CommandParameter="{Binding D[Pdb]}" />
+                                        <TextBlock Text="ВЛАДЕЛЕЦ СЕТИ (PEERINGDB)" Style="{StaticResource Caption}" VerticalAlignment="Center" />
+                                    </DockPanel>
+                                    <TextBox Text="{Binding D[Pdb], Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                                             Foreground="{DynamicResource TextBrush}" FontSize="12" TextWrapping="Wrap" />
+                                </DockPanel>
+                            </Border>
 
                             <Border Style="{StaticResource Card}" Margin="0,0,0,12" Visibility="{Binding HasRdap, Converter={StaticResource BoolToVis}}">
                                 <DockPanel>
@@ -902,6 +1031,192 @@
                 </Button>
             </StackPanel>
         </Border>
+
+        <!-- ============ Connection check side panel ============ -->
+        <Grid Grid.RowSpan="5" DataContext="{Binding Diagnostics}" Visibility="{Binding IsOpen, Converter={StaticResource BoolToVis}}">
+            <Border Background="#47000000" MouseLeftButtonDown="OnCheckScrimClick" />
+            <Border Width="660" HorizontalAlignment="Right" Background="{DynamicResource LayerBrush}">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="24" ShadowDepth="0" Opacity="0.35" />
+                </Border.Effect>
+                <DockPanel>
+                    <DockPanel DockPanel.Dock="Top" Margin="20,18,20,12">
+                        <Button DockPanel.Dock="Right" Style="{StaticResource BtnGhost}" Content="&#xE711;" ToolTip="Закрыть (Esc)" Command="{Binding CloseCommand}" />
+                        <TextBlock Text="&#xE9D9;" Style="{StaticResource Icon}" FontSize="18" Margin="0,0,10,0" />
+                        <TextBlock Text="Проверка соединения" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    </DockPanel>
+
+                    <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="0,1,0,0" Padding="20,12">
+                        <DockPanel>
+                            <Button DockPanel.Dock="Left" Style="{StaticResource Btn}" Command="{Binding CopyCommand}" IsEnabled="{Binding HasVerdict}"
+                                    ToolTip="Текст для отправки в чат: итог, шаги и трасса">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE8C8;" Style="{StaticResource Icon}" Margin="0,0,8,0" />
+                                    <TextBlock Text="Копировать отчёт" />
+                                </StackPanel>
+                            </Button>
+                            <TextBlock Text="С включённым VPN проверка идёт через него." Style="{StaticResource Faint}" FontSize="12"
+                                       VerticalAlignment="Center" HorizontalAlignment="Right" TextWrapping="Wrap" Margin="12,0,0,0" />
+                        </DockPanel>
+                    </Border>
+
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="20,0,20,16">
+                        <StackPanel>
+                            <!-- What to check -->
+                            <DockPanel Margin="0,0,0,6">
+                                <Grid DockPanel.Dock="Right" Margin="8,0,0,0">
+                                    <Button Style="{StaticResource BtnPrimary}" Height="36" Content="Проверить" Command="{Binding RunCommand}"
+                                            Visibility="{Binding IsRunning, Converter={StaticResource NotVis}}" />
+                                    <Button Style="{StaticResource Btn}" Height="36" Content="Остановить" Command="{Binding StopCommand}"
+                                            Visibility="{Binding IsRunning, Converter={StaticResource BoolToVis}}" />
+                                </Grid>
+                                <Border Height="36" CornerRadius="6" Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource Stroke2Brush}" BorderThickness="1,1,1,2">
+                                    <Grid Margin="10,0">
+                                        <TextBox x:Name="CheckBox" Style="{StaticResource BareTextBox}" Text="{Binding Target, UpdateSourceTrigger=PropertyChanged}"
+                                                 AutomationProperties.Name="Что проверить">
+                                            <TextBox.InputBindings>
+                                                <KeyBinding Key="Enter" Command="{Binding RunCommand}" />
+                                            </TextBox.InputBindings>
+                                        </TextBox>
+                                        <TextBlock Text="Сайт или адрес: youtube.com, 1.2.3.4, example.com:8443" Style="{StaticResource Faint}" FontSize="14"
+                                                   VerticalAlignment="Center" IsHitTestVisible="False"
+                                                   Visibility="{Binding Text, ElementName=CheckBox, Converter={StaticResource TextVis}, ConverterParameter=invert}" />
+                                    </Grid>
+                                </Border>
+                            </DockPanel>
+                            <TextBlock Text="{Binding Error}" Foreground="{DynamicResource DangerBrush}" TextWrapping="Wrap" Margin="0,0,0,6"
+                                       Visibility="{Binding Error, Converter={StaticResource TextVis}}" />
+
+                            <!-- Verdict -->
+                            <Border CornerRadius="8" Padding="14,12" Margin="0,8,0,14" BorderThickness="1"
+                                    Visibility="{Binding HasVerdict, Converter={StaticResource BoolToVis}}">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="{DynamicResource OkSoftBrush}" />
+                                        <Setter Property="BorderBrush" Value="{DynamicResource OkBrush}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Level}" Value="Warn">
+                                                <Setter Property="Background" Value="{DynamicResource WarnSoftBrush}" />
+                                                <Setter Property="BorderBrush" Value="{DynamicResource WarnStrokeBrush}" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Level}" Value="Fail">
+                                                <Setter Property="Background" Value="{DynamicResource DangerSoftBrush}" />
+                                                <Setter Property="BorderBrush" Value="{DynamicResource DangerBrush}" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <DockPanel>
+                                    <TextBlock DockPanel.Dock="Left" FontFamily="{StaticResource IconFont}" FontSize="22" Margin="0,2,12,0" VerticalAlignment="Top">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Text" Value="&#xE930;" />
+                                                <Setter Property="Foreground" Value="{DynamicResource OkBrush}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Level}" Value="Warn">
+                                                        <Setter Property="Text" Value="&#xE7BA;" />
+                                                        <Setter Property="Foreground" Value="{DynamicResource WarnBrush}" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Level}" Value="Fail">
+                                                        <Setter Property="Text" Value="&#xEA39;" />
+                                                        <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding VerdictTitle}" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding VerdictText}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+
+                            <!-- Steps -->
+                            <ItemsControl ItemsSource="{Binding Steps}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:StepView}">
+                                        <Border Style="{StaticResource Card}" Padding="12,9" Margin="0,0,0,6">
+                                            <DockPanel>
+                                                <TextBlock DockPanel.Dock="Left" Width="22" FontFamily="{StaticResource IconFont}" FontSize="14" VerticalAlignment="Top" Margin="0,2,8,0">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Text" Value="&#xEA3A;" />
+                                                            <Setter Property="Foreground" Value="{DynamicResource Text3Brush}" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding Status}" Value="Running">
+                                                                    <Setter Property="Text" Value="&#xE895;" />
+                                                                    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding Status}" Value="Ok">
+                                                                    <Setter Property="Text" Value="&#xE73E;" />
+                                                                    <Setter Property="Foreground" Value="{DynamicResource OkBrush}" />
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding Status}" Value="Warn">
+                                                                    <Setter Property="Text" Value="&#xE7BA;" />
+                                                                    <Setter Property="Foreground" Value="{DynamicResource WarnBrush}" />
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding Status}" Value="Fail">
+                                                                    <Setter Property="Text" Value="&#xEA39;" />
+                                                                    <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding Status}" Value="Skipped">
+                                                                    <Setter Property="Text" Value="&#xE738;" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                                <TextBlock DockPanel.Dock="Left" Text="{Binding Title}" FontWeight="SemiBold" Width="170" VerticalAlignment="Top" />
+                                                <TextBlock Text="{Binding Text}" TextWrapping="Wrap" Style="{StaticResource Muted}" />
+                                            </DockPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <!-- Route -->
+                            <StackPanel Visibility="{Binding HasHops, Converter={StaticResource BoolToVis}}" Margin="0,10,0,0">
+                                <TextBlock Text="ТРАССА — ПУТЬ ПАКЕТОВ ПО УЗЛАМ" Style="{StaticResource Caption}" />
+                                <TextBlock Style="{StaticResource Faint}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,6"
+                                           Text="«*» — узел не отвечает на трассировку; посередине пути это обычно нормально. Важно, после какого узла не отвечает никто." />
+                                <Border Style="{StaticResource Card}" Padding="0">
+                                    <ItemsControl ItemsSource="{Binding Hops}" Margin="0,4">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="{x:Type vm:HopView}">
+                                                <Grid Margin="12,3">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="28" />
+                                                        <ColumnDefinition Width="170" />
+                                                        <ColumnDefinition Width="64" />
+                                                        <ColumnDefinition Width="50" />
+                                                        <ColumnDefinition Width="*" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <Grid.Style>
+                                                        <Style TargetType="Grid">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding Silent}" Value="True">
+                                                                    <Setter Property="Opacity" Value="0.5" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Grid.Style>
+                                                    <TextBlock Text="{Binding Ttl}" Style="{StaticResource Faint}" />
+                                                    <TextBlock Grid.Column="1" Text="{Binding Address}" FontFamily="{StaticResource MonoFont}" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Grid.Column="2" Text="{Binding Time}" Style="{StaticResource Muted}" />
+                                                    <TextBlock Grid.Column="3" Text="{Binding Loss}" Foreground="{DynamicResource WarnBrush}" />
+                                                    <TextBlock Grid.Column="4" Text="{Binding Owner}" Style="{StaticResource Muted}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Owner}" />
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </Border>
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </Grid>
 
         <!-- ============ Export side panel ============ -->
         <Grid Grid.RowSpan="5" DataContext="{Binding Export}" Visibility="{Binding IsOpen, Converter={StaticResource BoolToVis}}">

@@ -24,7 +24,7 @@ public class LookupTests
     {
         var info = Db().Lookup(IPAddress.Parse("142.250.74.110"))!;
         Assert.Equal(15169, info.Asn);
-        Assert.Equal("AS15169 GOOGLE", info.OwnerText);
+        Assert.Equal("AS15169 · Google", info.OwnerText);
         Assert.Equal("142.250.0.0/15", info.NetworkOf(IPAddress.Parse("142.250.74.110")).ToString());
     }
 

@@ -23,7 +23,11 @@ public sealed record AsnInfo(
 
     public string AsnText => Asn > 0 ? "AS" + Asn : "";
 
-    public string OwnerText => Asn > 0 ? $"AS{Asn} {Owner}" : Owner;
+    /// <summary>"Microsoft" instead of "MICROSOFT-CORP-MSN-AS-BLOCK".</summary>
+    public string Name => AsnNames.Display(Asn, Owner);
+
+    /// <summary>"AS8075 · Microsoft".</summary>
+    public string OwnerText => Asn > 0 ? $"AS{Asn} · {Name}" : Name;
 }
 
 /// <summary>

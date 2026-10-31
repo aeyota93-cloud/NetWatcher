@@ -84,6 +84,20 @@ public sealed class NavItem : ObservableObject
     public string Count { get => _count; set => Set(ref _count, value); }
     public bool IsNew { get => _isNew; set => Set(ref _isNew, value); }
 
+    private int _problems;
+
+    /// <summary>Destinations of this program that do not answer or lose packets.</summary>
+    public int Problems
+    {
+        get => _problems;
+        set
+        {
+            if (Set(ref _problems, value)) OnPropertyChanged(nameof(HasProblems));
+        }
+    }
+
+    public bool HasProblems => _problems > 0;
+
     /// <summary>Heights in pixels of the small activity bars, oldest first.</summary>
     public IReadOnlyList<double> Bars { get => _bars; set => Set(ref _bars, value); }
 }
@@ -115,6 +129,8 @@ public sealed class TableItem : ObservableObject
     private bool _isNew;
     private DateTime _lastSeen;
     private long _hits;
+    private HealthLevel _health;
+    private string _healthReason = "";
 
     public TableItem(string key, ItemKind kind)
     {
@@ -142,6 +158,13 @@ public sealed class TableItem : ObservableObject
     public long Hits { get => _hits; private set => Set(ref _hits, value); }
     public bool IsNew { get => _isNew; private set => Set(ref _isNew, value); }
     public bool IsExpanded { get => _isExpanded; set => Set(ref _isExpanded, value); }
+
+    /// <summary>Worst state among the rows: drives the ⚠ / ✕ mark.</summary>
+    public HealthLevel Health { get => _health; private set => Set(ref _health, value); }
+    public string HealthReason { get => _healthReason; private set => Set(ref _healthReason, value); }
+
+    /// <summary>The raw registry name, for the tooltip.</summary>
+    public string OwnerRaw => Rows.Count > 0 && Rows[0].Asn is { } a ? $"{a.OwnerText}\nВ реестре: {a.Owner}" : "";
 
     /// <summary>Chevron for groups: ▾ open, ▸ closed.</summary>
     public string Chevron => IsGroup ? (IsExpanded ? "" : "") : "";
@@ -180,7 +203,11 @@ public sealed class TableItem : ObservableObject
         When = TextFormat.Relative(now, last, liveWindow);
         Hits = rows.Sum(r => r.Hits);
         IsNew = rows.Any(r => r.IsNew);
+        var health = Core.Health.Worst(rows.Select(r => r.Health));
+        Health = health.Level;
+        HealthReason = health.Reason;
         OnPropertyChanged(nameof(Chevron));
+        OnPropertyChanged(nameof(OwnerRaw));
     }
 
     /// <summary>Tab-separated lines for pasting into a spreadsheet.</summary>
@@ -191,4 +218,4 @@ public sealed class TableItem : ObservableObject
 }
 
 /// <summary>A line of the DNS journal: the program asked for a name and got these addresses.</summary>
-public sealed record DnsItem(string Domain, string Program, string Addresses, string When);
+public sealed record DnsItem(string Domain, string Program, string Addresses, string When, bool IsError = false);

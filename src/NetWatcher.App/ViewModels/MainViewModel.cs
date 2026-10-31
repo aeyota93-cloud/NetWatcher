@@ -39,6 +39,7 @@ internal sealed class MainViewModel : ObservableObject
     private Dictionary<string, DateTimeOffset> _firstSeen = [];
     private Dictionary<string, DateTimeOffset> _groupFirstSeen = [];
     private Dictionary<string, int[]> _activity = [];
+    private List<Core.Storage.LogStore.DnsFailureRow> _dnsFailures = [];
 
     public MainViewModel(AppState state)
     {
@@ -63,6 +64,7 @@ internal sealed class MainViewModel : ObservableObject
             new("UDP", QuickFilter.Udp, "Только UDP: QUIC/HTTP3, звонки, игры, DNS"),
             new("С доменом", QuickFilter.WithDomain, "Адреса, для которых известен домен"),
             new("Без домена", QuickFilter.NoDomain, "Программа обращается напрямую по IP — стоит присмотреться"),
+            new("Проблемные", QuickFilter.Problems, "Адреса, которые не отвечают, подключаются с повторами или теряют пакеты; в журнале DNS — ошибки"),
             new("Только новые", QuickFilter.OnlyNew, "Адреса, на которые программа впервые пошла за последние сутки"),
             new("Скрыть Microsoft", QuickFilter.HideMicrosoft, "Убрать обращения к сетям и доменам Microsoft"),
             new("Только IPv4", QuickFilter.Ipv4, "Скрыть адреса IPv6"),
@@ -73,6 +75,7 @@ internal sealed class MainViewModel : ObservableObject
         _selectedNav = Nav[0];
 
         Export = new ExportViewModel(() => VisibleRows.ToList(), Copy);
+        Diagnostics = new DiagnosticsViewModel(state, Copy);
 
         _refreshTimer = new DispatcherTimer();
         _refreshTimer.Tick += (_, _) => _ = RefreshAsync();
@@ -120,12 +123,18 @@ internal sealed class MainViewModel : ObservableObject
             _bannerHidden = true;
             OnPropertyChanged(nameof(AsnBannerVisible));
         });
-        ToggleThemeCommand = new RelayCommand(() =>
+        SetThemeCommand = new RelayCommand(p =>
         {
-            _state.Settings.Theme = ThemeService.IsDark ? "Light" : "Dark";
+            if (p is not string mode) return;
+            _state.Settings.Theme = mode;
             _state.SaveSettings();
-            ThemeService.Apply(_state.Settings.Theme);
+            ThemeService.Apply(mode);
+            foreach (var n in new[] { nameof(ThemeGlyph), nameof(IsThemeSystem), nameof(IsThemeLight), nameof(IsThemeDark), nameof(ThemeTitle) })
+                OnPropertyChanged(n);
         });
+        OpenCheckCommand = new RelayCommand(p => Diagnostics.Open(CheckTargetOf(Items(p).FirstOrDefault() ?? (p == null ? SelectedItem : null))));
+        OpenEmptyCheckCommand = new RelayCommand(() => Diagnostics.Open(null));
+        PeeringDbCommand = new RelayCommand(() => _ = PeeringDbAsync(SelectedItem?.Rows.FirstOrDefault()?.Asn?.Asn));
         TogglePauseCommand = new RelayCommand(() => Paused = !Paused);
     }
 
@@ -232,7 +241,8 @@ internal sealed class MainViewModel : ObservableObject
     /// <summary>Esc: close the export panel, else clear search and filters.</summary>
     public void Escape()
     {
-        if (Export.IsOpen) Export.IsOpen = false;
+        if (Diagnostics.IsOpen) Diagnostics.CloseCommand.Execute(null);
+        else if (Export.IsOpen) Export.IsOpen = false;
         else ResetFilters();
     }
 
@@ -299,6 +309,7 @@ internal sealed class MainViewModel : ObservableObject
             item.Count = $"{item.Addresses} адр.";
             item.LastSeen = g.Max(r => r.LastSeen);
             item.IsNew = newSince is { } s && _groupFirstSeen.TryGetValue(g.Key, out var f) && f >= s;
+            item.Problems = g.Count(r => r.Health.IsProblem);
             item.Bars = (_activity.GetValueOrDefault(g.Key) ?? new int[7])
                 .Select(v => v == 0 ? 1.0 : 2 + 12 * Math.Sqrt(v / (double)maxActivity)).ToList();
             _groupTitles[g.Key] = item.Title;
@@ -391,6 +402,9 @@ internal sealed class MainViewModel : ObservableObject
     public string DomainsCount { get => _domainsCount; private set => Set(ref _domainsCount, value); }
     private string _addressesCount = "";
     public string AddressesCount { get => _addressesCount; private set => Set(ref _addressesCount, value); }
+    private int _dnsErrors;
+    public int DnsErrors { get => _dnsErrors; private set { if (Set(ref _dnsErrors, value)) OnPropertyChanged(nameof(HasDnsErrors)); } }
+    public bool HasDnsErrors => _dnsErrors > 0;
     private string _dnsCount = "";
     public string DnsCount { get => _dnsCount; private set => Set(ref _dnsCount, value); }
 
@@ -482,17 +496,29 @@ internal sealed class MainViewModel : ObservableObject
         var words = DestinationRow.SplitQuery(SearchText);
         var answers = _state.Dns.Answers(process == null ? null : p => string.Equals(p, process, StringComparison.OrdinalIgnoreCase), since);
         var now = DateTimeOffset.Now;
-        var list = answers
-            .Select(a => new DnsItem(
-                a.Domain,
-                AppInfo.FriendlyName(a.Process, ""),
-                string.Join(", ", a.Addresses.Take(6)) + (a.Addresses.Count > 6 ? $" и ещё {a.Addresses.Count - 6}" : ""),
-                TextFormat.Relative(now, a.LastSeen, LiveWindow)))
+        var onlyErrors = Filters.HasFlag(QuickFilter.Problems);
+        var good = onlyErrors ? [] : answers.Select(a => (Time: a.LastSeen, Item: new DnsItem(
+            a.Domain,
+            AppInfo.FriendlyName(a.Process, ""),
+            string.Join(", ", a.Addresses.Take(6)) + (a.Addresses.Count > 6 ? $" и ещё {a.Addresses.Count - 6}" : ""),
+            TextFormat.Relative(now, a.LastSeen, LiveWindow))));
+        var bad = _dnsFailures
+            .Where(f => process == null || string.Equals(f.Process, process, StringComparison.OrdinalIgnoreCase))
+            .Select(f => (Time: f.LastSeen, Item: new DnsItem(
+                f.Domain,
+                AppInfo.FriendlyName(f.Process, ""),
+                "✗ " + DnsStatus.Describe(f.Status) + (f.Hits > 1 ? $" ({TextFormat.Plural(f.Hits, "раз", "раза", "раз")})" : ""),
+                TextFormat.Relative(now, f.LastSeen, LiveWindow),
+                IsError: true)));
+        var list = good.Concat(bad)
+            .OrderByDescending(x => x.Time)
+            .Select(x => x.Item)
             .Where(d => words.All(w => d.Domain.Contains(w, StringComparison.OrdinalIgnoreCase)
                                        || d.Program.Contains(w, StringComparison.OrdinalIgnoreCase)
                                        || d.Addresses.Contains(w, StringComparison.OrdinalIgnoreCase)))
             .Take(2000)
             .ToList();
+        DnsErrors = list.Count(d => d.IsError);
         DnsCount = list.Count.ToString();
         if (_tab != 2) return;
         DnsItems.Clear();
@@ -537,6 +563,7 @@ internal sealed class MainViewModel : ObservableObject
                     : period.Span is { } span ? now - span
                     : DateTimeOffset.FromUnixTimeMilliseconds(0);
                 var list = _state.Store.Query(from);
+                _dnsFailures = _state.Store.DnsFailures(period.Live ? now.AddMinutes(-15) : from);
                 Analysis.Enrich(list, _state.Dns, asn, names);
                 Analysis.MarkNew(list, _firstSeen, Analysis.NewSince(now, _logStart));
                 var totalIps = list.Select(r => r.RemoteIp).Distinct().Count();
@@ -618,9 +645,11 @@ internal sealed class MainViewModel : ObservableObject
     {
         var keepRdap = _details.GetValueOrDefault("RdapFor");
         var rdap = _details.GetValueOrDefault("Rdap", "");
+        var keepPdb = (For: _details.GetValueOrDefault("PdbFor"), Text: _details.GetValueOrDefault("Pdb", ""));
         _details.Clear();
         var item = SelectedItem;
         HasRdap = false;
+        HasPdb = false;
 
         if (item == null)
         {
@@ -656,6 +685,27 @@ internal sealed class MainViewModel : ObservableObject
             _details["Network"] = string.Join(Environment.NewLine, rows.Select(r => r.NetworkText(Format)).Where(n => n != "").Distinct());
             _details["NetworkLabel"] = rows.Select(r => r.NetworkText(Format)).Where(n => n != "").Distinct().Count() > 1 ? "Сети владельцев" : "Сеть владельца";
             _details["Owner"] = first.Asn?.OwnerText is { Length: > 0 } o ? o : "неизвестен";
+            _details["OwnerRaw"] = first.Asn != null ? "В реестре: " + first.Asn.Owner : "";
+            var health = Health.Worst(rows.Select(r => r.Health));
+            _details["Health"] = health.Level switch
+            {
+                HealthLevel.Fail or HealthLevel.Warn => health.Reason,
+                HealthLevel.Ok => "соединение устанавливается",
+                _ => first.Proto == "UDP" ? "UDP — без подтверждений, судить нельзя; нажмите «Проверить»" : "мало данных",
+            };
+            _details["HealthLevel"] = health.Level.ToString();
+            if (keepPdb.For == first.Asn?.Asn.ToString() && keepPdb.For != null)
+            {
+                _details["PdbFor"] = keepPdb.For;
+                _details["Pdb"] = keepPdb.Text;
+                HasPdb = true;
+            }
+            else if (first.Asn is { } a && _state.PeeringDb.Cached(a.Asn) is { } cachedNet)
+            {
+                _details["PdbFor"] = a.Asn.ToString();
+                _details["Pdb"] = cachedNet.ToText();
+                HasPdb = true;
+            }
             _details["Country"] = CountryName(first.CountryText);
             _details["Protocol"] = string.Join(", ", rows.Select(r => TextFormat.Port(r.Proto, r.RemotePort)).Distinct().Take(4));
             _details["First"] = When(rows.Min(r => r.FirstSeen));
@@ -916,7 +966,54 @@ internal sealed class MainViewModel : ObservableObject
     public RelayCommand OpenOwnerExportCommand { get; }
     public RelayCommand DownloadAsnCommand { get; }
     public RelayCommand HideBannerCommand { get; }
-    public RelayCommand ToggleThemeCommand { get; }
+    public RelayCommand SetThemeCommand { get; }
+    public RelayCommand OpenCheckCommand { get; }
+    public RelayCommand OpenEmptyCheckCommand { get; }
+    public RelayCommand PeeringDbCommand { get; }
+
+    public DiagnosticsViewModel Diagnostics { get; }
+
+    // ---- theme menu ----
+    public string ThemeGlyph => _state.Settings.Theme switch { "Light" => "\uE706", "Dark" => "\uE708", _ => "\uE7F4" };
+    public string ThemeTitle => _state.Settings.Theme switch { "Light" => "Тема: светлая", "Dark" => "Тема: тёмная", _ => "Тема: как в Windows" };
+    public bool IsThemeSystem => _state.Settings.Theme == "System";
+    public bool IsThemeLight => _state.Settings.Theme == "Light";
+    public bool IsThemeDark => _state.Settings.Theme == "Dark";
+
+    /// <summary>"youtube.com" or "1.2.3.4:8080" for the check panel.</summary>
+    private static string? CheckTargetOf(TableItem? item)
+    {
+        var r = item?.Rows.FirstOrDefault();
+        if (r == null) return null;
+        var host = r.PrimaryDomain != "" ? r.PrimaryDomain : r.RemoteIp.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6 ? $"[{r.RemoteIpText}]" : r.RemoteIpText;
+        return r.RemotePort == 443 ? host : $"{host}:{r.RemotePort}";
+    }
+
+    private async Task PeeringDbAsync(int? asn)
+    {
+        if (asn is not { } n || n <= 0) return;
+        void Show(string text)
+        {
+            _details["PdbFor"] = n.ToString();
+            _details["Pdb"] = text;
+            HasPdb = true;
+            OnPropertyChanged(nameof(D));
+        }
+        Show("Запрос к PeeringDB…");
+        try
+        {
+            var net = await _state.PeeringDb.LookupAsync(n);
+            Show(net?.ToText() ?? $"AS{n} нет в PeeringDB — сеть не публикует сведения о себе.");
+            _ = RefreshAsync(); // the learnt name shows up in the table
+        }
+        catch (Exception e)
+        {
+            Show("Не удалось получить данные: " + e.Message);
+        }
+    }
+
+    private bool _hasPdb;
+    public bool HasPdb { get => _hasPdb; private set => Set(ref _hasPdb, value); }
     public RelayCommand TogglePauseCommand { get; }
 }
 

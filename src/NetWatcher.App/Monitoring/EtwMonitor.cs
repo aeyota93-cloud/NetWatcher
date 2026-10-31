@@ -9,7 +9,7 @@ namespace NetWatcher.App.Monitoring;
 
 internal readonly record struct EtwConnection(int Pid, UInt128 Ip, int Port, string Proto);
 
-internal readonly record struct EtwDns(int Pid, string Name, string Results, DateTimeOffset Time);
+internal readonly record struct EtwDns(int Pid, string Name, string Results, int Status, DateTimeOffset Time);
 
 /// <summary>
 /// Event Tracing for Windows: the system's own event stream. Two sessions:
@@ -28,6 +28,10 @@ internal sealed class EtwMonitor : IDisposable
 
     private readonly ConcurrentDictionary<EtwConnection, byte> _connections = new();
     private readonly ConcurrentQueue<EtwDns> _dns = new();
+
+    // Per destination: SYN sent again (no answer yet) and data packets sent again (loss).
+    private readonly ConcurrentDictionary<EtwConnection, int> _reconnects = new();
+    private readonly ConcurrentDictionary<EtwConnection, int> _retransmits = new();
     private TraceEventSession? _kernel;
     private TraceEventSession? _dnsSession;
 
@@ -55,6 +59,10 @@ internal sealed class EtwMonitor : IDisposable
             k.TcpIpConnectIPV6 += d => Add(d.ProcessID, d.daddr, d.dport, "TCP");
             k.UdpIpSend += d => Add(d.ProcessID, d.daddr, d.dport, "UDP");
             k.UdpIpSendIPV6 += d => Add(d.ProcessID, d.daddr, d.dport, "UDP");
+            k.TcpIpReconnect += d => Count(_reconnects, d.ProcessID, d.daddr, d.dport);
+            k.TcpIpReconnectIPV6 += d => Count(_reconnects, d.ProcessID, d.daddr, d.dport);
+            k.TcpIpRetransmit += d => Count(_retransmits, d.ProcessID, d.daddr, d.dport);
+            k.TcpIpRetransmitIPV6 += d => Count(_retransmits, d.ProcessID, d.daddr, d.dport);
             k.ProcessStart += d => ProcessStarted?.Invoke(d.ProcessID, d.ImageFileName);
             Run(_kernel, "сетевые события ядра", () => KernelRunning = false);
             KernelRunning = true;
@@ -107,17 +115,38 @@ internal sealed class EtwMonitor : IDisposable
         _connections.TryAdd(new EtwConnection(pid, IpKey.From(ip), port, proto), 0);
     }
 
+    private static void Count(ConcurrentDictionary<EtwConnection, int> map, int pid, IPAddress ip, int port)
+    {
+        if (pid <= 0 || ip == null) return;
+        map.AddOrUpdate(new EtwConnection(pid, IpKey.From(ip), port, "TCP"), 1, (_, n) => n + 1);
+    }
+
+    private static Dictionary<EtwConnection, int> Drain(ConcurrentDictionary<EtwConnection, int> map)
+    {
+        var result = new Dictionary<EtwConnection, int>();
+        foreach (var key in map.Keys)
+            if (map.TryRemove(key, out var n)) result[key] = n;
+        return result;
+    }
+
+    /// <summary>Unanswered SYNs per destination since the last call.</summary>
+    public Dictionary<EtwConnection, int> TakeReconnects() => Drain(_reconnects);
+
+    /// <summary>Resent data packets per destination since the last call.</summary>
+    public Dictionary<EtwConnection, int> TakeRetransmits() => Drain(_retransmits);
+
     private void OnDnsEvent(TraceEvent e)
     {
         if ((int)e.ID != DnsQueryCompleted) return;
         try
         {
-            var status = Convert.ToInt64(e.PayloadByName("QueryStatus") ?? 0);
-            if (status != 0) return;
+            var status = (int)Convert.ToInt64(e.PayloadByName("QueryStatus") ?? 0);
             var name = e.PayloadByName("QueryName") as string;
-            var results = e.PayloadByName("QueryResults") as string;
-            if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(results)) return;
-            _dns.Enqueue(new EtwDns(e.ProcessID, name, results, DateTimeOffset.Now));
+            var results = e.PayloadByName("QueryResults") as string ?? "";
+            if (string.IsNullOrEmpty(name)) return;
+            if (status == 0 && results == "") return;
+            // Failed questions are kept too: they explain "the site does not open".
+            _dns.Enqueue(new EtwDns(e.ProcessID, name, results, status, DateTimeOffset.Now));
         }
         catch (Exception ex) when (ex is FormatException or InvalidCastException or OverflowException)
         {

@@ -50,7 +50,27 @@ public sealed class LogStore : IDisposable
               PRIMARY KEY(ip, domain, process)
             ) WITHOUT ROWID;
             CREATE INDEX IF NOT EXISTS dns_last ON dns(last_seen);
+            CREATE TABLE IF NOT EXISTS dns_fail(
+              domain     TEXT    NOT NULL,
+              process    TEXT    NOT NULL,
+              status     INTEGER NOT NULL,
+              first_seen INTEGER NOT NULL,
+              last_seen  INTEGER NOT NULL,
+              hits       INTEGER NOT NULL,
+              PRIMARY KEY(domain, process, status)
+            ) WITHOUT ROWID;
+            CREATE INDEX IF NOT EXISTS dns_fail_last ON dns_fail(last_seen);
             """);
+        // Columns added in 0.2: connection health.
+        var columns = new HashSet<string>();
+        using (var info = _db.CreateCommand())
+        {
+            info.CommandText = "PRAGMA table_info(seen)";
+            using var r = info.ExecuteReader();
+            while (r.Read()) columns.Add(r.GetString(1));
+        }
+        foreach (var c in new[] { "est", "noanswer", "retrans" })
+            if (!columns.Contains(c)) Exec($"ALTER TABLE seen ADD COLUMN {c} INTEGER NOT NULL DEFAULT 0;");
     }
 
     public void Write(IReadOnlyCollection<Observation> seen, IReadOnlyCollection<DnsObservation> dns)
@@ -64,12 +84,15 @@ public sealed class LogStore : IDisposable
             {
                 cmd.Transaction = tx;
                 cmd.CommandText = """
-                    INSERT INTO seen(bucket, process, services, proto, remote_ip, remote_port, path, first_seen, last_seen, hits)
-                    VALUES($b, $p, $s, $pr, $ip, $port, $path, $t, $t, 1)
+                    INSERT INTO seen(bucket, process, services, proto, remote_ip, remote_port, path, first_seen, last_seen, hits, est, noanswer, retrans)
+                    VALUES($b, $p, $s, $pr, $ip, $port, $path, $t, $t, 1, $est, $na, $rt)
                     ON CONFLICT(bucket, process, services, proto, remote_ip, remote_port) DO UPDATE SET
                       last_seen = max(last_seen, excluded.last_seen),
                       first_seen = min(first_seen, excluded.first_seen),
                       hits = hits + 1,
+                      est = est + excluded.est,
+                      noanswer = noanswer + excluded.noanswer,
+                      retrans = retrans + excluded.retrans,
                       path = CASE WHEN excluded.path <> '' THEN excluded.path ELSE path END;
                     """;
                 var b = cmd.Parameters.Add("$b", SqliteType.Integer);
@@ -80,8 +103,14 @@ public sealed class LogStore : IDisposable
                 var port = cmd.Parameters.Add("$port", SqliteType.Integer);
                 var path = cmd.Parameters.Add("$path", SqliteType.Text);
                 var t = cmd.Parameters.Add("$t", SqliteType.Integer);
+                var est = cmd.Parameters.Add("$est", SqliteType.Integer);
+                var na = cmd.Parameters.Add("$na", SqliteType.Integer);
+                var rt = cmd.Parameters.Add("$rt", SqliteType.Integer);
                 foreach (var o in seen)
                 {
+                    est.Value = o.Established ? 1 : 0;
+                    na.Value = o.NoAnswer;
+                    rt.Value = o.Retransmits;
                     var ms = o.Time.ToUnixTimeMilliseconds();
                     b.Value = ms / 3_600_000;
                     p.Value = o.Process;
@@ -120,6 +149,52 @@ public sealed class LogStore : IDisposable
         }
     }
 
+    public void WriteDnsFailures(IReadOnlyCollection<DnsFailure> failures)
+    {
+        if (failures.Count == 0) return;
+        lock (_lock)
+        {
+            using var tx = _db.BeginTransaction();
+            using var cmd = _db.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = """
+                INSERT INTO dns_fail(domain, process, status, first_seen, last_seen, hits) VALUES($d, $p, $s, $t, $t, 1)
+                ON CONFLICT(domain, process, status) DO UPDATE SET last_seen = max(last_seen, excluded.last_seen), hits = hits + 1;
+                """;
+            var d = cmd.Parameters.Add("$d", SqliteType.Text);
+            var p = cmd.Parameters.Add("$p", SqliteType.Text);
+            var st = cmd.Parameters.Add("$s", SqliteType.Integer);
+            var t = cmd.Parameters.Add("$t", SqliteType.Integer);
+            foreach (var f in failures)
+            {
+                d.Value = DnsResultParser.NormalizeName(f.Domain);
+                p.Value = f.Process;
+                st.Value = f.Status;
+                t.Value = f.Time.ToUnixTimeMilliseconds();
+                cmd.ExecuteNonQuery();
+            }
+            tx.Commit();
+        }
+    }
+
+    public sealed record DnsFailureRow(string Domain, string Process, int Status, DateTimeOffset FirstSeen, DateTimeOffset LastSeen, long Hits);
+
+    public List<DnsFailureRow> DnsFailures(DateTimeOffset from)
+    {
+        var list = new List<DnsFailureRow>();
+        lock (_lock)
+        {
+            using var cmd = _db.CreateCommand();
+            cmd.CommandText = "SELECT domain, process, status, first_seen, last_seen, hits FROM dns_fail WHERE last_seen >= $f ORDER BY last_seen DESC LIMIT 5000";
+            cmd.Parameters.AddWithValue("$f", from.ToUnixTimeMilliseconds());
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+                list.Add(new DnsFailureRow(r.GetString(0), r.GetString(1), r.GetInt32(2),
+                    DateTimeOffset.FromUnixTimeMilliseconds(r.GetInt64(3)), DateTimeOffset.FromUnixTimeMilliseconds(r.GetInt64(4)), r.GetInt64(5)));
+        }
+        return list;
+    }
+
     /// <summary>Destinations seen since <paramref name="from"/>, folded over the whole period.</summary>
     public List<DestinationRow> Query(DateTimeOffset from)
     {
@@ -129,7 +204,7 @@ public sealed class LogStore : IDisposable
             using var cmd = _db.CreateCommand();
             cmd.CommandText = """
                 SELECT process, services, proto, remote_ip, remote_port, max(path),
-                       min(first_seen), max(last_seen), sum(hits)
+                       min(first_seen), max(last_seen), sum(hits), sum(est), sum(noanswer), sum(retrans)
                 FROM seen
                 WHERE last_seen >= $from
                 GROUP BY process, services, proto, remote_ip, remote_port
@@ -150,6 +225,9 @@ public sealed class LogStore : IDisposable
                     FirstSeen = DateTimeOffset.FromUnixTimeMilliseconds(r.GetInt64(6)).ToLocalTime(),
                     LastSeen = DateTimeOffset.FromUnixTimeMilliseconds(r.GetInt64(7)).ToLocalTime(),
                     Hits = r.GetInt64(8),
+                    Established = r.GetInt64(9),
+                    NoAnswer = r.GetInt64(10),
+                    Retransmits = r.GetInt64(11),
                 });
             }
         }
@@ -239,7 +317,7 @@ public sealed class LogStore : IDisposable
         lock (_lock)
         {
             using var cmd = _db.CreateCommand();
-            cmd.CommandText = "DELETE FROM seen WHERE last_seen < $c; DELETE FROM dns WHERE last_seen < $c;";
+            cmd.CommandText = "DELETE FROM seen WHERE last_seen < $c; DELETE FROM dns WHERE last_seen < $c; DELETE FROM dns_fail WHERE last_seen < $c;";
             cmd.Parameters.AddWithValue("$c", cutoff.ToUnixTimeMilliseconds());
             var n = cmd.ExecuteNonQuery();
             if (n > 0) Exec("PRAGMA wal_checkpoint(TRUNCATE);");
@@ -251,7 +329,7 @@ public sealed class LogStore : IDisposable
     {
         lock (_lock)
         {
-            Exec("DELETE FROM seen; DELETE FROM dns;");
+            Exec("DELETE FROM seen; DELETE FROM dns; DELETE FROM dns_fail;");
             Exec("VACUUM;");
         }
     }

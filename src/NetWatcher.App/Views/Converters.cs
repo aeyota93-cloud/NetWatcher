@@ -14,11 +14,11 @@ public sealed class InverseBoolToVisibility : IValueConverter
         throw new NotSupportedException();
 }
 
-/// <summary>Visible when the string is not empty.</summary>
+/// <summary>Visible when the string is not empty; with parameter "invert" — when it is empty (placeholders).</summary>
 public sealed class NotEmptyToVisibility : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
-        value is string { Length: > 0 } ? Visibility.Visible : Visibility.Collapsed;
+        (value is string { Length: > 0 }) != (parameter as string == "invert") ? Visibility.Visible : Visibility.Collapsed;
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
         throw new NotSupportedException();
