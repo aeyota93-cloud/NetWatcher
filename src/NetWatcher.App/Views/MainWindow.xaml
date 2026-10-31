@@ -3,210 +3,1012 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:ClassModifier="internal"
         xmlns:vm="clr-namespace:NetWatcher.App.ViewModels"
-        Title="NetWatcher — кто куда ходит в сеть"
-        Width="1280" Height="760" MinWidth="820" MinHeight="480"
+        xmlns:v="clr-namespace:NetWatcher.App.Views"
+        Title="NetWatcher"
+        Width="1400" Height="880" MinWidth="1040" MinHeight="600"
         WindowStartupLocation="CenterScreen"
         Style="{StaticResource BaseWindow}">
 
     <Window.Resources>
-        <vm:InverseBoolConverter x:Key="Inverse" />
+        <v:InverseBoolToVisibility x:Key="NotVis" />
+        <v:NotEmptyToVisibility x:Key="TextVis" />
+        <v:UpperCase x:Key="Upper" />
+        <v:BindingProxy x:Key="Proxy" Data="{Binding}" />
+
+        <!-- Letter avatar or real icon of a program. -->
+        <DataTemplate x:Key="Avatar" DataType="{x:Type vm:NavItem}">
+            <Grid Width="28" Height="28">
+                <Border CornerRadius="7" Background="{Binding Color}" Visibility="{Binding HasIcon, Converter={StaticResource NotVis}}">
+                    <TextBlock Text="{Binding Letter}" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <Image Source="{Binding Icon}" Width="22" Height="22" Visibility="{Binding HasIcon, Converter={StaticResource BoolToVis}}" />
+            </Grid>
+        </DataTemplate>
+
+        <!-- Context menu shared by right click and the "⋯" button of each row. -->
+        <ContextMenu x:Key="RowMenu" DataContext="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource Self}}">
+            <MenuItem Header="Копировать IP" InputGestureText="Ctrl+Shift+C" Command="{Binding CopyIpCommand}"
+                      CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+            <MenuItem Header="Копировать домены" Command="{Binding CopyDomainCommand}"
+                      CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+            <MenuItem Header="Копировать сеть владельца" Command="{Binding CopyNetworkCommand}"
+                      CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+            <MenuItem Header="Копировать строки целиком" InputGestureText="Ctrl+C" Command="{Binding CopyRowCommand}"
+                      CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+            <Separator />
+            <MenuItem Header="Найти всё с этим IP" Command="{Binding SearchIpCommand}"
+                      CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+            <MenuItem Header="Найти всё с этим доменом" Command="{Binding SearchDomainCommand}"
+                      CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+            <MenuItem Header="Найти всё этой программы" Command="{Binding SearchProgramCommand}"
+                      CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+            <Separator />
+            <MenuItem Header="Подробно о сети (RDAP)" Command="{Binding RdapCommand}"
+                      CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+            <MenuItem Header="Открыть папку программы" Command="{Binding OpenFolderCommand}"
+                      CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+        </ContextMenu>
+
+        <!-- Rows: no grid lines, a soft hover, the accent-tinted selection. -->
+        <Style x:Key="RowStyle" TargetType="DataGridRow">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="{DynamicResource StrokeBrush}" />
+            <Setter Property="BorderThickness" Value="0,0,0,1" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+            <Setter Property="MinHeight" Value="40" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsChild}" Value="True">
+                    <Setter Property="MinHeight" Value="34" />
+                    <Setter Property="Foreground" Value="{DynamicResource Text2Brush}" />
+                </DataTrigger>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource HoverBrush}" />
+                </Trigger>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource SelBrush}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="CellStyle" TargetType="DataGridCell">
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=DataGridRow}}" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="DataGridCell">
+                        <Border Background="Transparent" Padding="10,0">
+                            <ContentPresenter VerticalAlignment="Center" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="HeaderStyle" TargetType="DataGridColumnHeader">
+            <Setter Property="Background" Value="{DynamicResource LayerBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource Text2Brush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="BorderBrush" Value="{DynamicResource StrokeBrush}" />
+            <Setter Property="BorderThickness" Value="0,0,0,1" />
+        </Style>
+        <!-- Row action buttons appear on hover or selection only. -->
+        <Style x:Key="RowActions" TargetType="StackPanel">
+            <Setter Property="Visibility" Value="Hidden" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=DataGridRow}}" Value="True">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=DataGridRow}}" Value="True">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="StepMark" TargetType="Border">
+            <Setter Property="Width" Value="24" />
+            <Setter Property="Height" Value="24" />
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="Margin" Value="0,0,12,0" />
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+        </Style>
     </Window.Resources>
 
-    <Window.InputBindings>
-        <KeyBinding Key="F5" Command="{Binding RefreshCommand}" />
-    </Window.InputBindings>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
 
-    <DockPanel>
-        <!-- Search and period -->
-        <Border DockPanel.Dock="Top" Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1" Padding="12,10">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
+        <!-- ============ Command bar ============ -->
+        <Grid Margin="16,12,16,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" MaxWidth="560" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" MinWidth="8" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
 
-                <Grid MaxWidth="640" HorizontalAlignment="Stretch">
-                    <TextBox x:Name="SearchBox" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
-                             Padding="8,6,28,6" VerticalContentAlignment="Center" FontSize="14"
-                             ToolTip="Ищет по программе, службе, IP, порту, домену, владельцу сети и стране. Несколько слов — все должны совпасть. Подсеть вида 142.250.0.0/15 находит адреса внутри неё." />
-                    <TextBlock Text="Поиск: программа, служба, IP, домен, подсеть, владелец…  (Ctrl+F)"
-                               Margin="11,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" Style="{StaticResource Muted}">
-                        <TextBlock.Visibility>
-                            <Binding Path="Text.IsEmpty" ElementName="SearchBox">
-                                <Binding.Converter>
-                                    <BooleanToVisibilityConverter />
-                                </Binding.Converter>
-                            </Binding>
-                        </TextBlock.Visibility>
-                    </TextBlock>
-                    <Button Content="✕" HorizontalAlignment="Right" Margin="0,0,2,0" Padding="6,2" Background="Transparent" BorderThickness="0"
-                            Command="{Binding ClearSearchCommand}" ToolTip="Очистить поиск (Esc)" />
+            <Border x:Name="SearchFrame" Height="36" CornerRadius="6" Background="{DynamicResource CardBrush}" BorderThickness="1,1,1,2">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="BorderBrush" Value="{DynamicResource Stroke2Brush}" />
+                        <Style.Triggers>
+                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <Grid Margin="10,0,6,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="&#xE721;" Style="{StaticResource Icon}" Foreground="{DynamicResource Text2Brush}" Margin="0,0,8,0" />
+                    <TextBox x:Name="SearchBox" Grid.Column="1" Style="{StaticResource BareTextBox}"
+                             Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                             AutomationProperties.Name="Поиск"
+                             ToolTip="Ищет по программе, службе, IP, порту, домену, владельцу и стране. Несколько слов — все должны совпасть. 142.250.0.0/15 — адреса внутри подсети." />
+                    <TextBlock Grid.Column="1" Text="Программа, служба, домен, IP или подсеть 10.0.0.0/8" Style="{StaticResource Faint}"
+                               FontSize="14" VerticalAlignment="Center" IsHitTestVisible="False"
+                               Visibility="{Binding HasSearch, Converter={StaticResource NotVis}}" />
+                    <Border Grid.Column="2" BorderBrush="{DynamicResource Stroke2Brush}" BorderThickness="1" CornerRadius="4" Padding="5,1"
+                            Visibility="{Binding HasSearch, Converter={StaticResource NotVis}}">
+                        <TextBlock Text="Ctrl+F" FontSize="11" Style="{StaticResource Faint}" />
+                    </Border>
+                    <Button Grid.Column="2" Style="{StaticResource BtnGhost}" Content="&#xE711;" ToolTip="Очистить (Esc)"
+                            Command="{Binding ClearSearchCommand}" Visibility="{Binding HasSearch, Converter={StaticResource BoolToVis}}" />
                 </Grid>
+            </Border>
 
-                <ComboBox Grid.Column="1" Margin="12,0,0,0" MinWidth="190"
-                          ItemsSource="{Binding Periods}" SelectedItem="{Binding Period}" ToolTip="За какой период показывать" />
+            <Border Grid.Column="1" Style="{StaticResource SegmentHost}" Height="36" Margin="10,0,0,0">
+                <ItemsControl ItemsSource="{Binding Periods}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:PeriodItem}">
+                            <RadioButton Style="{StaticResource Segment}" GroupName="period" Content="{Binding Title}" IsChecked="{Binding IsOn}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Border>
 
-                <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="8,0,0,0">
-                    <ToggleButton Content="⏸ Пауза" Padding="10,5" Margin="4,0,0,0" IsChecked="{Binding Paused}"
-                                  ToolTip="Остановить автообновление экрана. Запись в журнал продолжается." />
-                    <Button Content="⟳ Обновить" Command="{Binding RefreshCommand}" ToolTip="F5" />
-                    <Button Content="⚙ Настройки" Click="OnSettings" />
+            <Border Grid.Column="2" Height="36" Margin="10,0,0,0" Padding="12,0" CornerRadius="6"
+                    Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource Stroke2Brush}" BorderThickness="1">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Ellipse Width="8" Height="8" Margin="0,0,8,0">
+                        <Ellipse.Style>
+                            <Style TargetType="Ellipse">
+                                <Setter Property="Fill" Value="{DynamicResource OkBrush}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding LiveOk}" Value="False">
+                                        <Setter Property="Fill" Value="{DynamicResource WarnBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Ellipse.Style>
+                    </Ellipse>
+                    <TextBlock Text="{Binding LiveText}" Style="{StaticResource Muted}" />
                 </StackPanel>
-            </Grid>
-        </Border>
+            </Border>
 
-        <!-- Status bar -->
-        <Border DockPanel.Dock="Bottom" Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="0,1,0,0" Padding="12,5">
+            <Button Grid.Column="3" Style="{StaticResource BtnIcon}" Margin="8,0,0,0" Content="{Binding PauseGlyph}"
+                    Command="{Binding TogglePauseCommand}" ToolTip="Пауза: экран не обновляется, запись в журнал продолжается" />
+
+            <StackPanel Grid.Column="5" Orientation="Horizontal">
+                <Button Style="{StaticResource Btn}" Height="36" Command="{Binding OpenExportCommand}" ToolTip="Ctrl+E">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE898;" Style="{StaticResource Icon}" Margin="0,0,8,0" />
+                        <TextBlock Text="Экспорт списка" />
+                    </StackPanel>
+                </Button>
+                <Button Style="{StaticResource BtnIcon}" Margin="8,0,0,0" Content="&#xE706;" Command="{Binding ToggleThemeCommand}" ToolTip="Светлая или тёмная тема" />
+                <Button Style="{StaticResource BtnIcon}" Margin="8,0,0,0" Content="&#xE713;" Click="OnSettings" ToolTip="Настройки" />
+            </StackPanel>
+        </Grid>
+
+        <!-- ============ Quick filters ============ -->
+        <DockPanel Grid.Row="1" Margin="16,0,16,10">
+            <TextBlock DockPanel.Dock="Right" Text="{Binding FoundText}" Style="{StaticResource Faint}" FontSize="12" VerticalAlignment="Center" />
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="&#xE71C;" Style="{StaticResource Icon}" Foreground="{DynamicResource Text2Brush}" FontSize="12" Margin="0,0,6,0" />
+                <TextBlock Text="Быстрые фильтры" Style="{StaticResource Muted}" FontSize="12" VerticalAlignment="Center" Margin="0,0,10,0" />
+                <ItemsControl ItemsSource="{Binding Chips}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:FilterChip}">
+                            <ToggleButton Style="{StaticResource Chip}" Content="{Binding Title}" IsChecked="{Binding IsOn}" ToolTip="{Binding Hint}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </DockPanel>
+
+        <!-- ============ Banner: owner database missing ============ -->
+        <Border Grid.Row="2" Margin="16,0,16,10" Padding="14,8" CornerRadius="6" Background="{DynamicResource WarnSoftBrush}"
+                BorderBrush="{DynamicResource WarnStrokeBrush}" BorderThickness="1"
+                Visibility="{Binding AsnBannerVisible, Converter={StaticResource BoolToVis}}">
             <DockPanel>
-                <TextBlock DockPanel.Dock="Right" Text="{Binding Summary}" Style="{StaticResource Muted}" />
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="{Binding CaptureStatus}" Style="{StaticResource Muted}" />
-                    <TextBlock Text="  ·  " Style="{StaticResource Muted}" />
-                    <TextBlock Text="{Binding AsnStatus}" Style="{StaticResource Muted}" />
-                    <TextBlock Text="{Binding Error}" Foreground="{StaticResource Danger}" Margin="12,0,0,0" />
-                    <TextBlock Text="{Binding Notice}" Foreground="{StaticResource Accent}" Margin="12,0,0,0" />
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <TextBlock Text="{Binding AsnBusyText}" Style="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                    <Button Style="{StaticResource BtnPrimarySmall}" Content="Скачать" Command="{Binding DownloadAsnCommand}" />
+                    <Button Style="{StaticResource BtnSmall}" Content="Позже" Margin="8,0,0,0" Command="{Binding HideBannerCommand}" />
                 </StackPanel>
+                <TextBlock Text="&#xE1D3;" Style="{StaticResource Icon}" Foreground="{DynamicResource WarnBrush}" Margin="0,0,12,0" />
+                <TextBlock VerticalAlignment="Center" TextWrapping="Wrap">
+                    <Run Text="Колонки «Владелец» и «Сеть» пустые." FontWeight="SemiBold" />
+                    <Run Text="Скачайте базу владельцев IP (около 7 МБ, обновлять раз в месяц)." />
+                </TextBlock>
             </DockPanel>
         </Border>
 
-        <Grid Margin="10">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="300" MinWidth="200" />
-                <ColumnDefinition Width="8" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
+        <!-- ============ Body ============ -->
+        <Border Grid.Row="3" Background="{DynamicResource LayerBrush}" BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="0,1,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="280" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="340" />
+                </Grid.ColumnDefinitions>
 
-            <!-- Programs and services -->
-            <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="6">
+                <!-- Programs -->
                 <DockPanel>
-                    <TextBlock DockPanel.Dock="Top" Text="Программы и службы" Style="{StaticResource Header}" Margin="12,10,12,6" />
-                    <ListBox ItemsSource="{Binding Groups}" SelectedItem="{Binding SelectedGroup}" BorderThickness="0"
-                             ScrollViewer.HorizontalScrollBarVisibility="Disabled" VirtualizingPanel.IsVirtualizing="True">
-                        <ListBox.ContextMenu>
-                            <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
-                                <MenuItem Header="Копировать все IP" Command="{Binding CopyGroupIpsCommand}"
-                                          CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                                <MenuItem Header="Копировать все домены" Command="{Binding CopyGroupDomainsCommand}"
-                                          CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                                <MenuItem Header="Копировать название" Command="{Binding CopyGroupCommand}"
-                                          CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                            </ContextMenu>
-                        </ListBox.ContextMenu>
+                    <DockPanel DockPanel.Dock="Top" Margin="14,12,10,4">
+                        <ComboBox DockPanel.Dock="Right" SelectedIndex="{Binding NavSortIndex}" FontSize="12" MinWidth="130" ToolTip="Порядок списка">
+                            <ComboBoxItem Content="По активности" />
+                            <ComboBoxItem Content="По имени" />
+                        </ComboBox>
+                        <TextBlock Text="Программы" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    </DockPanel>
+                    <ListBox x:Name="NavList" ItemsSource="{Binding Nav}" SelectedItem="{Binding SelectedNav}" BorderThickness="0"
+                             Background="Transparent" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.IsVirtualizingWhenGrouping="True">
+                        <ListBox.GroupStyle>
+                            <GroupStyle>
+                                <GroupStyle.HeaderTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Margin="16,12,0,4" Style="{StaticResource Caption}">
+                                            <TextBlock.Text>
+                                                <MultiBinding StringFormat="{}{0} · {1}">
+                                                    <Binding Path="Name" Converter="{StaticResource Upper}" />
+                                                    <Binding Path="ItemCount" />
+                                                </MultiBinding>
+                                            </TextBlock.Text>
+                                            <TextBlock.Visibility>
+                                                <Binding Path="Name" Converter="{StaticResource TextVis}" />
+                                            </TextBlock.Visibility>
+                                        </TextBlock>
+                                    </DataTemplate>
+                                </GroupStyle.HeaderTemplate>
+                            </GroupStyle>
+                        </ListBox.GroupStyle>
                         <ListBox.ItemContainerStyle>
                             <Style TargetType="ListBoxItem">
-                                <Setter Property="Padding" Value="8,5" />
-                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="FocusVisualStyle" Value="{x:Null}" />
                                 <Setter Property="ToolTip" Value="{Binding Path}" />
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListBoxItem">
+                                            <Border x:Name="b" Margin="6,1" Padding="8,6" CornerRadius="6" Background="Transparent">
+                                                <Grid>
+                                                    <Border x:Name="bar" Width="3" CornerRadius="1.5" Margin="-8,4,0,4" HorizontalAlignment="Left"
+                                                            Background="{DynamicResource AccentBrush}" Visibility="Hidden" />
+                                                    <ContentPresenter />
+                                                </Grid>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="b" Property="Background" Value="{DynamicResource HoverBrush}" />
+                                                </Trigger>
+                                                <Trigger Property="IsSelected" Value="True">
+                                                    <Setter TargetName="b" Property="Background" Value="{DynamicResource SelBrush}" />
+                                                    <Setter TargetName="bar" Property="Visibility" Value="Visible" />
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
                             </Style>
                         </ListBox.ItemContainerStyle>
                         <ListBox.ItemTemplate>
-                            <DataTemplate DataType="{x:Type vm:GroupView}">
+                            <DataTemplate DataType="{x:Type vm:NavItem}">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="22" />
+                                        <ColumnDefinition Width="28" />
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <Image Source="{Binding Icon}" Width="16" Height="16" VerticalAlignment="Top" Margin="0,2,0,0" />
-                                    <StackPanel Grid.Column="1">
-                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                    <Grid>
+                                        <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource Avatar}"
+                                                          Visibility="{Binding IsAll, Converter={StaticResource NotVis}}" />
+                                        <Border Width="28" Height="28" CornerRadius="7" Background="{DynamicResource AccentBrush}"
+                                                Visibility="{Binding IsAll, Converter={StaticResource BoolToVis}}">
+                                            <TextBlock Text="&#xE774;" Style="{StaticResource Icon}" Foreground="{DynamicResource OnAccentBrush}" />
+                                        </Border>
+                                    </Grid>
+                                    <StackPanel Grid.Column="1" Margin="8,0,6,0" VerticalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxWidth="150" />
+                                            <Border Style="{StaticResource NewBadge}" Visibility="{Binding IsNew, Converter={StaticResource BoolToVis}}"
+                                                    ToolTip="Впервые вышла в сеть за последние сутки">
+                                                <TextBlock Text="НОВОЕ" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource NewBrush}" />
+                                            </Border>
+                                        </StackPanel>
                                         <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Muted}" FontSize="12" TextTrimming="CharacterEllipsis" />
                                     </StackPanel>
-                                    <Border Grid.Column="2" Background="{StaticResource AccentSoft}" CornerRadius="9" Padding="7,1" Margin="6,0,0,0" VerticalAlignment="Top">
-                                        <TextBlock Text="{Binding Count}" FontSize="12" Foreground="{StaticResource Accent}" />
-                                    </Border>
+                                    <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Count}" Style="{StaticResource Muted}" FontSize="12" HorizontalAlignment="Right" />
+                                        <ItemsControl ItemsSource="{Binding Bars}" Height="14" HorizontalAlignment="Right" Margin="0,2,0,0"
+                                                      ToolTip="Активность за последние 7 часов">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <StackPanel Orientation="Horizontal" />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Rectangle Width="3" Height="{Binding}" Margin="0,0,1,0" RadiusX="1" RadiusY="1"
+                                                               VerticalAlignment="Bottom" Fill="{DynamicResource AccentBrush}" Opacity="0.55" />
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
                                 </Grid>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
                 </DockPanel>
-            </Border>
 
-            <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch" Background="Transparent" />
-
-            <TabControl Grid.Column="2" Padding="0" Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}">
-                <TabItem Header="  Адреса  ">
-                    <DataGrid x:Name="Grid" ItemsSource="{Binding Rows}" AutoGenerateColumns="False" IsReadOnly="True"
-                              CanUserAddRows="False" CanUserDeleteRows="False" SelectionMode="Extended" SelectionUnit="FullRow"
-                              HeadersVisibility="Column" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="{StaticResource Border}"
-                              BorderThickness="0" RowHeight="24" ClipboardCopyMode="ExcludeHeader"
-                              EnableRowVirtualization="True" VirtualizingPanel.IsVirtualizingWhenGrouping="True"
-                              MouseDoubleClick="OnRowDoubleClick">
-                        <DataGrid.ContextMenu>
-                            <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
-                                <MenuItem Header="Копировать IP" InputGestureText="Ctrl+Shift+C" Command="{Binding CopyIpCommand}"
-                                          CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                                <MenuItem Header="Копировать домены" Command="{Binding CopyDomainCommand}"
-                                          CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                                <MenuItem Header="Копировать сеть владельца" Command="{Binding CopyNetworkCommand}"
-                                          CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                                <MenuItem Header="Копировать строки целиком" InputGestureText="Ctrl+C" Command="{Binding CopyRowCommand}"
-                                          CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                                <Separator />
-                                <MenuItem Header="Найти всё с этим IP" Command="{Binding SearchIpCommand}"
-                                          CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                                <MenuItem Header="Найти всё с этим доменом" Command="{Binding SearchDomainCommand}"
-                                          CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                                <MenuItem Header="Найти всё этой программы" Command="{Binding SearchProcessCommand}"
-                                          CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                                <Separator />
-                                <MenuItem Header="Подробно о сети (RDAP)…" Command="{Binding RdapCommand}"
-                                          CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                                <MenuItem Header="Открыть папку программы" Command="{Binding OpenFolderCommand}"
-                                          CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                            </ContextMenu>
-                        </DataGrid.ContextMenu>
-                        <DataGrid.Columns>
-                            <DataGridTemplateColumn Header="Программа" SortMemberPath="Process" Width="150" ClipboardContentBinding="{Binding Process}">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <StackPanel Orientation="Horizontal" ToolTip="{Binding Path}">
-                                            <Image Source="{Binding Icon}" Width="16" Height="16" Margin="2,0,6,0" />
-                                            <TextBlock Text="{Binding Process}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
-                            <DataGridTextColumn Header="Служба" Binding="{Binding Services}" Width="150" />
-                            <DataGridTextColumn Header="IP-адрес" Binding="{Binding Ip}" SortMemberPath="IpSort" Width="130" FontFamily="Consolas" />
-                            <DataGridTextColumn Header="Порт" Binding="{Binding Port}" Width="55" />
-                            <DataGridTextColumn Header="Прот." Binding="{Binding Proto}" Width="48" />
-                            <DataGridTextColumn Header="Домен" Binding="{Binding Domains}" Width="200" />
-                            <DataGridTextColumn Header="Владелец" Binding="{Binding Owner}" Width="170" />
-                            <DataGridTextColumn Header="Сеть" Binding="{Binding Network}" Width="140" FontFamily="Consolas" />
-                            <DataGridTextColumn Header="Страна" Binding="{Binding Country}" Width="55" />
-                            <DataGridTextColumn Header="Впервые" Binding="{Binding FirstSeen, StringFormat='dd.MM HH:mm:ss'}" Width="100" />
-                            <DataGridTextColumn Header="Последний раз" Binding="{Binding LastSeen, StringFormat='dd.MM HH:mm:ss'}" Width="105" />
-                            <DataGridTextColumn Header="Раз" Binding="{Binding Hits}" Width="50" />
-                        </DataGrid.Columns>
-                    </DataGrid>
-                </TabItem>
-
-                <TabItem Header="  Списки и подсети  ">
-                    <DockPanel Margin="12">
-                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
-                            <ComboBox ItemsSource="{Binding ListModes}" SelectedItem="{Binding ListModeOption}" MinWidth="260" />
-                            <RadioButton Content="1.2.3.0/24" Margin="16,0,0,0" VerticalAlignment="Center" GroupName="fmt"
-                                         IsChecked="{Binding UseMask, Converter={StaticResource Inverse}}" />
-                            <RadioButton Content="1.2.3.0 255.255.255.0" Margin="12,0,0,0" VerticalAlignment="Center" GroupName="fmt"
-                                         IsChecked="{Binding UseMask}" />
-                            <CheckBox Content="Только IPv4" Margin="16,0,0,0" VerticalAlignment="Center" IsChecked="{Binding Ipv4Only}" />
-                        </StackPanel>
-                        <DockPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
-                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                                <Button Content="Копировать всё" Style="{StaticResource PrimaryButton}" Command="{Binding CopyListCommand}" />
-                                <Button Content="Сохранить в файл…" Command="{Binding SaveListCommand}" />
+                <!-- Main: header, tabs, table -->
+                <Border Grid.Column="1" BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="1,0,1,0">
+                    <DockPanel>
+                        <DockPanel DockPanel.Dock="Top" Margin="16,12,16,0">
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Style="{StaticResource BtnSmall}" Command="{Binding CopyAllIpsCommand}" ToolTip="Все IP-адреса из списка ниже">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE8C8;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,6,0" />
+                                        <TextBlock Text="Все IP" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Style="{StaticResource BtnSmall}" Margin="8,0,0,0" Command="{Binding CopyAllDomainsCommand}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE8C8;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,6,0" />
+                                        <TextBlock Text="Все домены" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Style="{StaticResource BtnPrimarySmall}" Margin="8,0,0,0" Command="{Binding OpenVpnExportCommand}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE898;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,6,0" />
+                                        <TextBlock Text="Подсети для VPN…" />
+                                    </StackPanel>
+                                </Button>
                             </StackPanel>
-                            <TextBlock Text="{Binding ListSummary}" Style="{StaticResource Muted}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                            <Grid Width="36" Height="36" Margin="0,0,12,0" VerticalAlignment="Center">
+                                <Border CornerRadius="8" Background="{DynamicResource AccentBrush}" Visibility="{Binding ShowProgramColumn, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Text="&#xE774;" Style="{StaticResource Icon}" FontSize="18" Foreground="{DynamicResource OnAccentBrush}" />
+                                </Border>
+                                <ContentPresenter Content="{Binding HeaderNav}" ContentTemplate="{StaticResource Avatar}"
+                                                  Visibility="{Binding ShowProgramColumn, Converter={StaticResource NotVis}}" />
+                            </Grid>
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{Binding HeaderTitle}" FontSize="18" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding HeaderSubtitle}" Style="{StaticResource Faint}" FontSize="12" TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
                         </DockPanel>
-                        <TextBlock DockPanel.Dock="Top" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,8"
-                                   Text="Список строится по тому, что видно на вкладке «Адреса»: выбранная слева программа, поиск и период. Подходит для правил файрвола и раздельного туннелирования VPN." />
-                        <TextBox Text="{Binding ListText, Mode=OneWay}" IsReadOnly="True" FontFamily="Consolas" FontSize="13"
-                                 VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" AcceptsReturn="True" Padding="6" />
+
+                        <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="0,0,0,1" Padding="16,8,16,0">
+                            <StackPanel Orientation="Horizontal">
+                                <RadioButton Style="{StaticResource Tab}" GroupName="tab" IsChecked="{Binding IsDomainsTab}" ToolTip="Адреса сгруппированы по доменам">
+                                    <TextBlock><Run Text="По доменам" /><Run Text=" " /><Run Text="{Binding DomainsCount, Mode=OneWay}" FontSize="11" Foreground="{DynamicResource Text3Brush}" FontWeight="Normal" /></TextBlock>
+                                </RadioButton>
+                                <RadioButton Style="{StaticResource Tab}" GroupName="tab" IsChecked="{Binding IsAddressesTab}" ToolTip="Плоский список, можно сортировать по колонкам">
+                                    <TextBlock><Run Text="Все адреса" /><Run Text=" " /><Run Text="{Binding AddressesCount, Mode=OneWay}" FontSize="11" Foreground="{DynamicResource Text3Brush}" FontWeight="Normal" /></TextBlock>
+                                </RadioButton>
+                                <RadioButton Style="{StaticResource Tab}" GroupName="tab" IsChecked="{Binding IsDnsTab}" ToolTip="Какие имена программа спрашивала и какие адреса получила">
+                                    <TextBlock><Run Text="Журнал DNS" /><Run Text=" " /><Run Text="{Binding DnsCount, Mode=OneWay}" FontSize="11" Foreground="{DynamicResource Text3Brush}" FontWeight="Normal" /></TextBlock>
+                                </RadioButton>
+                            </StackPanel>
+                        </Border>
+
+                        <Grid>
+                            <DataGrid x:Name="Grid" ItemsSource="{Binding Table}" SelectedItem="{Binding SelectedItem}"
+                                      Visibility="{Binding IsTableTab, Converter={StaticResource BoolToVis}}"
+                                      Tag="{Binding}" ContextMenu="{StaticResource RowMenu}"
+                                      AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Extended" SelectionUnit="FullRow"
+                                      HeadersVisibility="Column" GridLinesVisibility="None" BorderThickness="0" Background="Transparent"
+                                      RowBackground="Transparent" AlternatingRowBackground="Transparent"
+                                      CanUserSortColumns="{Binding IsAddressesTab}" CanUserResizeRows="False" CanUserReorderColumns="False"
+                                      RowStyle="{StaticResource RowStyle}" CellStyle="{StaticResource CellStyle}" ColumnHeaderStyle="{StaticResource HeaderStyle}"
+                                      EnableRowVirtualization="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                                      ClipboardCopyMode="None" MouseDoubleClick="OnRowDoubleClick">
+                                <DataGrid.Columns>
+                                    <DataGridTemplateColumn Header="Куда" Width="2.2*" SortMemberPath="DomainText">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate DataType="{x:Type vm:TableItem}">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <Grid Width="24">
+                                                        <Button Style="{StaticResource BtnGhost}" Width="22" Height="22" FontSize="10" Content="{Binding Chevron}"
+                                                                Command="{Binding Data.ToggleCommand, Source={StaticResource Proxy}}" CommandParameter="{Binding}"
+                                                                Visibility="{Binding IsGroup, Converter={StaticResource BoolToVis}}" ToolTip="Показать адреса" />
+                                                    </Grid>
+                                                    <Border Width="24" Visibility="{Binding IsChild, Converter={StaticResource BoolToVis}}" />
+                                                    <TextBlock Text="{Binding DomainText}" VerticalAlignment="Center" Margin="0,0,8,0" TextTrimming="CharacterEllipsis">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="FontWeight" Value="SemiBold" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding HasDomain}" Value="False">
+                                                                        <Setter Property="FontWeight" Value="Normal" />
+                                                                        <Setter Property="Foreground" Value="{DynamicResource Text3Brush}" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                    <TextBlock Text="{Binding Ip}" VerticalAlignment="Center" FontFamily="{StaticResource MonoFont}" FontSize="12.5">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Foreground" Value="{DynamicResource Text3Brush}" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsChild}" Value="True">
+                                                                        <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding IsGroup}" Value="True">
+                                                                        <Setter Property="FontFamily" Value="Segoe UI" />
+                                                                        <Setter Property="FontSize" Value="13" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                    <Border Style="{StaticResource NewBadge}" Visibility="{Binding IsNew, Converter={StaticResource BoolToVis}}"
+                                                            ToolTip="Программа впервые пошла сюда за последние сутки">
+                                                        <TextBlock Text="НОВОЕ" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource NewBrush}" />
+                                                    </Border>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTextColumn Header="Программа" Binding="{Binding Program}" Width="1.1*"
+                                                        Visibility="{Binding Data.ShowProgramColumn, Source={StaticResource Proxy}, Converter={StaticResource BoolToVis}}" />
+                                    <DataGridTemplateColumn Header="Порт" Width="118">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate DataType="{x:Type vm:TableItem}">
+                                                <ItemsControl ItemsSource="{Binding Ports}">
+                                                    <ItemsControl.ItemsPanel>
+                                                        <ItemsPanelTemplate>
+                                                            <StackPanel Orientation="Horizontal" />
+                                                        </ItemsPanelTemplate>
+                                                    </ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Border Style="{StaticResource Tag}">
+                                                                <TextBlock Text="{Binding}" FontSize="11" Foreground="{DynamicResource Text2Brush}" />
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTemplateColumn Header="Владелец" Width="1.5*" SortMemberPath="Owner">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate DataType="{x:Type vm:TableItem}">
+                                                <StackPanel Orientation="Horizontal" ToolTip="{Binding Owner}">
+                                                    <Border Style="{StaticResource Tag}" Margin="0,0,6,0" Visibility="{Binding HasCountry, Converter={StaticResource BoolToVis}}">
+                                                        <TextBlock Text="{Binding Country}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource Text2Brush}" />
+                                                    </Border>
+                                                    <TextBlock Text="{Binding Owner}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTextColumn Header="Сеть" Binding="{Binding Network}" Width="150" FontFamily="{StaticResource MonoFont}" />
+                                    <DataGridTextColumn Header="Когда" Binding="{Binding When}" SortMemberPath="LastSeen" Width="92" />
+                                    <DataGridTemplateColumn Width="70" CanUserSort="False">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate DataType="{x:Type vm:TableItem}">
+                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Style="{StaticResource RowActions}">
+                                                    <Button Style="{StaticResource BtnGhost}" Content="&#xE8C8;" ToolTip="Копировать IP"
+                                                            Command="{Binding Data.CopyIpCommand, Source={StaticResource Proxy}}" CommandParameter="{Binding}" />
+                                                    <Button Style="{StaticResource BtnGhost}" Content="&#xE712;" ToolTip="Ещё действия" Click="OnRowMore" />
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                </DataGrid.Columns>
+                            </DataGrid>
+
+                            <DataGrid ItemsSource="{Binding DnsItems}" Visibility="{Binding IsDnsTab, Converter={StaticResource BoolToVis}}"
+                                      AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="None"
+                                      BorderThickness="0" Background="Transparent" RowBackground="Transparent" AlternatingRowBackground="Transparent"
+                                      RowStyle="{StaticResource RowStyle}" CellStyle="{StaticResource CellStyle}" ColumnHeaderStyle="{StaticResource HeaderStyle}"
+                                      EnableRowVirtualization="True" ClipboardCopyMode="ExcludeHeader">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Домен" Binding="{Binding Domain}" Width="1.6*" FontWeight="SemiBold" />
+                                    <DataGridTextColumn Header="Программа" Binding="{Binding Program}" Width="1*"
+                                                        Visibility="{Binding Data.ShowProgramColumn, Source={StaticResource Proxy}, Converter={StaticResource BoolToVis}}" />
+                                    <DataGridTextColumn Header="Ответ: адреса" Binding="{Binding Addresses}" Width="2*" FontFamily="{StaticResource MonoFont}" />
+                                    <DataGridTextColumn Header="Когда" Binding="{Binding When}" Width="92" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+
+                            <!-- First run / empty period -->
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" Visibility="{Binding ShowOnboarding, Converter={StaticResource BoolToVis}}">
+                                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Width="520" Margin="0,40">
+                                    <Border Width="64" Height="64" CornerRadius="16" Background="{DynamicResource AccentSoftBrush}">
+                                        <TextBlock Text="&#xE9D9;" Style="{StaticResource Icon}" FontSize="30" Foreground="{DynamicResource AccentBrush}" />
+                                    </Border>
+                                    <TextBlock Text="{Binding EmptyTitle}" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,16,0,6" />
+                                    <TextBlock Text="{Binding EmptyText}" Style="{StaticResource Muted}" TextWrapping="Wrap" TextAlignment="Center" />
+
+                                    <Border Style="{StaticResource Card}" Margin="0,18,0,8">
+                                        <DockPanel>
+                                            <Border DockPanel.Dock="Left">
+                                                <Border.Style>
+                                                    <Style TargetType="Border" BasedOn="{StaticResource StepMark}">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding AdminOk}" Value="True">
+                                                                <Setter Property="Background" Value="{DynamicResource OkSoftBrush}" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <TextBlock Text="&#xE73E;" Style="{StaticResource Icon}" FontSize="12" Foreground="{DynamicResource OkBrush}" />
+                                            </Border>
+                                            <StackPanel>
+                                                <TextBlock Text="Права администратора" FontWeight="SemiBold" />
+                                                <TextBlock Text="Видны системные процессы и службы Windows" Style="{StaticResource Muted}" FontSize="12" />
+                                            </StackPanel>
+                                        </DockPanel>
+                                    </Border>
+                                    <Border Style="{StaticResource Card}" Margin="0,0,0,8">
+                                        <DockPanel>
+                                            <Border DockPanel.Dock="Left">
+                                                <Border.Style>
+                                                    <Style TargetType="Border" BasedOn="{StaticResource StepMark}">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding CaptureOk}" Value="True">
+                                                                <Setter Property="Background" Value="{DynamicResource OkSoftBrush}" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <Grid>
+                                                    <TextBlock Text="&#xE73E;" Style="{StaticResource Icon}" FontSize="12" Foreground="{DynamicResource OkBrush}"
+                                                               Visibility="{Binding CaptureOk, Converter={StaticResource BoolToVis}}" />
+                                                    <TextBlock Text="!" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource WarnBrush}"
+                                                               Visibility="{Binding CaptureOk, Converter={StaticResource NotVis}}" />
+                                                </Grid>
+                                            </Border>
+                                            <StackPanel>
+                                                <TextBlock Text="Домены и UDP" FontWeight="SemiBold" />
+                                                <TextBlock Text="{Binding CaptureText}" Style="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </DockPanel>
+                                    </Border>
+                                    <Border Style="{StaticResource Card}" Margin="0,0,0,8">
+                                        <DockPanel>
+                                            <Border DockPanel.Dock="Left">
+                                                <Border.Style>
+                                                    <Style TargetType="Border" BasedOn="{StaticResource StepMark}">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding AsnOk}" Value="True">
+                                                                <Setter Property="Background" Value="{DynamicResource OkSoftBrush}" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <Grid>
+                                                    <TextBlock Text="&#xE73E;" Style="{StaticResource Icon}" FontSize="12" Foreground="{DynamicResource OkBrush}"
+                                                               Visibility="{Binding AsnOk, Converter={StaticResource BoolToVis}}" />
+                                                    <TextBlock Text="3" FontWeight="Bold" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                               Foreground="{DynamicResource AccentBrush}" Visibility="{Binding AsnOk, Converter={StaticResource NotVis}}" />
+                                                </Grid>
+                                            </Border>
+                                            <Button DockPanel.Dock="Right" Style="{StaticResource BtnPrimarySmall}" Content="Скачать" Command="{Binding DownloadAsnCommand}"
+                                                    Visibility="{Binding AsnMissing, Converter={StaticResource BoolToVis}}" />
+                                            <StackPanel>
+                                                <TextBlock Text="База владельцев IP" FontWeight="SemiBold" />
+                                                <TextBlock Text="Нужна для владельцев сетей и списков подсетей" Style="{StaticResource Muted}" FontSize="12" />
+                                            </StackPanel>
+                                        </DockPanel>
+                                    </Border>
+                                    <Border Style="{StaticResource Card}">
+                                        <DockPanel>
+                                            <Border DockPanel.Dock="Left" Style="{StaticResource StepMark}">
+                                                <TextBlock Text="4" FontWeight="Bold" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource AccentBrush}" />
+                                            </Border>
+                                            <Button DockPanel.Dock="Right" Style="{StaticResource BtnSmall}" Content="Изменить" Click="OnSettings" />
+                                            <StackPanel>
+                                                <TextBlock Text="Срок хранения журнала" FontWeight="SemiBold" />
+                                                <TextBlock Text="{Binding RetentionText}" Style="{StaticResource Muted}" FontSize="12" />
+                                            </StackPanel>
+                                        </DockPanel>
+                                    </Border>
+
+                                    <TextBlock Text="Попробуйте найти:" Style="{StaticResource Faint}" HorizontalAlignment="Center" Margin="0,18,0,8" />
+                                    <ItemsControl ItemsSource="{Binding Suggestions}" HorizontalAlignment="Center">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel HorizontalAlignment="Center" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Button Style="{StaticResource BtnSmall}" Margin="4" Content="{Binding}"
+                                                        Command="{Binding Data.SearchTextCommand, Source={StaticResource Proxy}}" CommandParameter="{Binding}" />
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </ScrollViewer>
+
+                            <!-- Nothing matches the search or filters -->
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="480"
+                                        Visibility="{Binding ShowNothingFound, Converter={StaticResource BoolToVis}}">
+                                <Border Width="64" Height="64" CornerRadius="16" Background="{DynamicResource AccentSoftBrush}">
+                                    <TextBlock Text="&#xE721;" Style="{StaticResource Icon}" FontSize="28" Foreground="{DynamicResource AccentBrush}" />
+                                </Border>
+                                <TextBlock Text="{Binding EmptyTitle}" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,16,0,6" TextWrapping="Wrap" TextAlignment="Center" />
+                                <TextBlock Text="{Binding EmptyText}" Style="{StaticResource Muted}" TextWrapping="Wrap" TextAlignment="Center" />
+                                <Button Style="{StaticResource Btn}" Content="Сбросить поиск и фильтры" Margin="0,16,0,0" HorizontalAlignment="Center"
+                                        Command="{Binding ResetFiltersCommand}" />
+                            </StackPanel>
+                        </Grid>
                     </DockPanel>
-                </TabItem>
-            </TabControl>
+                </Border>
+
+                <!-- Details -->
+                <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" Padding="16,14">
+                    <Grid>
+                        <!-- Selected address or domain -->
+                        <StackPanel Visibility="{Binding HasSelection, Converter={StaticResource BoolToVis}}">
+                            <DockPanel Margin="0,0,0,14">
+                                <Button DockPanel.Dock="Right" Style="{StaticResource BtnGhost}" Content="&#xE711;" ToolTip="Закрыть" Click="OnCloseDetails" VerticalAlignment="Top" />
+                                <Border Width="32" Height="32" CornerRadius="8" Background="{DynamicResource AccentSoftBrush}" Margin="0,0,10,0" VerticalAlignment="Top">
+                                    <TextBlock Text="&#xE774;" Style="{StaticResource Icon}" Foreground="{DynamicResource AccentBrush}" />
+                                </Border>
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding D[Title]}" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" MaxWidth="200" />
+                                        <Border Style="{StaticResource NewBadge}" Visibility="{Binding DetailsNew, Converter={StaticResource BoolToVis}}">
+                                            <TextBlock Text="НОВОЕ" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource NewBrush}" />
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding D[Subtitle]}" Style="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </DockPanel>
+
+                            <TextBlock Text="{Binding D[IpLabel], Converter={StaticResource Upper}}" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}" Margin="0,0,0,12">
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right" Style="{StaticResource BtnGhost}" Content="&#xE8C8;" ToolTip="Копировать"
+                                            Command="{Binding CopyValueCommand}" CommandParameter="{Binding D[Ip]}" VerticalAlignment="Top" />
+                                    <TextBox Text="{Binding D[Ip], Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                                             Foreground="{DynamicResource TextBrush}" FontFamily="{StaticResource MonoFont}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                </DockPanel>
+                            </Border>
+
+                            <TextBlock Text="ДОМЕНЫ ЭТОГО АДРЕСА" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}" Margin="0,0,0,12">
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right" Style="{StaticResource BtnGhost}" Content="&#xE8C8;" ToolTip="Копировать"
+                                            Command="{Binding CopyValueCommand}" CommandParameter="{Binding D[Domains]}" VerticalAlignment="Top" />
+                                    <TextBox Text="{Binding D[Domains], Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                                             Foreground="{DynamicResource TextBrush}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                </DockPanel>
+                            </Border>
+
+                            <DockPanel Margin="0,0,0,4">
+                                <Border DockPanel.Dock="Right" Style="{StaticResource SegmentHost}" Padding="1">
+                                    <StackPanel Orientation="Horizontal">
+                                        <RadioButton Style="{StaticResource Segment}" GroupName="fmt" Content="CIDR" FontSize="11" Padding="8,2" IsChecked="{Binding UseCidr}" ToolTip="1.2.3.0/24" />
+                                        <RadioButton Style="{StaticResource Segment}" GroupName="fmt" Content="Маска" FontSize="11" Padding="8,2" IsChecked="{Binding UseMask}" ToolTip="1.2.3.0 255.255.255.0" />
+                                    </StackPanel>
+                                </Border>
+                                <TextBlock Text="{Binding D[NetworkLabel], Converter={StaticResource Upper}}" Style="{StaticResource Caption}" VerticalAlignment="Bottom" />
+                            </DockPanel>
+                            <Border Style="{StaticResource Field}" Margin="0,0,0,12">
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right" Style="{StaticResource BtnGhost}" Content="&#xE8C8;" ToolTip="Копировать"
+                                            Command="{Binding CopyValueCommand}" CommandParameter="{Binding D[Network]}" VerticalAlignment="Top" />
+                                    <TextBox Text="{Binding D[Network], Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                                             Foreground="{DynamicResource TextBrush}" FontFamily="{StaticResource MonoFont}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                </DockPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
+                                    </Grid.RowDefinitions>
+                                    <Grid.Resources>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="FontSize" Value="12" />
+                                            <Setter Property="Margin" Value="0,2,14,2" />
+                                            <Setter Property="TextWrapping" Value="Wrap" />
+                                        </Style>
+                                    </Grid.Resources>
+                                    <TextBlock Text="Владелец" Foreground="{DynamicResource Text3Brush}" />
+                                    <TextBlock Grid.Column="1" Text="{Binding D[Owner]}" />
+                                    <TextBlock Grid.Row="1" Text="Страна" Foreground="{DynamicResource Text3Brush}" />
+                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding D[Country]}" />
+                                    <TextBlock Grid.Row="2" Text="Протокол" Foreground="{DynamicResource Text3Brush}" />
+                                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding D[Protocol]}" />
+                                    <TextBlock Grid.Row="3" Text="Впервые" Foreground="{DynamicResource Text3Brush}" />
+                                    <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding D[First]}" />
+                                    <TextBlock Grid.Row="4" Text="Последний раз" Foreground="{DynamicResource Text3Brush}" />
+                                    <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding D[Last]}" />
+                                </Grid>
+                            </Border>
+
+                            <WrapPanel Margin="0,0,0,12">
+                                <Button Style="{StaticResource BtnSmall}" Margin="0,0,8,8" Command="{Binding RdapCommand}" ToolTip="Спросить у реестра IP-адресов (RIPE, ARIN…) точный блок и организацию">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE774;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,6,0" />
+                                        <TextBlock Text="Подробно о сети (RDAP)" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Style="{StaticResource BtnSmall}" Margin="0,0,8,8" Command="{Binding WhoElseCommand}" ToolTip="Найти все программы, которые ходили на этот адрес">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE721;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,6,0" />
+                                        <TextBlock Text="Кто ещё ходит сюда" />
+                                    </StackPanel>
+                                </Button>
+                            </WrapPanel>
+
+                            <Border Style="{StaticResource Card}" Margin="0,0,0,12" Visibility="{Binding HasRdap, Converter={StaticResource BoolToVis}}">
+                                <DockPanel>
+                                    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                                        <Button DockPanel.Dock="Right" Style="{StaticResource BtnGhost}" Content="&#xE8C8;" ToolTip="Копировать"
+                                                Command="{Binding CopyValueCommand}" CommandParameter="{Binding D[Rdap]}" />
+                                        <TextBlock Text="ДАННЫЕ РЕЕСТРА (RDAP)" Style="{StaticResource Caption}" VerticalAlignment="Center" />
+                                    </DockPanel>
+                                    <TextBox Text="{Binding D[Rdap], Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                                             Foreground="{DynamicResource TextBrush}" FontSize="12" TextWrapping="Wrap" />
+                                </DockPanel>
+                            </Border>
+
+                            <TextBlock Style="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap">
+                                <Run Text="Ctrl+C" FontWeight="SemiBold" /><Run Text=" копирует выделенные строки, " /><Run Text="Ctrl+Shift+C" FontWeight="SemiBold" /><Run Text=" — только IP. Двойной щелчок по строке копирует её IP." />
+                            </TextBlock>
+                        </StackPanel>
+
+                        <!-- Nothing selected: summary of the program -->
+                        <StackPanel Visibility="{Binding NoSelection, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="{Binding D[SumTitle], Converter={StaticResource Upper}}" Style="{StaticResource Caption}" TextWrapping="Wrap" />
+                            <Border Style="{StaticResource Card}" Margin="0,0,0,16">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
+                                    </Grid.RowDefinitions>
+                                    <Grid.Resources>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="FontSize" Value="12" />
+                                            <Setter Property="Margin" Value="0,3,14,3" />
+                                            <Setter Property="TextWrapping" Value="Wrap" />
+                                        </Style>
+                                    </Grid.Resources>
+                                    <TextBlock Text="Адресов" Foreground="{DynamicResource Text3Brush}" />
+                                    <TextBlock Grid.Column="1" Text="{Binding D[SumAddresses]}" />
+                                    <TextBlock Grid.Row="1" Text="Сетей владельцев" Foreground="{DynamicResource Text3Brush}" />
+                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding D[SumNetworks]}" />
+                                    <TextBlock Grid.Row="2" Text="Страны" Foreground="{DynamicResource Text3Brush}" />
+                                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding D[SumCountries]}" />
+                                    <TextBlock Grid.Row="3" Text="Без домена" Foreground="{DynamicResource Text3Brush}" />
+                                    <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding D[SumNoDomain]}" />
+                                </Grid>
+                            </Border>
+                            <TextBlock Text="СЕТИ ДЛЯ ПРАВИЛ VPN / ФАЙРВОЛА" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}" Padding="10,8" Margin="0,0,0,10">
+                                <TextBox Text="{Binding SumNetworksText, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                                         Foreground="{DynamicResource TextBrush}" FontFamily="{StaticResource MonoFont}" MaxHeight="260"
+                                         VerticalScrollBarVisibility="Auto" />
+                            </Border>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                                <Button Style="{StaticResource BtnPrimarySmall}" Command="{Binding CopySummaryNetworksCommand}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE8C8;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,6,0" />
+                                        <TextBlock Text="Копировать" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Style="{StaticResource BtnSmall}" Margin="8,0,0,0" Content="Другие форматы…" Command="{Binding OpenOwnerExportCommand}" />
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap"
+                                       Text="Выберите строку в таблице, чтобы увидеть подробности: домены, сеть, владельца и данные реестра." />
+                        </StackPanel>
+                    </Grid>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+
+        <!-- ============ Status bar ============ -->
+        <Border Grid.Row="4" Background="{DynamicResource LayerBrush}" BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="0,1,0,0" Padding="16,6">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Right" Text="{Binding TotalsText}" Style="{StaticResource Muted}" FontSize="12" />
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock FontSize="12" Margin="0,0,16,0">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{DynamicResource OkBrush}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding CaptureOk}" Value="False">
+                                        <Setter Property="Foreground" Value="{DynamicResource WarnBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                        <Run Text="●" /><Run Text=" " /><Run Text="{Binding CaptureText, Mode=OneWay}" />
+                    </TextBlock>
+                    <TextBlock Text="{Binding AsnText}" FontSize="12" Margin="0,0,16,0">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource Muted}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding AsnOk}" Value="False">
+                                        <Setter Property="Foreground" Value="{DynamicResource WarnBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <TextBlock Text="{Binding JournalText}" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,16,0" />
+                    <TextBlock Text="{Binding Error}" Foreground="{DynamicResource DangerBrush}" FontSize="12" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- ============ Toast ============ -->
+        <Border Grid.Row="3" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,18" Padding="14,9" CornerRadius="8"
+                Background="{DynamicResource ToastBrush}" Visibility="{Binding ToastVisible, Converter={StaticResource BoolToVis}}">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="18" ShadowDepth="3" Opacity="0.3" />
+            </Border.Effect>
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="&#xE73E;" Style="{StaticResource Icon}" Foreground="{DynamicResource ToastTextBrush}" Margin="0,0,10,0" />
+                <TextBlock Text="Скопировано:" Foreground="{DynamicResource ToastTextBrush}" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding ToastValue}" Foreground="{DynamicResource ToastAccentBrush}" FontWeight="SemiBold" Margin="6,0,0,0" VerticalAlignment="Center" />
+                <Button Content="Отменить" Margin="14,0,0,0" Command="{Binding UndoCopyCommand}" Cursor="Hand"
+                        Visibility="{Binding CanUndo, Converter={StaticResource BoolToVis}}">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <TextBlock Text="{TemplateBinding Content}" Foreground="#BBBBBB" TextDecorations="Underline" VerticalAlignment="Center" />
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+            </StackPanel>
+        </Border>
+
+        <!-- ============ Export side panel ============ -->
+        <Grid Grid.RowSpan="5" DataContext="{Binding Export}" Visibility="{Binding IsOpen, Converter={StaticResource BoolToVis}}">
+            <Border Background="#47000000" MouseLeftButtonDown="OnScrimClick" />
+            <Border Width="560" HorizontalAlignment="Right" Background="{DynamicResource LayerBrush}">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="24" ShadowDepth="0" Opacity="0.35" />
+                </Border.Effect>
+                <DockPanel>
+                    <DockPanel DockPanel.Dock="Top" Margin="20,18,20,10">
+                        <Button DockPanel.Dock="Right" Style="{StaticResource BtnGhost}" Content="&#xE711;" ToolTip="Закрыть (Esc)" Command="{Binding CloseCommand}" />
+                        <TextBlock Text="&#xE898;" Style="{StaticResource Icon}" FontSize="18" Margin="0,0,10,0" />
+                        <TextBlock Text="Экспорт списка" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding Context}" Style="{StaticResource Faint}" VerticalAlignment="Center" Margin="12,2,0,0" TextTrimming="CharacterEllipsis" />
+                    </DockPanel>
+
+                    <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="0,1,0,0" Padding="20,14">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Right" Text="Ctrl+Enter — копировать" Style="{StaticResource Faint}" FontSize="12" VerticalAlignment="Center" />
+                            <StackPanel Orientation="Horizontal">
+                                <Button Style="{StaticResource BtnPrimary}" Command="{Binding CopyCommand}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE8C8;" Style="{StaticResource Icon}" Margin="0,0,8,0" />
+                                        <TextBlock Text="Копировать" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Style="{StaticResource Btn}" Margin="8,0,0,0" Content="Сохранить .txt…" Command="{Binding SaveCommand}" />
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+
+                    <DockPanel Margin="20,0,20,12">
+                        <StackPanel DockPanel.Dock="Top">
+                            <TextBlock Text="Что выгрузить" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6" />
+                            <Border Style="{StaticResource SegmentHost}" Height="34" HorizontalAlignment="Left">
+                                <StackPanel Orientation="Horizontal">
+                                    <RadioButton Style="{StaticResource Segment}" GroupName="what" Content="IP-адреса" IsChecked="{Binding IsAddresses}" />
+                                    <RadioButton Style="{StaticResource Segment}" GroupName="what" Content="Домены" IsChecked="{Binding IsDomains}" />
+                                    <RadioButton Style="{StaticResource Segment}" GroupName="what" Content="Подсети" IsChecked="{Binding IsSubnets}" />
+                                    <RadioButton Style="{StaticResource Segment}" GroupName="what" Content="Сети владельцев" IsChecked="{Binding IsOwners}"
+                                                 ToolTip="Целые блоки, которые объявляет владелец (по базе AS)" />
+                                </StackPanel>
+                            </Border>
+
+                            <StackPanel Margin="0,16,0,0" IsEnabled="{Binding WidthEnabled}">
+                                <DockPanel>
+                                    <TextBlock DockPanel.Dock="Right" Text="{Binding WidthText}" Style="{StaticResource Muted}" FontSize="12" />
+                                    <TextBlock Text="Насколько укрупнять" FontWeight="SemiBold" FontSize="12" />
+                                </DockPanel>
+                                <Slider Minimum="0" Maximum="4" TickFrequency="1" IsSnapToTickEnabled="True" TickPlacement="BottomRight"
+                                        Value="{Binding Width}" Margin="0,6,0,0" AutomationProperties.Name="Насколько укрупнять подсети" />
+                                <UniformGrid Columns="5" Margin="0,2,0,0">
+                                    <TextBlock Text="точно" Style="{StaticResource Muted}" FontSize="12" />
+                                    <TextBlock Text="/28" Style="{StaticResource Muted}" FontSize="12" HorizontalAlignment="Center" Margin="0,0,40,0" />
+                                    <TextBlock Text="/24" Style="{StaticResource Muted}" FontSize="12" HorizontalAlignment="Center" />
+                                    <TextBlock Text="/20" Style="{StaticResource Muted}" FontSize="12" HorizontalAlignment="Center" Margin="40,0,0,0" />
+                                    <TextBlock Text="/16" Style="{StaticResource Muted}" FontSize="12" HorizontalAlignment="Right" />
+                                </UniformGrid>
+                                <TextBlock Style="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0"
+                                           Text="Шире — меньше строк, но в список попадут и соседние адреса, которые программа не использовала." />
+                            </StackPanel>
+
+                            <TextBlock Text="Куда будете вставлять" FontWeight="SemiBold" FontSize="12" Margin="0,16,0,6" />
+                            <UniformGrid Columns="2" IsEnabled="{Binding TargetEnabled}">
+                                <RadioButton Style="{StaticResource OptionCard}" GroupName="target" IsChecked="{Binding IsLines}">
+                                    <StackPanel>
+                                        <TextBlock Text="Список по строкам" FontWeight="SemiBold" />
+                                        <TextBlock Text="Обычный текст, одна сеть в строке" Style="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </RadioButton>
+                                <RadioButton Style="{StaticResource OptionCard}" GroupName="target" IsChecked="{Binding IsWireGuard}">
+                                    <StackPanel>
+                                        <TextBlock Text="WireGuard / AmneziaWG" FontWeight="SemiBold" />
+                                        <TextBlock Text="AllowedIPs = 1.2.3.0/24, …" Style="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </RadioButton>
+                                <RadioButton Style="{StaticResource OptionCard}" GroupName="target" IsChecked="{Binding IsFirewall}">
+                                    <StackPanel>
+                                        <TextBlock Text="Файрвол Windows" FontWeight="SemiBold" />
+                                        <TextBlock Text="Через запятую, для поля «Удалённые IP-адреса»" Style="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </RadioButton>
+                                <RadioButton Style="{StaticResource OptionCard}" GroupName="target" IsChecked="{Binding IsMask}">
+                                    <StackPanel>
+                                        <TextBlock Text="С маской" FontWeight="SemiBold" />
+                                        <TextBlock Text="1.2.3.0 255.255.255.0 — для роутеров" Style="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </RadioButton>
+                            </UniformGrid>
+
+                            <StackPanel Orientation="Horizontal" Margin="0,4,0,12">
+                                <CheckBox Content="Только IPv4" IsChecked="{Binding Ipv4Only}" Margin="0,0,20,0" />
+                                <CheckBox Content="Комментарии с доменами" IsChecked="{Binding Comments}" IsEnabled="{Binding CommentsEnabled}"
+                                          ToolTip="Добавляет в конец строки # домены, которые ведут в эту сеть" />
+                            </StackPanel>
+
+                            <DockPanel Margin="0,0,0,6">
+                                <TextBlock DockPanel.Dock="Right" Text="{Binding Summary}" Style="{StaticResource Faint}" FontSize="12" />
+                                <TextBlock Text="Предпросмотр" FontWeight="SemiBold" FontSize="12" />
+                            </DockPanel>
+                        </StackPanel>
+                        <Border Style="{StaticResource Field}" Padding="10,8">
+                            <TextBox Text="{Binding Preview, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                                     Foreground="{DynamicResource TextBrush}" FontFamily="{StaticResource MonoFont}" TextWrapping="Wrap"
+                                     VerticalScrollBarVisibility="Auto" />
+                        </Border>
+                    </DockPanel>
+                </DockPanel>
+            </Border>
         </Grid>
-    </DockPanel>
+    </Grid>
 </Window>

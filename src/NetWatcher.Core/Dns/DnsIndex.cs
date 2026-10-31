@@ -45,6 +45,26 @@ public sealed class DnsIndex
         }
     }
 
+    /// <summary>DNS answers seen by a process (or by everyone when null), newest first.</summary>
+    public List<DnsAnswer> Answers(Func<string, bool>? process, DateTimeOffset since)
+    {
+        lock (_lock)
+        {
+            return _byIp
+                .SelectMany(kv => kv.Value
+                    .Where(e => e.LastSeen >= since && (process == null || process(e.Process)))
+                    .Select(e => (Ip: kv.Key, e)))
+                .GroupBy(x => (x.e.Domain, Process: x.e.Process.ToLowerInvariant()))
+                .Select(g => new DnsAnswer(
+                    g.Key.Domain,
+                    g.First().e.Process,
+                    g.Select(x => IpKey.ToAddress(x.Ip)).OrderBy(IpKey.From).ToList(),
+                    g.Max(x => x.e.LastSeen)))
+                .OrderByDescending(a => a.LastSeen)
+                .ToList();
+        }
+    }
+
     public void RemoveOlderThan(DateTimeOffset cutoff)
     {
         lock (_lock)
@@ -65,6 +85,8 @@ public sealed class DnsIndex
             lock (_lock) return _byIp.Count;
         }
     }
+
+    public sealed record DnsAnswer(string Domain, string Process, IReadOnlyList<IPAddress> Addresses, DateTimeOffset LastSeen);
 
     private sealed record Entry(string Domain, string Process, DateTimeOffset LastSeen);
 }

@@ -81,6 +81,24 @@ public static class Analysis
             .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
+    /// <summary>
+    /// From when a destination counts as "new": the last 24 hours, but not the first hour
+    /// of the log — on the first run everything would be new. Null means nothing is new yet.
+    /// </summary>
+    public static DateTimeOffset? NewSince(DateTimeOffset now, DateTimeOffset? logStart)
+    {
+        if (logStart is not { } start) return null;
+        var since = new[] { now.AddHours(-24), start.AddHours(1) }.Max();
+        return since > now ? null : since;
+    }
+
+    /// <summary>Marks rows whose destination was first seen at or after <paramref name="since"/>.</summary>
+    public static void MarkNew(IEnumerable<DestinationRow> rows, IReadOnlyDictionary<string, DateTimeOffset> firstSeen, DateTimeOffset? since)
+    {
+        foreach (var r in rows)
+            r.IsNew = since is { } s && firstSeen.TryGetValue(r.Key, out var first) && first >= s;
+    }
+
     /// <summary>Distinct addresses of the rows, sorted, one per line.</summary>
     public static List<IPAddress> Addresses(IEnumerable<DestinationRow> rows) =>
         rows.Select(r => r.RemoteIp).DistinctBy(IpKey.From).OrderBy(IpKey.From).ToList();

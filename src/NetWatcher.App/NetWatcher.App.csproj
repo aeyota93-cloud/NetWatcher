@@ -10,6 +10,8 @@
     <AssemblyName>NetWatcher</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- The Windows 11 (Fluent) theme for standard controls is marked experimental in WPF. -->
+    <NoWarn>$(NoWarn);WPF0001</NoWarn>
     <!-- Lets the project build on Linux/macOS CI; it still runs only on Windows. -->
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
   </PropertyGroup>

@@ -17,10 +17,17 @@ public sealed class Settings
 
     public AddressFormat AddressFormat { get; set; } = AddressFormat.Cidr;
 
+    /// <summary>"System", "Light" or "Dark".</summary>
+    public string Theme { get; set; } = "System";
+
+    /// <summary>Program list order: by activity (true) or by name.</summary>
+    public bool SortByActivity { get; set; } = true;
+
     public void Normalize()
     {
         RetentionDays = Math.Clamp(RetentionDays, 1, 365);
         PollSeconds = Math.Clamp(PollSeconds, 1, 60);
+        if (Theme is not ("System" or "Light" or "Dark")) Theme = "System";
     }
 
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = true };

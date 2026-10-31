@@ -36,6 +36,7 @@ internal sealed class Collector : IDisposable
     }
 
     public bool DnsCapture => _etw.DnsRunning;
+    public bool IsElevated { get; } = Microsoft.Diagnostics.Tracing.Session.TraceEventSession.IsElevated() == true;
     public bool KernelCapture => _etw.KernelRunning;
     public string? CaptureError => _etw.Error;
 

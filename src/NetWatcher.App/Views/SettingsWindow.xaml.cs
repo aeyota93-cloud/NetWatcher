@@ -15,6 +15,12 @@ internal partial class SettingsWindow : Window
         Retention.Text = state.Settings.RetentionDays.ToString();
         Poll.Text = state.Settings.PollSeconds.ToString();
         HideLoopback.IsChecked = state.Settings.HideLoopback;
+        (state.Settings.Theme switch
+        {
+            "Light" => ThemeLight,
+            "Dark" => ThemeDark,
+            _ => ThemeSystem,
+        }).IsChecked = true;
         AsnInfo.Text = state.AsnStatus;
         AsnButton.Content = state.Asn.Count > 0 ? "Обновить базу" : "Скачать базу";
         ShowDbInfo();
@@ -43,7 +49,9 @@ internal partial class SettingsWindow : Window
         s.RetentionDays = days;
         s.PollSeconds = poll;
         s.HideLoopback = HideLoopback.IsChecked == true;
+        s.Theme = ThemeLight.IsChecked == true ? "Light" : ThemeDark.IsChecked == true ? "Dark" : "System";
         _state.SaveSettings();
+        ThemeService.Apply(s.Theme);
         if (shorter) _state.Collector.PurgeSoon();
         DialogResult = true;
     }

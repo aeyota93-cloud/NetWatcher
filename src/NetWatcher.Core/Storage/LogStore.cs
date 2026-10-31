@@ -156,6 +156,67 @@ public sealed class LogStore : IDisposable
         return rows;
     }
 
+    /// <summary>When each destination (by <see cref="DestinationRow.Key"/>) was first seen, over the whole log.</summary>
+    public Dictionary<string, DateTimeOffset> FirstSeenByRow()
+    {
+        var result = new Dictionary<string, DateTimeOffset>();
+        lock (_lock)
+        {
+            using var cmd = _db.CreateCommand();
+            cmd.CommandText = """
+                SELECT process, services, proto, remote_ip, remote_port, min(first_seen)
+                FROM seen GROUP BY process, services, proto, remote_ip, remote_port
+                """;
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+            {
+                var group = r.GetString(1) == "" ? r.GetString(0) : $"{r.GetString(0)} · {r.GetString(1)}";
+                result[$"{group}|{r.GetString(2)}|{r.GetString(3)}|{r.GetInt32(4)}"] = DateTimeOffset.FromUnixTimeMilliseconds(r.GetInt64(5));
+            }
+        }
+        return result;
+    }
+
+    /// <summary>The oldest moment in the log, or null when it is empty.</summary>
+    public DateTimeOffset? LogStart()
+    {
+        lock (_lock)
+        {
+            using var cmd = _db.CreateCommand();
+            cmd.CommandText = "SELECT min(first_seen) FROM seen";
+            return cmd.ExecuteScalar() is long ms ? DateTimeOffset.FromUnixTimeMilliseconds(ms) : null;
+        }
+    }
+
+    /// <summary>
+    /// Activity per group for the last <paramref name="hours"/> hours: how many destinations
+    /// were active in each hour, oldest hour first.
+    /// </summary>
+    public Dictionary<string, int[]> Activity(DateTimeOffset now, int hours)
+    {
+        var result = new Dictionary<string, int[]>();
+        var last = now.ToUnixTimeMilliseconds() / 3_600_000;
+        var first = last - hours + 1;
+        lock (_lock)
+        {
+            using var cmd = _db.CreateCommand();
+            cmd.CommandText = """
+                SELECT process, services, bucket, count(*) FROM seen
+                WHERE bucket >= $b GROUP BY process, services, bucket
+                """;
+            cmd.Parameters.AddWithValue("$b", first);
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+            {
+                var group = r.GetString(1) == "" ? r.GetString(0) : $"{r.GetString(0)} · {r.GetString(1)}";
+                if (!result.TryGetValue(group, out var bars)) result[group] = bars = new int[hours];
+                var i = (int)(r.GetInt64(2) - first);
+                if (i >= 0 && i < hours) bars[i] = r.GetInt32(3);
+            }
+        }
+        return result;
+    }
+
     /// <summary>Fills an index with every stored DNS answer, so domains survive a restart.</summary>
     public void LoadDns(DnsIndex index)
     {

@@ -41,6 +41,14 @@ public sealed class DestinationRow
     public string ServicesDisplay { get; set; } = "";
 
     public string GroupKey => Services == "" ? Process : $"{Process} · {Services}";
+
+    /// <summary>Identifies the row across refreshes: group, protocol, address and port.</summary>
+    public string Key => $"{GroupKey}|{Proto}|{RemoteIpText}|{RemotePort}";
+
+    /// <summary>The program first went to this address recently (see <see cref="Analysis.NewSince"/>).</summary>
+    public bool IsNew { get; set; }
+
+    public string PrimaryDomain => Domains.Count > 0 ? Domains[0] : "";
     public string RemoteIpText => RemoteIp.ToString();
     public string DomainsText => string.Join(", ", Domains);
     public string OwnerText => Asn?.OwnerText ?? "";

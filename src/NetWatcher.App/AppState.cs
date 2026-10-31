@@ -20,6 +20,9 @@ internal sealed class AppState : IDisposable
 
     public string AsnStatus { get; set; } = "";
 
+    /// <summary>The owner database is being read from disk at start.</summary>
+    public bool AsnLoading { get; private set; } = true;
+
     public AppState()
     {
         Settings = Settings.Load(AppPaths.Settings);
@@ -42,7 +45,8 @@ internal sealed class AppState : IDisposable
     {
         if (!File.Exists(AppPaths.AsnDatabase))
         {
-            AsnStatus = "База владельцев IP не скачана: Настройки → «Скачать базу»";
+            AsnStatus = "База владельцев IP не скачана";
+            AsnLoading = false;
             return;
         }
         try
@@ -55,12 +59,16 @@ internal sealed class AppState : IDisposable
         {
             AsnStatus = "База владельцев IP не читается: " + e.Message;
         }
+        finally
+        {
+            AsnLoading = false;
+        }
     }
 
     public void SetAsnLoaded()
     {
         var date = File.GetLastWriteTime(AppPaths.AsnDatabase);
-        AsnStatus = $"База владельцев IP: {Asn.Count:N0} диапазонов от {date:dd.MM.yyyy}";
+        AsnStatus = $"База владельцев IP от {date:dd.MM.yyyy}";
     }
 
     public void SaveSettings() => Settings.Save(AppPaths.Settings);

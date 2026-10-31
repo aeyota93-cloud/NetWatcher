@@ -3,48 +3,12 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              ShutdownMode="OnMainWindowClose">
     <Application.Resources>
-        <SolidColorBrush x:Key="Accent" Color="#2563EB" />
-        <SolidColorBrush x:Key="AccentSoft" Color="#DBEAFE" />
-        <SolidColorBrush x:Key="Surface" Color="#FFFFFF" />
-        <SolidColorBrush x:Key="Background" Color="#F3F4F6" />
-        <SolidColorBrush x:Key="Border" Color="#E5E7EB" />
-        <SolidColorBrush x:Key="Text" Color="#111827" />
-        <SolidColorBrush x:Key="MutedBrush" Color="#6B7280" />
-        <SolidColorBrush x:Key="Danger" Color="#B91C1C" />
-
-        <Style TargetType="Window" x:Key="BaseWindow">
-            <Setter Property="FontFamily" Value="Segoe UI" />
-            <Setter Property="FontSize" Value="13" />
-            <Setter Property="Background" Value="{StaticResource Background}" />
-            <Setter Property="Foreground" Value="{StaticResource Text}" />
-        </Style>
-
-        <Style TargetType="Button">
-            <Setter Property="Padding" Value="12,5" />
-            <Setter Property="Margin" Value="4,0,0,0" />
-            <Setter Property="Background" Value="{StaticResource Surface}" />
-            <Setter Property="BorderBrush" Value="{StaticResource Border}" />
-            <Setter Property="Cursor" Value="Hand" />
-        </Style>
-
-        <Style TargetType="Button" x:Key="PrimaryButton" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Background" Value="{StaticResource Accent}" />
-            <Setter Property="Foreground" Value="White" />
-            <Setter Property="BorderBrush" Value="{StaticResource Accent}" />
-        </Style>
-
-        <Style TargetType="ComboBox">
-            <Setter Property="Padding" Value="8,5" />
-            <Setter Property="VerticalContentAlignment" Value="Center" />
-        </Style>
-
-        <Style TargetType="TextBlock" x:Key="Muted">
-            <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
-        </Style>
-
-        <Style TargetType="TextBlock" x:Key="Header">
-            <Setter Property="FontSize" Value="15" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-        </Style>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!-- ThemeService swaps Light.xaml for Dark.xaml at run time. -->
+                <ResourceDictionary Source="Themes/Light.xaml" />
+                <ResourceDictionary Source="Themes/Styles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
     </Application.Resources>
 </Application>

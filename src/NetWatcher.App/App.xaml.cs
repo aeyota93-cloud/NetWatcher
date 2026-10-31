@@ -36,6 +36,7 @@ public partial class App : Application
             return;
         }
 
+        ThemeService.Init(_state.Settings.Theme);
         MainWindow = new MainWindow(_state);
         MainWindow.Show();
     }

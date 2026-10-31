@@ -1,258 +1,501 @@
 using System.Collections;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
-using System.Net;
+using System.Globalization;
 using System.Windows;
 using System.Windows.Threading;
-using Microsoft.Win32;
+using NetWatcher.App.Native;
 using NetWatcher.Core;
+using NetWatcher.Core.Asn;
 using NetWatcher.Core.Net;
-using System.Globalization;
-using System.Windows.Data;
 
 namespace NetWatcher.App.ViewModels;
 
-public sealed record PeriodOption(string Title, TimeSpan? Span, bool Live)
-{
-    public override string ToString() => Title;
-}
-
-public enum ListMode
-{
-    Addresses,
-    Domains,
-    Exact,
-    Wide24,
-    Wide16,
-    Owner,
-}
-
-public sealed record ListModeOption(string Title, ListMode Mode)
-{
-    public override string ToString() => Title;
-}
-
 internal sealed class MainViewModel : ObservableObject
 {
+    private const string AllKey = "";
+    private const string AppsSection = "Приложения";
+    private const string ServicesSection = "Службы Windows";
+
     private readonly AppState _state;
-    private readonly DispatcherTimer _autoRefresh;
+    private readonly DispatcherTimer _refreshTimer;
+    private readonly DispatcherTimer _clock;
     private readonly DispatcherTimer _searchDelay;
-    private readonly DispatcherTimer _noticeTimer;
-    private string _notice = "";
-    private List<DestinationRow> _allRows = [];
+    private readonly DispatcherTimer _toastTimer;
+    private readonly HashSet<string> _expanded = [];
+    private readonly Dictionary<string, string> _groupTitles = [];
+
+    private List<DestinationRow> _rows = [];
+    private int _totalAddresses;
+    private DateTimeOffset? _logStart;
+    private DateTime _lastRefresh = DateTime.MinValue;
     private bool _refreshing;
     private bool _pending;
+    private PeriodItem _period;
+    private string? _clipboardBefore;
 
-    private string _searchText = "";
-    private PeriodOption _period;
-    private GroupView? _selectedGroup;
-    private bool _paused;
-    private ListModeOption _listMode;
-    private bool _useMask;
-    private bool _ipv4Only;
-    private string _listText = "";
-    private string _listSummary = "";
-    private string _summary = "";
-    private string _captureStatus = "";
-    private string _asnStatus = "";
-    private string _error = "";
+    // Data that changes slowly is read once in a while.
+    private DateTime _slowAt = DateTime.MinValue;
+    private Dictionary<string, DateTimeOffset> _firstSeen = [];
+    private Dictionary<string, DateTimeOffset> _groupFirstSeen = [];
+    private Dictionary<string, int[]> _activity = [];
 
     public MainViewModel(AppState state)
     {
         _state = state;
+
+        Periods =
+        [
+            new("Сейчас", null, true),
+            new("15 мин", TimeSpan.FromMinutes(15), false),
+            new("1 час", TimeSpan.FromHours(1), false),
+            new("24 часа", TimeSpan.FromDays(1), false),
+            new("7 дней", TimeSpan.FromDays(7), false),
+            new("Всё", null, false),
+        ];
         _period = Periods[0];
-        _listMode = ListModes[0];
-        _useMask = state.Settings.AddressFormat == AddressFormat.Mask;
+        Periods[0].IsOn = true;
+        foreach (var p in Periods) p.Selected = OnPeriod;
 
-        Groups.Add(new GroupView("", "Все программы", ""));
-        _selectedGroup = Groups[0];
+        Chips =
+        [
+            new("TCP", QuickFilter.Tcp, "Только соединения TCP"),
+            new("UDP", QuickFilter.Udp, "Только UDP: QUIC/HTTP3, звонки, игры, DNS"),
+            new("С доменом", QuickFilter.WithDomain, "Адреса, для которых известен домен"),
+            new("Без домена", QuickFilter.NoDomain, "Программа обращается напрямую по IP — стоит присмотреться"),
+            new("Только новые", QuickFilter.OnlyNew, "Адреса, на которые программа впервые пошла за последние сутки"),
+            new("Скрыть Microsoft", QuickFilter.HideMicrosoft, "Убрать обращения к сетям и доменам Microsoft"),
+            new("Только IPv4", QuickFilter.Ipv4, "Скрыть адреса IPv6"),
+        ];
+        foreach (var c in Chips) c.Changed = () => _ = RefreshAsync();
 
-        _autoRefresh = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
-        _autoRefresh.Tick += (_, _) => _ = RefreshAsync();
-        _searchDelay = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
+        Nav.Add(new NavItem(AllKey, "", "") { Title = "Все" });
+        _selectedNav = Nav[0];
+
+        Export = new ExportViewModel(() => VisibleRows.ToList(), Copy);
+
+        _refreshTimer = new DispatcherTimer();
+        _refreshTimer.Tick += (_, _) => _ = RefreshAsync();
+        _clock = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _clock.Tick += (_, _) => UpdateLive();
+        _searchDelay = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
         _searchDelay.Tick += (_, _) =>
         {
             _searchDelay.Stop();
             _ = RefreshAsync();
         };
+        _toastTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
+        _toastTimer.Tick += (_, _) =>
+        {
+            _toastTimer.Stop();
+            ToastVisible = false;
+        };
 
         RefreshCommand = new RelayCommand(() => _ = RefreshAsync());
         ClearSearchCommand = new RelayCommand(() => SearchText = "");
-        CopyIpCommand = new RelayCommand(p => CopyLines(Selected(p).Select(r => r.Ip).Distinct()));
-        CopyDomainCommand = new RelayCommand(p => CopyLines(Selected(p).SelectMany(r => r.Row.Domains).Distinct()));
-        CopyNetworkCommand = new RelayCommand(p => CopyLines(Selected(p).Select(r => r.Network).Where(n => n != "").Distinct()));
-        CopyRowCommand = new RelayCommand(p => CopyLines(Selected(p).Select(r => r.ToLine())));
-        SearchIpCommand = new RelayCommand(p => SearchFor(Selected(p).FirstOrDefault()?.Ip));
-        SearchProcessCommand = new RelayCommand(p => SearchFor(Selected(p).FirstOrDefault()?.Process));
-        SearchDomainCommand = new RelayCommand(p => SearchFor(Selected(p).FirstOrDefault()?.Row.Domains.FirstOrDefault()));
-        RdapCommand = new RelayCommand(p => _ = RdapAsync(Selected(p).FirstOrDefault()));
-        OpenFolderCommand = new RelayCommand(p => OpenFolder(Selected(p).FirstOrDefault()?.Path));
-        CopyListCommand = new RelayCommand(() => Copy(ListText));
-        SaveListCommand = new RelayCommand(SaveList);
-        CopyGroupCommand = new RelayCommand(p => { if (p is GroupView g) Copy(g.Title); });
-        CopyGroupIpsCommand = new RelayCommand(p => CopyLines(Analysis.Addresses(RowsOf(p as GroupView)).Select(a => a.ToString())));
-        CopyGroupDomainsCommand = new RelayCommand(p => CopyLines(RowsOf(p as GroupView).SelectMany(r => r.Domains).Distinct().Order(StringComparer.OrdinalIgnoreCase)));
-        _noticeTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
-        _noticeTimer.Tick += (_, _) =>
+        ResetFiltersCommand = new RelayCommand(ResetFilters);
+        ToggleCommand = new RelayCommand(p => Toggle(p as TableItem));
+        CopyIpCommand = new RelayCommand(p => CopyLines(Rows(p).Select(r => r.RemoteIpText).Distinct(), "IP"));
+        CopyDomainCommand = new RelayCommand(p => CopyLines(Rows(p).SelectMany(r => r.Domains).Distinct(), "домены"));
+        CopyNetworkCommand = new RelayCommand(p => CopyLines(Rows(p).Select(r => r.NetworkText(Format)).Where(n => n != "").Distinct(), "сети"));
+        CopyRowCommand = new RelayCommand(p => CopyLines(Items(p).SelectMany(i => i.Lines()), "строки"));
+        CopyValueCommand = new RelayCommand(p => Copy(p as string ?? "", null));
+        CopyAllIpsCommand = new RelayCommand(() => CopyLines(Analysis.Addresses(VisibleRows).Select(a => a.ToString()), "все IP"));
+        CopyAllDomainsCommand = new RelayCommand(() => CopyLines(VisibleRows.SelectMany(r => r.Domains).Distinct().Order(StringComparer.OrdinalIgnoreCase), "все домены"));
+        CopySummaryNetworksCommand = new RelayCommand(() => Copy(SumNetworksText, "сети владельцев"));
+        SearchIpCommand = new RelayCommand(p => SearchFor(Rows(p).FirstOrDefault()?.RemoteIpText));
+        SearchDomainCommand = new RelayCommand(p => SearchFor(Rows(p).FirstOrDefault()?.PrimaryDomain));
+        SearchProgramCommand = new RelayCommand(p => SearchFor(Rows(p).FirstOrDefault()?.Process));
+        SearchTextCommand = new RelayCommand(p => SearchFor(p as string));
+        WhoElseCommand = new RelayCommand(() => SearchFor(SelectedItem?.Rows.FirstOrDefault()?.RemoteIpText));
+        RdapCommand = new RelayCommand(p => _ = RdapAsync(Rows(p).FirstOrDefault() ?? SelectedItem?.Rows.FirstOrDefault()));
+        OpenFolderCommand = new RelayCommand(p => OpenFolder(Rows(p).FirstOrDefault()?.Path));
+        UndoCopyCommand = new RelayCommand(UndoCopy);
+        OpenExportCommand = new RelayCommand(() => Export.Open(ExportContext));
+        OpenVpnExportCommand = new RelayCommand(() => Export.Open(ExportContext, ExportWhat.Subnets));
+        OpenOwnerExportCommand = new RelayCommand(() => Export.Open(ExportContext, ExportWhat.OwnerNetworks));
+        DownloadAsnCommand = new RelayCommand(_ => _ = DownloadAsnAsync(), _ => !AsnBusy);
+        HideBannerCommand = new RelayCommand(() =>
         {
-            _noticeTimer.Stop();
-            Notice = "";
-        };
+            _bannerHidden = true;
+            OnPropertyChanged(nameof(AsnBannerVisible));
+        });
+        ToggleThemeCommand = new RelayCommand(() =>
+        {
+            _state.Settings.Theme = ThemeService.IsDark ? "Light" : "Dark";
+            _state.SaveSettings();
+            ThemeService.Apply(_state.Settings.Theme);
+        });
+        TogglePauseCommand = new RelayCommand(() => Paused = !Paused);
     }
 
     public void Start()
     {
         UpdateTimer();
-        _autoRefresh.Start();
+        _refreshTimer.Start();
+        _clock.Start();
         _ = RefreshAsync();
     }
 
-    // ---- what is on screen ----
+    // =====================================================================
+    // Top bar: search, period, filters, live state
+    // =====================================================================
 
-    public PeriodOption[] Periods { get; } =
-    [
-        new("Сейчас (активные)", null, Live: true),
-        new("Последние 15 минут", TimeSpan.FromMinutes(15), false),
-        new("Последний час", TimeSpan.FromHours(1), false),
-        new("Последние 24 часа", TimeSpan.FromDays(1), false),
-        new("Последние 7 дней", TimeSpan.FromDays(7), false),
-        new("Вся история", null, false),
-    ];
+    public PeriodItem[] Periods { get; }
+    public FilterChip[] Chips { get; }
 
-    public ListModeOption[] ListModes { get; } =
-    [
-        new("IP-адреса", ListMode.Addresses),
-        new("Домены", ListMode.Domains),
-        new("Подсети: только эти адреса", ListMode.Exact),
-        new("Подсети: расширить до /24", ListMode.Wide24),
-        new("Подсети: расширить до /16", ListMode.Wide16),
-        new("Сети владельцев (по базе AS)", ListMode.Owner),
-    ];
-
-    public ObservableCollection<GroupView> Groups { get; } = [];
-    public ObservableCollection<RowView> Rows { get; } = [];
-
+    private string _searchText = "";
     public string SearchText
     {
         get => _searchText;
         set
         {
             if (!Set(ref _searchText, value)) return;
+            OnPropertyChanged(nameof(HasSearch));
             _searchDelay.Stop();
             _searchDelay.Start();
         }
     }
 
-    public PeriodOption Period
-    {
-        get => _period;
-        set
-        {
-            if (!Set(ref _period, value)) return;
-            UpdateTimer();
-            _ = RefreshAsync();
-        }
-    }
+    public bool HasSearch => _searchText.Length > 0;
 
-    public GroupView? SelectedGroup
-    {
-        get => _selectedGroup;
-        set
-        {
-            if (!Set(ref _selectedGroup, value)) return;
-            ApplyRows();
-            UpdateList();
-        }
-    }
+    private QuickFilter Filters => Chips.Where(c => c.IsOn).Aggregate(QuickFilter.None, (a, c) => a | c.Flag);
+    private bool FiltersActive => DestinationRow.SplitQuery(SearchText).Count > 0 || Filters != QuickFilter.None;
 
+    private string _foundText = "";
+    public string FoundText { get => _foundText; private set => Set(ref _foundText, value); }
+
+    private bool _paused;
     public bool Paused
     {
         get => _paused;
         set
         {
             if (!Set(ref _paused, value)) return;
-            if (value) _autoRefresh.Stop();
+            OnPropertyChanged(nameof(PauseGlyph));
+            if (value) _refreshTimer.Stop();
             else
             {
-                _autoRefresh.Start();
+                _refreshTimer.Start();
                 _ = RefreshAsync();
             }
+            UpdateLive();
         }
     }
 
-    public ListModeOption ListModeOption
+    public string PauseGlyph => Paused ? "" : "";
+
+    private string _liveText = "";
+    public string LiveText { get => _liveText; private set => Set(ref _liveText, value); }
+    private bool _liveOk = true;
+    public bool LiveOk { get => _liveOk; private set => Set(ref _liveOk, value); }
+
+    private void UpdateLive()
     {
-        get => _listMode;
-        set
+        if (Paused)
         {
-            if (Set(ref _listMode, value)) UpdateList();
+            LiveText = "Пауза — экран не обновляется, запись идёт";
+            LiveOk = false;
+            return;
         }
+        var ago = (int)(DateTime.Now - _lastRefresh).TotalSeconds;
+        LiveText = _lastRefresh == DateTime.MinValue ? "Запись идёт" : $"Запись идёт · обновлено {Math.Max(ago, 0)} с назад";
+        LiveOk = _state.Collector.LastError == null;
     }
 
-    public bool UseMask
+    private void OnPeriod(PeriodItem p)
     {
-        get => _useMask;
-        set
-        {
-            if (!Set(ref _useMask, value)) return;
-            _state.Settings.AddressFormat = value ? AddressFormat.Mask : AddressFormat.Cidr;
-            _state.SaveSettings();
-            foreach (var r in Rows) r.Update(r.Row, Format);
-            UpdateList();
-        }
+        foreach (var other in Periods)
+            if (other != p) other.IsOn = false;
+        _period = p;
+        UpdateTimer();
+        _ = RefreshAsync();
     }
-
-    public bool Ipv4Only
-    {
-        get => _ipv4Only;
-        set
-        {
-            if (Set(ref _ipv4Only, value)) UpdateList();
-        }
-    }
-
-    public string ListText { get => _listText; private set => Set(ref _listText, value); }
-    public string ListSummary { get => _listSummary; private set => Set(ref _listSummary, value); }
-    public string Summary { get => _summary; private set => Set(ref _summary, value); }
-    public string CaptureStatus { get => _captureStatus; private set => Set(ref _captureStatus, value); }
-    public string AsnStatus { get => _asnStatus; private set => Set(ref _asnStatus, value); }
-    public string Error { get => _error; private set => Set(ref _error, value); }
-    public string Notice { get => _notice; private set => Set(ref _notice, value); }
-
-    private AddressFormat Format => UseMask ? AddressFormat.Mask : AddressFormat.Cidr;
-
-    // ---- commands ----
-
-    public RelayCommand RefreshCommand { get; }
-    public RelayCommand ClearSearchCommand { get; }
-    public RelayCommand CopyIpCommand { get; }
-    public RelayCommand CopyDomainCommand { get; }
-    public RelayCommand CopyNetworkCommand { get; }
-    public RelayCommand CopyRowCommand { get; }
-    public RelayCommand SearchIpCommand { get; }
-    public RelayCommand SearchProcessCommand { get; }
-    public RelayCommand SearchDomainCommand { get; }
-    public RelayCommand RdapCommand { get; }
-    public RelayCommand OpenFolderCommand { get; }
-    public RelayCommand CopyListCommand { get; }
-    public RelayCommand SaveListCommand { get; }
-    public RelayCommand CopyGroupCommand { get; }
-    public RelayCommand CopyGroupIpsCommand { get; }
-    public RelayCommand CopyGroupDomainsCommand { get; }
-
-    // ---- refresh ----
 
     private void UpdateTimer()
     {
-        var poll = _state.Settings.PollSeconds;
-        _autoRefresh.Interval = TimeSpan.FromSeconds(Period.Live ? Math.Max(poll, 2) : 10);
+        _refreshTimer.Interval = TimeSpan.FromSeconds(_period.Live ? Math.Max(_state.Settings.PollSeconds, 2) : 10);
+    }
+
+    private void ResetFilters()
+    {
+        foreach (var c in Chips) c.IsOn = false;
+        SearchText = "";
+    }
+
+    /// <summary>Esc: close the export panel, else clear search and filters.</summary>
+    public void Escape()
+    {
+        if (Export.IsOpen) Export.IsOpen = false;
+        else ResetFilters();
     }
 
     public void SettingsChanged()
     {
         UpdateTimer();
+        _slowAt = DateTime.MinValue;
         _ = RefreshAsync();
     }
+
+    // =====================================================================
+    // Left list
+    // =====================================================================
+
+    public ObservableCollection<NavItem> Nav { get; } = [];
+
+    private NavItem? _selectedNav;
+    public NavItem? SelectedNav
+    {
+        get => _selectedNav;
+        set
+        {
+            if (value == null || !Set(ref _selectedNav, value)) return;
+            SelectedItem = null;
+            UpdateHeader();
+            ApplyTable();
+            UpdateDetails();
+            if (Export.IsOpen) Export.Open(ExportContext);
+        }
+    }
+
+    public int NavSortIndex
+    {
+        get => _state.Settings.SortByActivity ? 0 : 1;
+        set
+        {
+            _state.Settings.SortByActivity = value == 0;
+            _state.SaveSettings();
+            OnPropertyChanged();
+            ApplyNav();
+        }
+    }
+
+    private IEnumerable<DestinationRow> VisibleRows =>
+        SelectedNav is null or { IsAll: true } ? _rows : _rows.Where(r => r.GroupKey == SelectedNav.Key);
+
+    private void ApplyNav()
+    {
+        var names = _state.Collector.Services.DisplayNames;
+        var maxActivity = Math.Max(1, _activity.Values.SelectMany(v => v).DefaultIfEmpty(0).Max());
+        var newSince = Analysis.NewSince(DateTimeOffset.Now, _logStart);
+        var existing = Nav.Skip(1).ToDictionary(n => n.Key);
+        var items = new List<NavItem>();
+
+        foreach (var g in _rows.GroupBy(r => r.GroupKey))
+        {
+            var first = g.First();
+            var path = g.Select(r => r.Path).FirstOrDefault(p => p != "") ?? "";
+            var isService = first.Services != "" || first.Process is "System";
+            var item = existing.GetValueOrDefault(g.Key) ?? new NavItem(g.Key, isService ? ServicesSection : AppsSection, path);
+            item.Title = TitleOf(first, path, names);
+            item.Subtitle = first.Services != "" ? $"{first.Process} · {first.Services.Replace(",", ", ")}" : first.Process;
+            item.Addresses = g.Select(r => r.RemoteIp).Distinct().Count();
+            item.Count = $"{item.Addresses} адр.";
+            item.LastSeen = g.Max(r => r.LastSeen);
+            item.IsNew = newSince is { } s && _groupFirstSeen.TryGetValue(g.Key, out var f) && f >= s;
+            item.Bars = (_activity.GetValueOrDefault(g.Key) ?? new int[7])
+                .Select(v => v == 0 ? 1.0 : 2 + 12 * Math.Sqrt(v / (double)maxActivity)).ToList();
+            _groupTitles[g.Key] = item.Title;
+            items.Add(item);
+        }
+
+        // The selected entry stays even when the filters hide it, so the user does not lose their place.
+        if (SelectedNav is { IsAll: false } sel && items.All(i => i.Key != sel.Key))
+        {
+            sel.Count = "0 адр.";
+            sel.Bars = [];
+            items.Add(sel);
+        }
+
+        var sorted = items.OrderBy(i => i.Section == AppsSection ? 0 : 1);
+        var list = (_state.Settings.SortByActivity
+                ? sorted.ThenByDescending(i => i.LastSeen).ThenByDescending(i => i.Addresses)
+                : sorted.ThenBy(i => i.Title, StringComparer.CurrentCultureIgnoreCase))
+            .ToList();
+
+        var all = Nav[0];
+        all.Subtitle = FiltersActive
+            ? TextFormat.Plural(list.Count, "совпадение", "совпадения", "совпадений")
+            : TextFormat.Plural(list.Count, "программа и служба", "программы и службы", "программ и служб");
+        all.Count = $"{_rows.Select(r => r.RemoteIp).Distinct().Count()} адр.";
+
+        Sync(Nav, list, 1);
+    }
+
+    private static string TitleOf(DestinationRow r, string path, IReadOnlyDictionary<string, string> names)
+    {
+        if (r.Services == "")
+            return r.Process == "System" ? "Ядро Windows (System)" : AppInfo.FriendlyName(r.Process, path);
+        var list = r.Services.Split(',');
+        var main = names.TryGetValue(list[0], out var d) ? d : list[0];
+        return list.Length == 1 ? main : $"{main} и ещё {list.Length - 1}";
+    }
+
+    /// <summary>Puts <paramref name="wanted"/> into <paramref name="target"/> from <paramref name="offset"/> on, moving instead of rebuilding.</summary>
+    private static void Sync<T>(ObservableCollection<T> target, IReadOnlyList<T> wanted, int offset) where T : class
+    {
+        for (var i = 0; i < wanted.Count; i++)
+        {
+            var at = i + offset;
+            var current = target.IndexOf(wanted[i]);
+            if (current < 0) target.Insert(at, wanted[i]);
+            else if (current != at) target.Move(current, at);
+        }
+        while (target.Count > wanted.Count + offset) target.RemoveAt(target.Count - 1);
+    }
+
+    // =====================================================================
+    // Header and tabs
+    // =====================================================================
+
+    private string _headerTitle = "Все программы";
+    public string HeaderTitle { get => _headerTitle; private set => Set(ref _headerTitle, value); }
+    private string _headerSubtitle = "";
+    public string HeaderSubtitle { get => _headerSubtitle; private set => Set(ref _headerSubtitle, value); }
+    public bool ShowProgramColumn => SelectedNav is null or { IsAll: true };
+    public NavItem? HeaderNav => SelectedNav;
+
+    private string ExportContext => $"{HeaderTitle} · {_period.Title.ToLowerInvariant()}";
+
+    private void UpdateHeader()
+    {
+        var n = SelectedNav;
+        HeaderTitle = n is null or { IsAll: true } ? "Все программы" : n.Title;
+        HeaderSubtitle = n is null or { IsAll: true } ? n?.Subtitle ?? "" : n.Path != "" ? n.Path : n.Subtitle;
+        OnPropertyChanged(nameof(ShowProgramColumn));
+        OnPropertyChanged(nameof(HeaderNav));
+    }
+
+    private int _tab;
+    public bool IsDomainsTab { get => _tab == 0; set { if (value) SetTab(0); } }
+    public bool IsAddressesTab { get => _tab == 1; set { if (value) SetTab(1); } }
+    public bool IsDnsTab { get => _tab == 2; set { if (value) SetTab(2); } }
+    public bool IsTableTab => _tab != 2;
+
+    private void SetTab(int tab)
+    {
+        if (_tab == tab) return;
+        _tab = tab;
+        foreach (var n in new[] { nameof(IsDomainsTab), nameof(IsAddressesTab), nameof(IsDnsTab), nameof(IsTableTab) }) OnPropertyChanged(n);
+        SelectedItem = null;
+        ApplyTable();
+    }
+
+    private string _domainsCount = "";
+    public string DomainsCount { get => _domainsCount; private set => Set(ref _domainsCount, value); }
+    private string _addressesCount = "";
+    public string AddressesCount { get => _addressesCount; private set => Set(ref _addressesCount, value); }
+    private string _dnsCount = "";
+    public string DnsCount { get => _dnsCount; private set => Set(ref _dnsCount, value); }
+
+    // =====================================================================
+    // Table
+    // =====================================================================
+
+    public ObservableCollection<TableItem> Table { get; } = [];
+    public ObservableCollection<DnsItem> DnsItems { get; } = [];
+
+    private TableItem? _selectedItem;
+    public TableItem? SelectedItem
+    {
+        get => _selectedItem;
+        set
+        {
+            if (Set(ref _selectedItem, value)) UpdateDetails();
+        }
+    }
+
+    private TimeSpan LiveWindow => TimeSpan.FromSeconds(Math.Max(10, _state.Settings.PollSeconds * 3));
+
+    private void ApplyTable()
+    {
+        var rows = VisibleRows.ToList();
+        var now = DateTimeOffset.Now;
+        var groups = DomainGroup.Build(rows);
+        var existing = Table.ToDictionary(t => t.Key);
+        var wanted = new List<TableItem>();
+        var autoExpand = DestinationRow.SplitQuery(SearchText).Count > 0;
+
+        string Net(DestinationRow r) => r.NetworkText(AddressFormat.Cidr);
+        string Prog(DestinationRow r) => _groupTitles.GetValueOrDefault(r.GroupKey, r.Process);
+
+        TableItem Item(string key, ItemKind kind, IReadOnlyList<DestinationRow> list, string domain)
+        {
+            var item = existing.GetValueOrDefault(key) ?? new TableItem(key, kind);
+            item.Update(list, domain, Net, Prog, now, LiveWindow);
+            return item;
+        }
+
+        if (_tab == 0)
+        {
+            foreach (var g in groups)
+            {
+                if (g.Rows.Count == 1)
+                {
+                    wanted.Add(Item("s:" + g.Rows[0].Key, ItemKind.Single, g.Rows, g.Domain));
+                    continue;
+                }
+                var group = Item("g:" + g.Key, ItemKind.Group, g.Rows, g.Domain);
+                group.IsExpanded = autoExpand || _expanded.Contains(g.Key);
+                group.Update(g.Rows, g.Domain, Net, Prog, now, LiveWindow);
+                wanted.Add(group);
+                if (group.IsExpanded)
+                    foreach (var r in g.Rows)
+                        wanted.Add(Item("c:" + g.Key + "|" + r.Key, ItemKind.Child, [r], ""));
+            }
+        }
+        else
+        {
+            foreach (var r in rows.OrderByDescending(r => r.LastSeen).ThenBy(r => IpKey.From(r.RemoteIp)))
+                wanted.Add(Item("a:" + r.Key, ItemKind.Single, [r], r.PrimaryDomain));
+        }
+
+        Sync(Table, wanted, 0);
+        if (SelectedItem != null && !Table.Contains(SelectedItem)) SelectedItem = null;
+
+        DomainsCount = groups.Count.ToString();
+        AddressesCount = rows.Count.ToString();
+        ApplyDns();
+        UpdateEmptyState();
+    }
+
+    private void Toggle(TableItem? item)
+    {
+        if (item is not { IsGroup: true }) return;
+        var key = item.Key[2..];
+        if (!_expanded.Remove(key)) _expanded.Add(key);
+        ApplyTable();
+    }
+
+    private void ApplyDns()
+    {
+        var since = _period.Live ? DateTimeOffset.Now.AddMinutes(-15)
+            : _period.Span is { } s ? DateTimeOffset.Now - s
+            : DateTimeOffset.MinValue;
+        var process = SelectedNav is null or { IsAll: true } ? null : SelectedNav.Key.Split(" · ")[0];
+        var words = DestinationRow.SplitQuery(SearchText);
+        var answers = _state.Dns.Answers(process == null ? null : p => string.Equals(p, process, StringComparison.OrdinalIgnoreCase), since);
+        var now = DateTimeOffset.Now;
+        var list = answers
+            .Select(a => new DnsItem(
+                a.Domain,
+                AppInfo.FriendlyName(a.Process, ""),
+                string.Join(", ", a.Addresses.Take(6)) + (a.Addresses.Count > 6 ? $" и ещё {a.Addresses.Count - 6}" : ""),
+                TextFormat.Relative(now, a.LastSeen, LiveWindow)))
+            .Where(d => words.All(w => d.Domain.Contains(w, StringComparison.OrdinalIgnoreCase)
+                                       || d.Program.Contains(w, StringComparison.OrdinalIgnoreCase)
+                                       || d.Addresses.Contains(w, StringComparison.OrdinalIgnoreCase)))
+            .Take(2000)
+            .ToList();
+        DnsCount = list.Count.ToString();
+        if (_tab != 2) return;
+        DnsItems.Clear();
+        foreach (var d in list) DnsItems.Add(d);
+    }
+
+    // =====================================================================
+    // Refresh
+    // =====================================================================
 
     public async Task RefreshAsync()
     {
@@ -264,27 +507,52 @@ internal sealed class MainViewModel : ObservableObject
         _refreshing = true;
         try
         {
-            var period = Period;
+            var period = _period;
             var words = DestinationRow.SplitQuery(SearchText);
+            var filters = Filters;
             var asn = _state.Asn;
             var names = _state.Collector.Services.DisplayNames;
-            var liveWindow = TimeSpan.FromSeconds(Math.Max(10, _state.Settings.PollSeconds * 3));
+            var live = LiveWindow;
+            var slow = DateTime.UtcNow - _slowAt > TimeSpan.FromSeconds(30);
 
-            _allRows = await Task.Run(() =>
+            var (rows, total) = await Task.Run(() =>
             {
                 var now = DateTimeOffset.Now;
-                var from = period.Live ? now - liveWindow
+                if (slow)
+                {
+                    _firstSeen = _state.Store.FirstSeenByRow();
+                    _groupFirstSeen = _firstSeen
+                        .GroupBy(kv => kv.Key[..kv.Key.IndexOf('|')])
+                        .ToDictionary(g => g.Key, g => g.Min(kv => kv.Value));
+                    _activity = _state.Store.Activity(now, 7);
+                    _logStart = _state.Store.LogStart();
+                }
+                var from = period.Live ? now - live
                     : period.Span is { } span ? now - span
                     : DateTimeOffset.FromUnixTimeMilliseconds(0);
                 var list = _state.Store.Query(from);
                 Analysis.Enrich(list, _state.Dns, asn, names);
-                return words.Count == 0 ? list : list.Where(r => r.Matches(words)).ToList();
+                Analysis.MarkNew(list, _firstSeen, Analysis.NewSince(now, _logStart));
+                var totalIps = list.Select(r => r.RemoteIp).Distinct().Count();
+                var found = words.Count == 0 ? list : list.Where(r => r.Matches(words)).ToList();
+                return (QuickFilters.Apply(found, filters), totalIps);
             });
+            if (slow) _slowAt = DateTime.UtcNow;
 
-            ApplyGroups();
-            ApplyRows();
-            UpdateList();
+            _rows = rows;
+            _totalAddresses = total;
+            _lastRefresh = DateTime.Now;
+
+            ApplyNav();
+            UpdateHeader();
+            ApplyTable();
+            UpdateDetails();
             UpdateStatus();
+            UpdateLive();
+            if (Export.IsOpen) Export.Rebuild();
+
+            var shown = _rows.Select(r => r.RemoteIp).Distinct().Count();
+            FoundText = FiltersActive ? $"Найдено {shown} из {TextFormat.Plural(_totalAddresses, "адреса", "адресов", "адресов")} · Esc — сбросить" : "";
         }
         catch (Exception e)
         {
@@ -301,159 +569,210 @@ internal sealed class MainViewModel : ObservableObject
         }
     }
 
-    private void ApplyGroups()
+    // =====================================================================
+    // Details pane
+    // =====================================================================
+
+    public bool HasSelection => SelectedItem != null;
+    public bool NoSelection => SelectedItem == null;
+
+    private AddressFormat Format => _state.Settings.AddressFormat;
+
+    public bool UseMask
     {
-        var groups = Analysis.Groups(_allRows);
-        var all = Groups[0];
-        all.Count = _allRows.Select(r => r.RemoteIp).Distinct().Count().ToString();
-        all.Subtitle = $"{groups.Count} программ и служб";
-
-        var existing = Groups.Skip(1).ToDictionary(g => g.Key);
-        var desired = new List<GroupView>();
-        foreach (var g in groups)
+        get => Format == AddressFormat.Mask;
+        set
         {
-            var view = existing.GetValueOrDefault(g.Key) ?? new GroupView(g.Key, g.Process, g.Path);
-            view.Subtitle = g.ServicesDisplay != "" ? g.ServicesDisplay : Plural(g.Addresses, "адрес", "адреса", "адресов");
-            view.Count = g.Addresses.ToString();
-            desired.Add(view);
-        }
-
-        // The selected group stays in the list even when nothing matches now, so the selection is not lost.
-        if (SelectedGroup is { IsAll: false } sel && !desired.Contains(sel))
-        {
-            sel.Count = "0";
-            desired.Add(sel);
-        }
-
-        // Move items in place instead of rebuilding: the list keeps its scroll position.
-        for (var i = 0; i < desired.Count; i++)
-        {
-            var target = i + 1;
-            var current = Groups.IndexOf(desired[i]);
-            if (current < 0) Groups.Insert(target, desired[i]);
-            else if (current != target) Groups.Move(current, target);
-        }
-        while (Groups.Count > desired.Count + 1) Groups.RemoveAt(Groups.Count - 1);
-    }
-
-    private IEnumerable<DestinationRow> VisibleRows => RowsOf(SelectedGroup);
-
-    private void ApplyRows()
-    {
-        var wanted = VisibleRows.ToDictionary(RowView.KeyOf);
-        for (var i = Rows.Count - 1; i >= 0; i--)
-            if (!wanted.ContainsKey(Rows[i].Key)) Rows.RemoveAt(i);
-
-        var existing = Rows.ToDictionary(r => r.Key);
-        var added = wanted.Keys.Count(k => !existing.ContainsKey(k));
-        // Many new rows at once (period switch): sort once at the end instead of on every insert.
-        using var defer = added > 200 ? CollectionViewSource.GetDefaultView(Rows).DeferRefresh() : null;
-        foreach (var (key, row) in wanted)
-        {
-            if (existing.TryGetValue(key, out var view)) view.Update(row, Format);
-            else Rows.Add(new RowView(row, Format));
+            _state.Settings.AddressFormat = value ? AddressFormat.Mask : AddressFormat.Cidr;
+            _state.SaveSettings();
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(UseCidr));
+            UpdateDetails();
         }
     }
 
-    private void UpdateList()
+    public bool UseCidr { get => !UseMask; set => UseMask = !value; }
+
+    private readonly Dictionary<string, string> _details = [];
+
+    /// <summary>Details pane values by name: Title, Subtitle, Ip, Domains, Network, Owner, Country, Protocol, First, Last, Rdap…</summary>
+    public IReadOnlyDictionary<string, string> D => new Dictionary<string, string>(_details);
+
+    private bool _detailsNew;
+    public bool DetailsNew { get => _detailsNew; private set => Set(ref _detailsNew, value); }
+    private bool _rdapBusy;
+    public bool RdapBusy { get => _rdapBusy; private set => Set(ref _rdapBusy, value); }
+    private bool _hasRdap;
+    public bool HasRdap { get => _hasRdap; private set => Set(ref _hasRdap, value); }
+
+    private string _sumNetworksText = "";
+    public string SumNetworksText { get => _sumNetworksText; private set => Set(ref _sumNetworksText, value); }
+
+    private void UpdateDetails()
     {
-        var rows = VisibleRows.ToList();
-        if (Ipv4Only) rows = rows.Where(r => r.RemoteIp.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork).ToList();
-        List<string> lines;
-        switch (ListModeOption.Mode)
+        var keepRdap = _details.GetValueOrDefault("RdapFor");
+        var rdap = _details.GetValueOrDefault("Rdap", "");
+        _details.Clear();
+        var item = SelectedItem;
+        HasRdap = false;
+
+        if (item == null)
         {
-            case ListMode.Addresses:
-                lines = Analysis.Addresses(rows).Select(a => a.ToString()).ToList();
-                break;
-            case ListMode.Domains:
-                lines = rows.SelectMany(r => r.Domains).Distinct().Order(StringComparer.OrdinalIgnoreCase).ToList();
-                break;
-            default:
-                var mode = ListModeOption.Mode switch
-                {
-                    ListMode.Exact => SubnetMode.Exact,
-                    ListMode.Wide24 => SubnetMode.Wide24,
-                    ListMode.Wide16 => SubnetMode.Wide16,
-                    _ => SubnetMode.Owner,
-                };
-                lines = Analysis.Subnets(rows, mode, Ipv4Only).Select(c => c.Format(Format)).ToList();
-                break;
+            var rows = VisibleRows.ToList();
+            var ips = rows.Select(r => r.RemoteIp).Distinct().ToList();
+            var asns = rows.Where(r => r.Asn != null).Select(r => r.Asn!.AsnText).Distinct().ToList();
+            var owners = Core.Export.Build(rows, ExportWhat.OwnerNetworks, 0, ExportTarget.Lines, false, false);
+            var noDomain = rows.Where(r => r.Domains.Count == 0).Select(r => r.RemoteIp).Distinct().Count();
+            _details["SumTitle"] = $"Сводка: {HeaderTitle}";
+            _details["SumAddresses"] = ips.Count.ToString();
+            _details["SumNetworks"] = owners.Items == 0 ? "—"
+                : owners.Items + (asns.Count > 0 ? $" ({string.Join(", ", asns.Take(4))}{(asns.Count > 4 ? "…" : "")})" : "");
+            _details["SumCountries"] = string.Join(", ", rows.Select(r => r.CountryText).Where(c => c != "").Distinct().Take(8)) is { Length: > 0 } c ? c : "—";
+            _details["SumNoDomain"] = ips.Count == 0 ? "—" : noDomain == 0 ? "нет"
+                : $"{noDomain} из {ips.Count}" + (noDomain * 2 > ips.Count ? " — программа часто ходит напрямую по IP" : "");
+            SumNetworksText = owners.Text;
+        }
+        else
+        {
+            var rows = item.Rows;
+            var first = rows[0];
+            var ips = rows.Select(r => r.RemoteIpText).Distinct().ToList();
+            var domains = rows.SelectMany(r => r.Domains).Distinct().ToList();
+            var groupDomain = item.IsChild ? "" : item.HasDomain ? item.DomainText : "";
+            _details["Title"] = groupDomain != "" ? groupDomain : first.RemoteIpText;
+            var programs = rows.Select(r => _groupTitles.GetValueOrDefault(r.GroupKey, r.Process)).Distinct().ToList();
+            var hits = rows.Sum(r => r.Hits);
+            var who = programs.Count == 1 ? programs[0] : TextFormat.Plural(programs.Count, "программа", "программы", "программ");
+            _details["Subtitle"] = $"{who} · замечено {TextFormat.Plural(hits, "раз", "раза", "раз")}";
+            _details["Ip"] = string.Join(Environment.NewLine, ips);
+            _details["IpLabel"] = ips.Count == 1 ? "IP-адрес" : $"IP-адреса ({ips.Count})";
+            _details["Domains"] = domains.Count > 0 ? string.Join(", ", domains) : "неизвестен — программа обратилась по IP без запроса DNS";
+            _details["Network"] = string.Join(Environment.NewLine, rows.Select(r => r.NetworkText(Format)).Where(n => n != "").Distinct());
+            _details["NetworkLabel"] = rows.Select(r => r.NetworkText(Format)).Where(n => n != "").Distinct().Count() > 1 ? "Сети владельцев" : "Сеть владельца";
+            _details["Owner"] = first.Asn?.OwnerText is { Length: > 0 } o ? o : "неизвестен";
+            _details["Country"] = CountryName(first.CountryText);
+            _details["Protocol"] = string.Join(", ", rows.Select(r => TextFormat.Port(r.Proto, r.RemotePort)).Distinct().Take(4));
+            _details["First"] = When(rows.Min(r => r.FirstSeen));
+            var lastSeen = rows.Max(r => r.LastSeen);
+            _details["Last"] = TextFormat.Relative(DateTimeOffset.Now, lastSeen, LiveWindow) == "сейчас" ? "сейчас" : When(lastSeen);
+            if (keepRdap == first.RemoteIpText)
+            {
+                _details["RdapFor"] = keepRdap;
+                _details["Rdap"] = rdap;
+                HasRdap = true;
+            }
+            DetailsNew = rows.Any(r => r.IsNew);
         }
 
-        var text = string.Join(Environment.NewLine, lines);
-        if (text != ListText) ListText = text;
-        var addresses = rows.Select(r => r.RemoteIp).Distinct().Count();
-        ListSummary = $"{Plural(lines.Count, "строка", "строки", "строк")} из {Plural(addresses, "адреса", "адресов", "адресов")}"
-                      + (ListModeOption.Mode == ListMode.Owner && _state.Asn.Count == 0 ? " · база владельцев не скачана, показаны сами адреса" : "");
+        OnPropertyChanged(nameof(D));
+        OnPropertyChanged(nameof(HasSelection));
+        OnPropertyChanged(nameof(NoSelection));
     }
 
-    public void UpdateStatus()
+    private static string When(DateTimeOffset t)
     {
-        var c = _state.Collector;
-        CaptureStatus = c.KernelCapture && c.DnsCapture
-            ? "Захват: TCP, UDP и DNS"
-            : "Захват: только TCP" + (c.CaptureError is { } e ? $" ({e})" : "");
-        AsnStatus = _state.AsnStatus;
-        var programs = _allRows.Select(r => r.GroupKey).Distinct().Count();
-        var addresses = _allRows.Select(r => r.RemoteIp).Distinct().Count();
-        Summary = $"{Plural(programs, "программа", "программы", "программ")} · {Plural(addresses, "адрес", "адреса", "адресов")} · журнал {_state.Store.SizeBytes / 1024.0 / 1024.0:0.0} МБ";
-        Error = c.LastError is { } err ? "Ошибка сбора: " + err : "";
+        var local = t.ToLocalTime();
+        var today = DateTime.Today;
+        return local.Date == today ? $"сегодня, {local:HH:mm}"
+            : local.Date == today.AddDays(-1) ? $"вчера, {local:HH:mm}"
+            : local.ToString("dd.MM.yyyy HH:mm");
     }
 
-    // ---- actions ----
-
-    private static List<RowView> Selected(object? parameter) =>
-        parameter is IList list ? list.OfType<RowView>().ToList()
-        : parameter is RowView r ? [r]
-        : [];
-
-    private void CopyLines(IEnumerable<string> lines) => Copy(string.Join(Environment.NewLine, lines));
-
-    /// <summary>Copies and says so in the status bar.</summary>
-    public void Copy(string text)
+    private static string CountryName(string code)
     {
-        if (string.IsNullOrEmpty(text))
-        {
-            ShowNotice("Нечего копировать");
-            return;
-        }
-        Clip.SetText(text);
-        var lines = text.Split('\n').Length;
-        ShowNotice(lines == 1 ? $"Скопировано: {(text.Length > 60 ? text[..60] + "…" : text)}" : $"Скопировано строк: {lines}");
-    }
-
-    private void ShowNotice(string text)
-    {
-        Notice = text;
-        _noticeTimer.Stop();
-        _noticeTimer.Start();
-    }
-
-    private IEnumerable<DestinationRow> RowsOf(GroupView? g) =>
-        g is null or { IsAll: true } ? _allRows : _allRows.Where(r => r.GroupKey == g.Key);
-
-    private void SearchFor(string? text)
-    {
-        if (string.IsNullOrWhiteSpace(text)) return;
-        SelectedGroup = Groups[0];
-        SearchText = text;
-    }
-
-    private async Task RdapAsync(RowView? row)
-    {
-        if (row == null || !IpKey.TryParse(row.Ip, out var ip)) return;
-        var window = Views.TextWindow.Show($"Сеть {row.Ip}", "Запрос к RDAP (реестр IP-адресов)…");
+        if (code == "") return "—";
         try
         {
-            var result = await _state.Rdap.LookupAsync(ip);
-            var text = $"Адрес: {ip}\n" + result.ToText(Format);
-            if (row.Row.Asn is { } asn) text += $"\n\nПо офлайн-базе: {asn.OwnerText}, {asn.NetworkOf(ip).Format(Format)}";
-            window.SetText(text);
+            return $"{new RegionInfo(code).DisplayName} ({code})";
+        }
+        catch (ArgumentException)
+        {
+            return code;
+        }
+    }
+
+    private async Task RdapAsync(DestinationRow? row)
+    {
+        if (row == null) return;
+        RdapBusy = true;
+        void Show(string text)
+        {
+            _details["RdapFor"] = row.RemoteIpText;
+            _details["Rdap"] = text;
+            HasRdap = true;
+            OnPropertyChanged(nameof(D));
+        }
+        Show("Запрос к реестру IP-адресов…");
+        try
+        {
+            var r = await _state.Rdap.LookupAsync(row.RemoteIp);
+            Show(r.ToText(Format));
         }
         catch (Exception e)
         {
-            window.SetText($"Не удалось получить данные RDAP: {e.Message}");
+            Show("Не удалось получить данные: " + e.Message);
         }
+        finally
+        {
+            RdapBusy = false;
+        }
+    }
+
+    // =====================================================================
+    // Copy, toast, search shortcuts
+    // =====================================================================
+
+    private bool _toastVisible;
+    public bool ToastVisible { get => _toastVisible; private set => Set(ref _toastVisible, value); }
+    private string _toastValue = "";
+    public string ToastValue { get => _toastValue; private set => Set(ref _toastValue, value); }
+    private bool _canUndo;
+    public bool CanUndo { get => _canUndo; private set => Set(ref _canUndo, value); }
+
+    /// <summary>Copies and says so at the bottom, with "Отменить" to put the old clipboard back.</summary>
+    public void Copy(string text, string? label)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            _clipboardBefore = null;
+            ShowToast("нечего копировать", false);
+            return;
+        }
+        _clipboardBefore = Clip.GetText();
+        Clip.SetText(text);
+        var lines = text.Split('\n').Length;
+        var value = lines > 1 ? $"{label ?? "строки"} ({lines})" : text.Length > 48 ? text[..48] + "…" : text;
+        ShowToast(value, true);
+    }
+
+    private void ShowToast(string value, bool undo)
+    {
+        ToastValue = value;
+        CanUndo = undo && _clipboardBefore != null;
+        ToastVisible = true;
+        _toastTimer.Stop();
+        _toastTimer.Start();
+    }
+
+    private void UndoCopy()
+    {
+        if (_clipboardBefore != null) Clip.SetText(_clipboardBefore);
+        _clipboardBefore = null;
+        ToastVisible = false;
+    }
+
+    private void CopyLines(IEnumerable<string> lines, string label) => Copy(string.Join(Environment.NewLine, lines), label);
+
+    private static List<TableItem> Items(object? p) =>
+        p is IList list ? list.OfType<TableItem>().ToList() : p is TableItem t ? [t] : [];
+
+    private static List<DestinationRow> Rows(object? p) => Items(p).SelectMany(i => i.Rows).Distinct().ToList();
+
+    public void SearchFor(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return;
+        SelectedNav = Nav[0];
+        SearchText = text;
     }
 
     private static void OpenFolder(string? path)
@@ -462,39 +781,137 @@ internal sealed class MainViewModel : ObservableObject
         Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = true });
     }
 
-    private void SaveList()
+    // =====================================================================
+    // Export, banner, empty states, status bar
+    // =====================================================================
+
+    public ExportViewModel Export { get; }
+
+    private bool _bannerHidden;
+    private bool _asnBusy;
+    public bool AsnBusy { get => _asnBusy; private set => Set(ref _asnBusy, value); }
+    private string _asnBusyText = "";
+    public string AsnBusyText { get => _asnBusyText; private set => Set(ref _asnBusyText, value); }
+    public bool AsnBannerVisible => !_bannerHidden && _state.Asn.Count == 0 && !_state.AsnLoading;
+    public bool AsnOk => _state.Asn.Count > 0;
+    public bool AsnMissing => !AsnOk;
+
+    private async Task DownloadAsnAsync()
     {
-        var dialog = new SaveFileDialog
-        {
-            Title = "Сохранить список",
-            FileName = $"netwatcher-{SafeName(SelectedGroup?.Title)}-{DateTime.Now:yyyyMMdd-HHmm}.txt",
-            Filter = "Текст (*.txt)|*.txt|Все файлы (*.*)|*.*",
-        };
-        if (dialog.ShowDialog() != true) return;
+        AsnBusy = true;
+        AsnBusyText = "Скачивается…";
         try
         {
-            File.WriteAllText(dialog.FileName, ListText + Environment.NewLine);
+            _state.Asn = await AsnUpdater.DownloadAsync(AppPaths.Http, AppPaths.AsnDatabase);
+            _state.SetAsnLoaded();
+            AsnBusyText = "";
+            _slowAt = DateTime.MinValue;
+            _ = RefreshAsync();
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        catch (Exception e)
         {
-            MessageBox.Show("Не удалось сохранить файл: " + e.Message, "NetWatcher", MessageBoxButton.OK, MessageBoxImage.Warning);
+            AsnBusyText = "Не удалось: " + e.Message;
+        }
+        finally
+        {
+            AsnBusy = false;
+            foreach (var n in new[] { nameof(AsnBannerVisible), nameof(AsnOk), nameof(AsnMissing) }) OnPropertyChanged(n);
         }
     }
 
-    private static string SafeName(string? s)
+    private bool _showOnboarding;
+    public bool ShowOnboarding { get => _showOnboarding; private set => Set(ref _showOnboarding, value); }
+    private bool _showNothingFound;
+    public bool ShowNothingFound { get => _showNothingFound; private set => Set(ref _showNothingFound, value); }
+    private string _emptyTitle = "";
+    public string EmptyTitle { get => _emptyTitle; private set => Set(ref _emptyTitle, value); }
+    private string _emptyText = "";
+    public string EmptyText { get => _emptyText; private set => Set(ref _emptyText, value); }
+    public bool AdminOk => _state.Collector.IsElevated;
+    public bool CaptureOk => _state.Collector.KernelCapture && _state.Collector.DnsCapture;
+    public string RetentionText => $"Сейчас {TextFormat.Plural(_state.Settings.RetentionDays, "день", "дня", "дней")}. Можно от 1 до 365";
+    public string[] Suggestions { get; } = ["telegram", "youtube.com", "Центр обновления", "10.0.0.0/8", "AS13335"];
+
+    private void UpdateEmptyState()
     {
-        if (string.IsNullOrEmpty(s) || s == "Все программы") return "all";
-        foreach (var c in Path.GetInvalidFileNameChars()) s = s.Replace(c, '_');
-        return s.Replace(' ', '_');
+        var empty = _tab != 2 && Table.Count == 0;
+        ShowNothingFound = empty && FiltersActive;
+        ShowOnboarding = empty && !FiltersActive;
+        if (ShowNothingFound)
+        {
+            var q = SearchText.Trim();
+            EmptyTitle = q != "" ? $"Ничего не найдено по «{q}»" : "Под эти фильтры ничего не подходит";
+            EmptyText = _period.Live
+                ? "Сейчас таких соединений нет. Попробуйте период «24 часа» или «Всё»."
+                : "Попробуйте другой запрос, другой период или сбросьте фильтры.";
+        }
+        else if (ShowOnboarding)
+        {
+            EmptyTitle = _logStart == null ? "NetWatcher записывает соединения" : "За этот период соединений нет";
+            EmptyText = _logStart == null
+                ? "Первые данные появятся через пару секунд. Выберите программу слева или начните искать."
+                : "Выберите период подлиннее сверху или другую программу слева.";
+        }
+        foreach (var n in new[] { nameof(AdminOk), nameof(CaptureOk), nameof(AsnOk), nameof(AsnMissing), nameof(RetentionText), nameof(AsnBannerVisible) })
+            OnPropertyChanged(n);
     }
 
-    internal static string Plural(int n, string one, string few, string many)
+    private string _captureText = "";
+    public string CaptureText { get => _captureText; private set => Set(ref _captureText, value); }
+    private string _asnText = "";
+    public string AsnText { get => _asnText; private set => Set(ref _asnText, value); }
+    private string _journalText = "";
+    public string JournalText { get => _journalText; private set => Set(ref _journalText, value); }
+    private string _totalsText = "";
+    public string TotalsText { get => _totalsText; private set => Set(ref _totalsText, value); }
+    private string _error = "";
+    public string Error { get => _error; private set => Set(ref _error, value); }
+
+    public void UpdateStatus()
     {
-        var mod100 = n % 100;
-        var mod10 = n % 10;
-        var word = mod100 is >= 11 and <= 14 ? many : mod10 == 1 ? one : mod10 is >= 2 and <= 4 ? few : many;
-        return $"{n} {word}";
+        var c = _state.Collector;
+        CaptureText = CaptureOk ? "TCP, UDP и DNS собираются" : "Только TCP" + (c.CaptureError is { } e ? $": {e}" : "");
+        AsnText = _state.AsnStatus;
+        JournalText = $"Журнал: {TextFormat.Plural(_state.Settings.RetentionDays, "день", "дня", "дней")} · {_state.Store.SizeBytes / 1024.0 / 1024.0:0.0} МБ";
+        var programs = _rows.Select(r => r.GroupKey).Distinct().Count();
+        TotalsText = $"{TextFormat.Plural(_rows.Select(r => r.RemoteIp).Distinct().Count(), "адрес", "адреса", "адресов")} · {TextFormat.Plural(programs, "программа", "программы", "программ")}";
+        Error = c.LastError is { } err ? "Ошибка сбора: " + err : "";
+        OnPropertyChanged(nameof(CaptureOk));
+        OnPropertyChanged(nameof(AsnBannerVisible));
+        OnPropertyChanged(nameof(RetentionText));
     }
+
+    // =====================================================================
+    // Commands
+    // =====================================================================
+
+    public RelayCommand RefreshCommand { get; }
+    public RelayCommand ClearSearchCommand { get; }
+    public RelayCommand ResetFiltersCommand { get; }
+    public RelayCommand ToggleCommand { get; }
+    public RelayCommand CopyIpCommand { get; }
+    public RelayCommand CopyDomainCommand { get; }
+    public RelayCommand CopyNetworkCommand { get; }
+    public RelayCommand CopyRowCommand { get; }
+    public RelayCommand CopyValueCommand { get; }
+    public RelayCommand CopyAllIpsCommand { get; }
+    public RelayCommand CopyAllDomainsCommand { get; }
+    public RelayCommand CopySummaryNetworksCommand { get; }
+    public RelayCommand SearchIpCommand { get; }
+    public RelayCommand SearchDomainCommand { get; }
+    public RelayCommand SearchProgramCommand { get; }
+    public RelayCommand SearchTextCommand { get; }
+    public RelayCommand WhoElseCommand { get; }
+    public RelayCommand RdapCommand { get; }
+    public RelayCommand OpenFolderCommand { get; }
+    public RelayCommand UndoCopyCommand { get; }
+    public RelayCommand OpenExportCommand { get; }
+    public RelayCommand OpenVpnExportCommand { get; }
+    public RelayCommand OpenOwnerExportCommand { get; }
+    public RelayCommand DownloadAsnCommand { get; }
+    public RelayCommand HideBannerCommand { get; }
+    public RelayCommand ToggleThemeCommand { get; }
+    public RelayCommand TogglePauseCommand { get; }
 }
 
 /// <summary>The clipboard can be briefly locked by another program; try a few times.</summary>
@@ -516,11 +933,16 @@ internal static class Clip
             }
         }
     }
-}
 
-public sealed class InverseBoolConverter : IValueConverter
-{
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value is not true;
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => value is not true;
+    public static string? GetText()
+    {
+        try
+        {
+            return Clipboard.ContainsText() ? Clipboard.GetText() : null;
+        }
+        catch (System.Runtime.InteropServices.COMException)
+        {
+            return null;
+        }
+    }
 }
