@@ -66,6 +66,30 @@ public class LookupTests
     }
 
     [Fact]
+    public void Loads_gzip_by_content_whatever_the_name()
+    {
+        // The updater reads the file while it is still called *.download.
+        var path = System.IO.Path.GetTempFileName() + ".download";
+        try
+        {
+            using (var f = File.Create(path))
+            using (var gz = new GZipStream(f, CompressionLevel.Fastest))
+                gz.Write(Encoding.UTF8.GetBytes(Sample));
+            Assert.Equal(4, AsnDatabase.LoadFile(path).Count);
+
+            File.WriteAllText(path, Sample);
+            Assert.Equal(4, AsnDatabase.LoadFile(path).Count);
+
+            File.WriteAllText(path, "<html>Just a moment...</html>");
+            Assert.Throws<InvalidDataException>(() => AsnDatabase.LoadFile(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void Parses_dns_client_results()
     {
         var (ips, aliases) = DnsResultParser.Parse("type:  5 star-mini.c10r.facebook.com;::ffff:157.240.1.35;2a03:2880:f10c:83:face:b00c:0:25de;");

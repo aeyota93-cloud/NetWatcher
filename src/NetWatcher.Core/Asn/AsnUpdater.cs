@@ -17,7 +17,8 @@ public static class AsnUpdater
 
             var db = await Task.Run(() => AsnDatabase.LoadFile(tmp), ct);
             if (db.Count < 1000)
-                throw new InvalidDataException("Скачанная база слишком мала, похоже, файл повреждён. Старая база оставлена.");
+                throw new InvalidDataException("Скачанный файл не похож на базу владельцев"
+                    + (File.Exists(destination) ? ", прежняя база оставлена." : "."));
 
             File.Move(tmp, destination, overwrite: true);
             return db;

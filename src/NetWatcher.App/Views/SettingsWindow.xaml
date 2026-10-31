@@ -4,6 +4,7 @@
         x:ClassModifier="internal"
         Title="Настройки" Width="560" SizeToContent="Height" ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Icon="pack://application:,,,/NetWatcher;component/Assets/NetWatcher.ico"
         Style="{StaticResource BaseWindow}">
     <StackPanel Margin="20">
         <TextBlock Text="Внешний вид" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,8" />

@@ -186,6 +186,10 @@ internal sealed class MainViewModel : ObservableObject
     public string PauseGlyph => Paused ? "" : "";
 
     private string _liveText = "";
+    private string _liveShort = "";
+
+    /// <summary>Short and of steady width, so the top bar does not jump every second.</summary>
+    public string LiveShort { get => _liveShort; private set => Set(ref _liveShort, value); }
     public string LiveText { get => _liveText; private set => Set(ref _liveText, value); }
     private bool _liveOk = true;
     public bool LiveOk { get => _liveOk; private set => Set(ref _liveOk, value); }
@@ -195,11 +199,13 @@ internal sealed class MainViewModel : ObservableObject
         if (Paused)
         {
             LiveText = "Пауза — экран не обновляется, запись идёт";
+            LiveShort = "Пауза";
             LiveOk = false;
             return;
         }
         var ago = (int)(DateTime.Now - _lastRefresh).TotalSeconds;
         LiveText = _lastRefresh == DateTime.MinValue ? "Запись идёт" : $"Запись идёт · обновлено {Math.Max(ago, 0)} с назад";
+        LiveShort = _lastRefresh == DateTime.MinValue ? "Запись" : $"Запись · {Math.Min(Math.Max(ago, 0), 99)} с";
         LiveOk = _state.Collector.LastError == null;
     }
 

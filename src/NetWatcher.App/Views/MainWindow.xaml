@@ -5,8 +5,9 @@
         xmlns:vm="clr-namespace:NetWatcher.App.ViewModels"
         xmlns:v="clr-namespace:NetWatcher.App.Views"
         Title="NetWatcher"
-        Width="1400" Height="880" MinWidth="1040" MinHeight="600"
+        Width="1400" Height="880" MinWidth="1180" MinHeight="600"
         WindowStartupLocation="CenterScreen"
+        Icon="pack://application:,,,/NetWatcher;component/Assets/NetWatcher.ico"
         Style="{StaticResource BaseWindow}">
 
     <Window.Resources>
@@ -126,7 +127,8 @@
         <!-- ============ Command bar ============ -->
         <Grid Margin="16,12,16,10">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" MaxWidth="560" />
+                <!-- Search takes almost all free space (20 : 1 with the spacer) up to 560 px. -->
+                <ColumnDefinition Width="20*" MinWidth="300" MaxWidth="560" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
@@ -183,7 +185,7 @@
                 </ItemsControl>
             </Border>
 
-            <Border Grid.Column="2" Height="36" Margin="10,0,0,0" Padding="12,0" CornerRadius="6"
+            <Border Grid.Column="2" Height="36" Width="150" Margin="10,0,0,0" Padding="12,0" CornerRadius="6" ToolTip="{Binding LiveText}"
                     Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource Stroke2Brush}" BorderThickness="1">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <Ellipse Width="8" Height="8" Margin="0,0,8,0">
@@ -198,7 +200,7 @@
                             </Style>
                         </Ellipse.Style>
                     </Ellipse>
-                    <TextBlock Text="{Binding LiveText}" Style="{StaticResource Muted}" />
+                    <TextBlock Text="{Binding LiveShort}" Style="{StaticResource Muted}" TextTrimming="CharacterEllipsis" />
                 </StackPanel>
             </Border>
 

@@ -9,6 +9,7 @@ namespace NetWatcher.App;
 /// </summary>
 internal static class ThemeService
 {
+    private const string PaletteKey = "NetWatcherPalette";
     private static string _mode = "System";
 
     public static bool IsDark { get; private set; }
@@ -49,14 +50,15 @@ internal static class ThemeService
             // Older systems: keep classic controls, our own colours still switch.
         }
 
+        // Find our palette by its marker key: the Fluent theme adds its own Fluent.Light.xaml /
+        // Fluent.Dark.xaml, which must not be touched.
         var dicts = app.Resources.MergedDictionaries;
-        var old = dicts.FirstOrDefault(d => d.Source?.OriginalString is { } s && (s.EndsWith("Light.xaml") || s.EndsWith("Dark.xaml")));
-        var fresh = new ResourceDictionary
+        foreach (var old in dicts.Where(d => d.Contains(PaletteKey)).ToList()) dicts.Remove(old);
+        // Last in the list, so nothing can override our colours.
+        dicts.Add(new ResourceDictionary
         {
             Source = new Uri($"pack://application:,,,/NetWatcher;component/Themes/{(dark ? "Dark" : "Light")}.xaml"),
-        };
-        if (old != null) dicts[dicts.IndexOf(old)] = fresh;
-        else dicts.Insert(0, fresh);
+        });
         Changed?.Invoke();
     }
 

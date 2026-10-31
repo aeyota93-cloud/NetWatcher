@@ -9,6 +9,7 @@
     <RootNamespace>NetWatcher.App</RootNamespace>
     <AssemblyName>NetWatcher</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\NetWatcher.ico</ApplicationIcon>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <!-- The Windows 11 (Fluent) theme for standard controls is marked experimental in WPF. -->
     <NoWarn>$(NoWarn);WPF0001</NoWarn>
@@ -29,6 +30,12 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Diagnostics.Tracing.TraceEvent" Version="3.2.8" />
     <Using Include="System.IO" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Window and taskbar icon; Assets/make-icon.js redraws it (node + playwright, then Pillow). -->
+    <Resource Include="Assets\NetWatcher.ico" />
+    <None Remove="Assets\make-icon.js" />
   </ItemGroup>
 
   <ItemGroup>

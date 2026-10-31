@@ -58,9 +58,14 @@ public sealed class AsnDatabase
     public static AsnDatabase LoadFile(string path)
     {
         using var file = File.OpenRead(path);
-        Stream stream = path.EndsWith(".gz", StringComparison.OrdinalIgnoreCase)
-            ? new GZipStream(file, CompressionMode.Decompress)
-            : file;
+        // Decide by content, not by name: a download in progress has no .gz extension.
+        Span<byte> head = stackalloc byte[2];
+        var read = file.Read(head);
+        file.Position = 0;
+        var gzip = read == 2 && head[0] == 0x1F && head[1] == 0x8B;
+        if (!gzip && read > 0 && head[0] == (byte)'<')
+            throw new InvalidDataException("Сервер вернул веб-страницу вместо базы. Попробуйте позже или скачайте файл вручную.");
+        Stream stream = gzip ? new GZipStream(file, CompressionMode.Decompress) : file;
         using (stream) return Load(stream);
     }
 
