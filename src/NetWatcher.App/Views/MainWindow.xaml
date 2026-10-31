@@ -1177,19 +1177,46 @@
 
                             <!-- Route -->
                             <StackPanel Visibility="{Binding HasHops, Converter={StaticResource BoolToVis}}" Margin="0,10,0,0">
-                                <TextBlock Text="ТРАССА — ПУТЬ ПАКЕТОВ ПО УЗЛАМ" Style="{StaticResource Caption}" />
+                                <DockPanel>
+                                    <TextBlock DockPanel.Dock="Right" Style="{StaticResource Caption}"><Run Text="проб на узел: " /><Run Text="{Binding Rounds, Mode=OneWay}" /></TextBlock>
+                                    <TextBlock Text="ТРАССА — ПУТЬ ПАКЕТОВ ПО УЗЛАМ (КАК MTR)" Style="{StaticResource Caption}" />
+                                </DockPanel>
                                 <TextBlock Style="{StaticResource Faint}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,6"
-                                           Text="«*» — узел не отвечает на трассировку; посередине пути это обычно нормально. Важно, после какого узла не отвечает никто." />
+                                           Text="«*» — узел не отвечает. Потери на промежуточном узле, которые не продолжаются дальше, — это роутер ограничивает ответы, а не проблема. Важны потери, которые тянутся до последнего узла. «(+1)» — на этом шаге отвечают разные роутеры (балансировка)." />
                                 <Border Style="{StaticResource Card}" Padding="0">
-                                    <ItemsControl ItemsSource="{Binding Hops}" Margin="0,4">
+                                    <StackPanel>
+                                    <Grid Margin="12,6,12,2">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="28" />
+                                            <ColumnDefinition Width="170" />
+                                            <ColumnDefinition Width="56" />
+                                            <ColumnDefinition Width="44" />
+                                            <ColumnDefinition Width="44" />
+                                            <ColumnDefinition Width="44" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.Resources>
+                                            <Style TargetType="TextBlock" BasedOn="{StaticResource Caption}" />
+                                        </Grid.Resources>
+                                        <TextBlock Text="№" />
+                                        <TextBlock Grid.Column="1" Text="АДРЕС" />
+                                        <TextBlock Grid.Column="2" Text="ПОТЕРИ" />
+                                        <TextBlock Grid.Column="3" Text="СР." ToolTip="Средняя задержка, мс" />
+                                        <TextBlock Grid.Column="4" Text="ЛУЧШ." ToolTip="Лучшая задержка, мс" />
+                                        <TextBlock Grid.Column="5" Text="ХУДШ." ToolTip="Худшая задержка, мс" />
+                                        <TextBlock Grid.Column="6" Text="ВЛАДЕЛЕЦ СЕТИ" />
+                                    </Grid>
+                                    <ItemsControl ItemsSource="{Binding Hops}" Margin="0,0,0,4">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate DataType="{x:Type vm:HopView}">
                                                 <Grid Margin="12,3">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="28" />
                                                         <ColumnDefinition Width="170" />
-                                                        <ColumnDefinition Width="64" />
-                                                        <ColumnDefinition Width="50" />
+                                                        <ColumnDefinition Width="56" />
+                                                        <ColumnDefinition Width="44" />
+                                                        <ColumnDefinition Width="44" />
+                                                        <ColumnDefinition Width="44" />
                                                         <ColumnDefinition Width="*" />
                                                     </Grid.ColumnDefinitions>
                                                     <Grid.Style>
@@ -1202,14 +1229,27 @@
                                                         </Style>
                                                     </Grid.Style>
                                                     <TextBlock Text="{Binding Ttl}" Style="{StaticResource Faint}" />
-                                                    <TextBlock Grid.Column="1" Text="{Binding Address}" FontFamily="{StaticResource MonoFont}" TextTrimming="CharacterEllipsis" />
-                                                    <TextBlock Grid.Column="2" Text="{Binding Time}" Style="{StaticResource Muted}" />
-                                                    <TextBlock Grid.Column="3" Text="{Binding Loss}" Foreground="{DynamicResource WarnBrush}" />
-                                                    <TextBlock Grid.Column="4" Text="{Binding Owner}" Style="{StaticResource Muted}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Owner}" />
+                                                    <TextBlock Grid.Column="1" Text="{Binding Address}" FontFamily="{StaticResource MonoFont}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Address}" />
+                                                    <TextBlock Grid.Column="2" Text="{Binding Loss}">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock" BasedOn="{StaticResource Muted}">
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding HasLoss}" Value="True">
+                                                                        <Setter Property="Foreground" Value="{DynamicResource WarnBrush}" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                    <TextBlock Grid.Column="3" Text="{Binding Avg}" Style="{StaticResource Muted}" />
+                                                    <TextBlock Grid.Column="4" Text="{Binding Best}" Style="{StaticResource Muted}" />
+                                                    <TextBlock Grid.Column="5" Text="{Binding Worst}" Style="{StaticResource Muted}" />
+                                                    <TextBlock Grid.Column="6" Text="{Binding Owner}" Style="{StaticResource Muted}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Owner}" />
                                                 </Grid>
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
+                                    </StackPanel>
                                 </Border>
                             </StackPanel>
                         </StackPanel>

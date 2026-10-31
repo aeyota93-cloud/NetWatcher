@@ -17,8 +17,10 @@ public readonly record struct Health(HealthLevel Level, string Reason)
 {
     public static Health Of(DestinationRow r)
     {
-        // Windows retries a SYN twice before giving up, so two unanswered attempts
-        // without a single open connection mean the server did not answer at all.
+        // Heuristic. Windows sends the SYN and by default retries it twice with an initial
+        // timeout of about 3 s (MaxSynRetransmissions = 2, InitialRto = 3000 ms in
+        // `netsh interface tcp show global`; sources differ, so this is not a hard rule).
+        // Two unanswered attempts without a single open connection: the server did not answer.
         if (r.NoAnswer >= 2 && r.Established == 0)
             return new(HealthLevel.Fail, "Не отвечает: попытки подключения остаются без ответа — сервер недоступен или подключение блокируется");
         if (r.NoAnswer > 0)

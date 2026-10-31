@@ -14,12 +14,50 @@ public enum VerdictLevel
 /// <summary>The one-line answer and its explanation.</summary>
 public sealed record Verdict(VerdictLevel Level, string Title, string Text);
 
-/// <summary>Where the route stops or starts losing packets.</summary>
-public sealed record TraceAnalysis(bool Reached, HopInfo? LastAnswered, HopInfo? LossFrom, string Where, string Text)
+/// <summary>
+/// Result of the SNI test as defined by OONI ts-024: the same neutral server is contacted
+/// with the site's name (target) and with a control name. Codes are OONI's own.
+/// </summary>
+public sealed record SniResult(string Code, string Text)
 {
+    public bool IsInterference => Code.StartsWith("interference.", StringComparison.Ordinal);
+
+    public static SniResult Classify(TlsProbe? target, TlsProbe? control)
+    {
+        var helper = Checker.ControlSni;
+        if (target == null || control == null || control.Outcome != TlsOutcome.Ok)
+            return new("anomaly.test_helper_unreachable",
+                $"контрольный сервер {helper} недоступен — отличить фильтр по имени от других причин нельзя");
+        return target.Outcome switch
+        {
+            // OONI counts a certificate for another name (ssl_invalid_hostname) as success: the helper
+            // naturally has no certificate for the site's name.
+            TlsOutcome.Ok when target.Cert is CertStatus.UnknownAuthority =>
+                new("interference.unknown_authority", $"с именем сайта пришёл сертификат неизвестного издателя — ответ подменён по дороге"),
+            TlsOutcome.Ok when target.Cert is CertStatus.Invalid =>
+                new("interference.invalid_certificate", "с именем сайта пришёл недействительный сертификат — ответ подменён по дороге"),
+            TlsOutcome.Ok =>
+                new("success.got_server_hello", $"нейтральный сервер {helper} с именем сайта отвечает нормально — фильтра по имени нет"),
+            TlsOutcome.Reset =>
+                new("interference.reset", $"с именем сайта соединение сбрасывается, с контрольным {helper} — проходит"),
+            TlsOutcome.Closed =>
+                new("interference.closed", $"с именем сайта соединение закрывается, с контрольным {helper} — проходит"),
+            TlsOutcome.Timeout =>
+                new("anomaly.timeout", $"с именем сайта рукопожатие зависает, с контрольным {helper} — проходит"),
+            _ => new("anomaly.unexpected_failure", $"неожиданная ошибка: {target.Error}"),
+        };
+    }
+}
+
+/// <summary>Where the route stops or starts losing packets, read the way MTR output is read.</summary>
+public sealed record TraceAnalysis(bool Reached, HopInfo? LastAnswered, HopInfo? LossFrom, bool DestinationOnlyLoss, string Where, string Text)
+{
+    /// <summary>With ten probes, two lost ones are worth mentioning; one may be chance.</summary>
+    public const double LossThreshold = 20;
+
     public static TraceAnalysis Of(IReadOnlyList<HopInfo> hops, AsnInfo? targetAsn)
     {
-        if (hops.Count == 0) return new(false, null, null, "", "трассировка не выполнялась");
+        if (hops.Count == 0) return new(false, null, null, false, "", "трассировка не выполнялась");
 
         // The provider is the owner of the first public hop.
         var provider = hops.FirstOrDefault(h => h.Answered && !h.IsPrivate)?.Asn;
@@ -35,29 +73,39 @@ public sealed record TraceAnalysis(bool Reached, HopInfo? LastAnswered, HopInfo?
 
         var reached = hops.Any(h => h.Reached);
         var last = hops.LastOrDefault(h => h.Answered);
-
-        // Loss that starts at a hop and stays until the end is real loss; loss only on
-        // a middle hop is usually a router that does not care to answer.
-        HopInfo? lossFrom = null;
-        var answered = hops.Where(h => h.Answered).ToList();
-        if (reached && answered.Count > 0 && answered[^1].LossPercent > 0)
-        {
-            for (var i = answered.Count - 1; i >= 0 && answered[i].LossPercent > 0; i--) lossFrom = answered[i];
-        }
+        var balanced = hops.Where(h => h.Balanced).Select(h => h.Ttl).ToList();
+        var balanceNote = balanced.Count > 0
+            ? $"; на узлах {string.Join(", ", balanced)} отвечают разные роутеры — балансировка нагрузки, трасса может смешивать несколько путей"
+            : "";
 
         if (reached)
         {
+            // Real loss starts at a hop and carries on to the destination. Loss on a middle hop
+            // that disappears further on is a router limiting its ICMP answers.
+            var answered = hops.Where(h => h.Answered).ToList();
+            HopInfo? lossFrom = null;
+            var destinationOnly = false;
+            if (answered[^1].LossPercent >= LossThreshold)
+            {
+                lossFrom = answered[^1];
+                for (var i = answered.Count - 2; i >= 0 && answered[i].LossPercent >= LossThreshold / 2; i--) lossFrom = answered[i];
+                destinationOnly = lossFrom == answered[^1];
+            }
+
             var text = $"адрес достигнут за {TextFormat.Plural(hops.Count, "узел", "узла", "узлов")}";
-            if (lossFrom != null) text += $"; потери с узла {lossFrom.Ttl} — {Segment(lossFrom)}";
-            return new(true, last, lossFrom, lossFrom != null ? Segment(lossFrom) : "", text);
+            if (lossFrom != null)
+                text += destinationOnly
+                    ? $"; теряет ответы только конечный узел ({answered[^1].LossPercent:0}%) — он может сам ограничивать ICMP"
+                    : $"; потери с узла {lossFrom.Ttl} до конца пути — {Segment(lossFrom)}";
+            return new(true, last, lossFrom, destinationOnly, lossFrom != null ? Segment(lossFrom) : "", text + balanceNote);
         }
 
         if (last == null)
-            return new(false, null, null, "", "ни один узел не ответил — трассировка блокируется или нет связи даже с роутером");
+            return new(false, null, null, false, "", "ни один узел не ответил — трассировка блокируется или нет связи даже с роутером");
 
         var where = Segment(last);
-        return new(false, last, null, where,
-            $"обрывается после узла {last.Ttl} ({last.Address}) — {where}. Узлы, которые молчат посередине, — норма; важно, что дальше не отвечает никто");
+        return new(false, last, null, false, where,
+            $"обрывается после узла {last.Ttl} ({last.Address}) — {where}. Молчащие узлы посередине — норма; важно, что дальше не отвечает никто{balanceNote}");
     }
 }
 
@@ -82,14 +130,58 @@ public static class Verdicts
         return (StepStatus.Ok, $"{sys.Addresses[0]} за {ms}" + (sys.Addresses.Count > 1 ? $" (и ещё {sys.Addresses.Count - 1})" : ""));
     }
 
-    /// <summary>Answers point to different owners: a CDN in another city, or a substituted answer.</summary>
-    private static bool Mismatch(DnsProbe sys, DnsProbe ind, AsnDatabase asn)
+    /// <summary>
+    /// OONI ts-017: answers are consistent when they share addresses or AS numbers.
+    /// Different owners can still be a CDN choosing a nearer server, so this is only a warning.
+    /// </summary>
+    public static bool Mismatch(DnsProbe sys, DnsProbe ind, AsnDatabase asn)
     {
         if (!sys.Ok || !ind.Ok || sys.Addresses.Intersect(ind.Addresses).Any()) return false;
         var a = sys.Addresses.Select(x => asn.Lookup(x)?.Asn).Where(x => x != null).ToHashSet();
         var b = ind.Addresses.Select(x => asn.Lookup(x)?.Asn).Where(x => x != null).ToHashSet();
         return a.Count > 0 && b.Count > 0 && !a.Overlaps(b);
     }
+
+    public static (StepStatus, string) DescribeInterception(WhoamiProbe udp, WhoamiProbe tcp, DnsProbe? systemResolver, AsnDatabase asn)
+    {
+        var resolver = systemResolver is { Ok: true } r
+            ? $" Ваш DNS выходит в интернет с адреса {r.Addresses[0]}{Owner(r.Addresses[0], asn)}."
+            : "";
+        if (asn.Count == 0)
+            return (StepStatus.Skipped, "нужна база владельцев IP, чтобы понять, кто ответил." + resolver);
+
+        bool? Google(WhoamiProbe w) => w.Resolver == null ? null : asn.Lookup(w.Resolver)?.Asn == Checker.GoogleAsn;
+        var u = Google(udp);
+        var t = Google(tcp);
+        const string caveat = " Это признак, а не доказательство.";
+
+        if (u == false)
+            return (StepStatus.Warn, $"запросы к 8.8.8.8 по UDP перехватываются: ответил резолвер {udp.Resolver}{Owner(udp.Resolver!, asn)}" +
+                                     (t == true ? ", а по TCP — Google, как и должно быть" : "") + "." + caveat + resolver);
+        if (t == false)
+            return (StepStatus.Warn, $"запросы к 8.8.8.8 по TCP перехватываются: ответил резолвер {tcp.Resolver}{Owner(tcp.Resolver!, asn)}." + caveat + resolver);
+        if (u == null && t == true)
+            return (StepStatus.Warn, "внешний DNS 8.8.8.8 по UDP не отвечает, по TCP — отвечает: UDP-порт 53 к чужим DNS закрыт." + resolver);
+        if (u == null && t == null)
+            return (StepStatus.Warn, $"8.8.8.8 не отвечает напрямую ни по UDP, ни по TCP ({udp.Error}) — сеть пропускает только свой DNS." + resolver);
+        return (StepStatus.Ok, "запросы к 8.8.8.8 доходят до Google без подмены." + resolver);
+    }
+
+    /// <summary>One clause for the overall verdict, or null when DNS is not intercepted.</summary>
+    public static string? InterceptionSummary(WhoamiProbe udp, WhoamiProbe tcp, AsnDatabase asn)
+    {
+        if (asn.Count == 0) return null;
+        bool? Google(WhoamiProbe w) => w.Resolver == null ? null : asn.Lookup(w.Resolver)?.Asn == Checker.GoogleAsn;
+        var u = Google(udp);
+        var t = Google(tcp);
+        if (u == false || t == false) return "запросы к публичному DNS перехватываются по дороге";
+        if (u == null && t == true) return "UDP-порт 53 к чужим DNS закрыт";
+        if (u == null && t == null) return "публичные DNS напрямую недоступны";
+        return null;
+    }
+
+    private static string Owner(IPAddress ip, AsnDatabase asn) =>
+        asn.Lookup(ip) is { } a ? $" ({a.OwnerText})" : "";
 
     public static string DescribeTcp(TcpProbe tcp, IPAddress ip, int port) => tcp.Outcome switch
     {
@@ -101,24 +193,51 @@ public static class Verdicts
         _ => $"{ip}:{port} — {tcp.Error}",
     };
 
-    public static (StepStatus, string) DescribeTls(TlsProbe real, TlsProbe? other, string host)
+    public static (StepStatus, string) DescribeTls(TlsProbe tls) => tls.Outcome switch
     {
-        if (real.Outcome == TlsOutcome.Ok)
-            return (real.Ms > 800 ? StepStatus.Warn : StepStatus.Ok, $"установлено за {real.Ms:0} мс");
-        if (real.Outcome == TlsOutcome.Alert)
-            return (StepStatus.Warn, "сервер ответил ошибкой TLS — он доступен, но отказал в рукопожатии");
-        var cut = real.Outcome == TlsOutcome.Timeout ? "зависает" : "обрывается";
-        if (other is { ServerAnswered: true })
-            return (StepStatus.Fail, $"с именем {host} {cut}, с другим именем — проходит: фильтрация по имени сайта");
-        return (StepStatus.Fail, $"{cut} и с другим именем тоже");
+        TlsOutcome.Ok => tls.Cert switch
+        {
+            CertStatus.Valid => (tls.Ms > 800 ? StepStatus.Warn : StepStatus.Ok, $"установлено за {tls.Ms:0} мс, сертификат действителен"),
+            CertStatus.NameMismatch => (StepStatus.Warn, $"сертификат выдан на другое имя ({tls.Subject}) — сервер обслуживает другой сайт или ответ подменён"),
+            CertStatus.UnknownAuthority => (StepStatus.Warn, $"сертификат от издателя, которому Windows не доверяет ({tls.Subject}) — так бывает с антивирусом, корпоративным прокси или при перехвате трафика"),
+            CertStatus.Invalid => (StepStatus.Warn, "сертификат недействителен: истёк или повреждён"),
+            _ => (StepStatus.Ok, $"установлено за {tls.Ms:0} мс"),
+        },
+        TlsOutcome.Alert => (StepStatus.Warn, "сервер ответил ошибкой TLS — он доступен, но отказал в рукопожатии"),
+        TlsOutcome.Reset => (StepStatus.Fail, "соединение сброшено во время рукопожатия"),
+        TlsOutcome.Closed => (StepStatus.Fail, "соединение закрыто во время рукопожатия"),
+        TlsOutcome.Timeout => (StepStatus.Fail, "рукопожатие зависло"),
+        _ => (StepStatus.Fail, tls.Error ?? "ошибка"),
+    };
+
+    public static (StepStatus, string) DescribeQuic(bool? advertised, QuicProbe? quic)
+    {
+        if (advertised == null) return (StepStatus.Skipped, "не удалось узнать, поддерживает ли сайт HTTP/3");
+        if (advertised == false) return (StepStatus.Skipped, "сайт не объявляет HTTP/3 — проверять нечего");
+        return quic?.Outcome switch
+        {
+            QuicOutcome.Ok => (StepStatus.Ok, $"работает, рукопожатие за {quic.Ms:0} мс"),
+            QuicOutcome.NotSupported => (StepStatus.Skipped, "проверка QUIC доступна в Windows 11 и новее"),
+            QuicOutcome.Timeout => (StepStatus.Warn, "сайт объявляет HTTP/3, но UDP 443 не проходит — браузер перейдёт на TCP. Так выглядит фильтрация UDP"),
+            _ => (StepStatus.Warn, $"ошибка QUIC: {quic?.Error}"),
+        };
     }
 
     public static (StepStatus, string) DescribePing(PingProbe p)
     {
         if (p.Error != null && p.Received == 0) return (StepStatus.Skipped, "проверка недоступна: " + p.Error);
-        if (p.Received == 0) return (StepStatus.Skipped, "сервер не отвечает на ping — многие так настроены, это не ошибка");
-        var text = $"{p.AvgMs:0} мс в среднем, потери {p.LossPercent:0}%";
-        return (p.LossPercent >= 20 || p.AvgMs > 200 ? StepStatus.Warn : StepStatus.Ok, text);
+        if (p.Received == 0) return (StepStatus.Skipped, "адрес не отвечает на ping — многие серверы так настроены, это не ошибка");
+        var text = $"{p.AvgMs:0} мс в среднем, потери {p.LossPercent:0}% из {p.Sent}";
+        return (p.LossPercent >= TraceAnalysis.LossThreshold || p.AvgMs > 200 ? StepStatus.Warn : StepStatus.Ok, text);
+    }
+
+    public static (StepStatus, string) DescribeMtu(MtuProbe m)
+    {
+        if (m.Error != null) return (StepStatus.Skipped, m.Error);
+        if (m.MaxPayload == m.FullPayload) return (StepStatus.Ok, $"пакеты полного размера ({m.PathMtu} байт) проходят");
+        if (m.TooBigReported)
+            return (StepStatus.Ok, $"MTU пути {m.PathMtu} байт, сеть честно сообщает об ограничении (так бывает с PPPoE, VPN и туннелями)");
+        return (StepStatus.Warn, $"пакеты больше {m.PathMtu} байт пропадают без уведомления — похоже на «чёрную дыру» MTU");
     }
 
     private static string Capital(string s) => s.Length == 0 ? s : char.ToUpper(s[0]) + s[1..];
@@ -171,35 +290,55 @@ public static class Verdicts
             }
         }
 
-        // TLS
-        if (r.TlsReal is { Cut: true } real)
+        // TLS, explained by the OONI ts-024 SNI test
+        if (r.Tls is { } tls && (tls.Cut || tls.Outcome == TlsOutcome.Error))
         {
-            if (r.TlsOther is { ServerAnswered: true })
-                return new(VerdictLevel.Fail, "Блокировка по имени сайта (DPI)",
-                    $"Подключение к серверу проходит, но защищённое соединение с именем {host} обрывается, а с другим именем — нет. " +
-                    "Так работает фильтрация трафика у провайдера по имени сайта. Помогает VPN.");
-            return new(VerdictLevel.Fail, "Защищённое соединение не устанавливается",
-                $"Подключение к серверу проходит, но рукопожатие TLS {(real.Outcome == TlsOutcome.Timeout ? "зависает" : "обрывается")} с любым именем. " +
-                "Это может быть блокировка по адресу или сбой на сервере." + vpn);
+            const string method = " Проверено по методике OONI (ts-024): нейтральный сервер, имя сайта против контрольного.";
+            return r.Sni?.Code switch
+            {
+                { } c when c.StartsWith("interference.", StringComparison.Ordinal) =>
+                    new(VerdictLevel.Fail, "Блокировка по имени сайта (DPI)",
+                        $"Сервер сайта доступен, но защищённое соединение с ним не устанавливается, а на нейтральном сервере {Capitalless(r.Sni.Text)}. " +
+                        "Значит, соединения режутся по имени сайта (SNI) где-то по пути. Помогает VPN." + method),
+                "anomaly.timeout" =>
+                    new(VerdictLevel.Fail, "Похоже на блокировку по имени сайта",
+                        $"На нейтральном сервере {Capitalless(r.Sni.Text)}. OONI относит такой результат к аномалиям: он типичен для фильтра по имени, но доказательством не является." + method),
+                "success.got_server_hello" =>
+                    new(VerdictLevel.Fail, "Защищённое соединение с сайтом не устанавливается",
+                        $"Фильтра по имени не видно: {r.Sni.Text}. Вероятнее блокировка адреса сайта или сбой на его стороне.{vpn}"),
+                _ =>
+                    new(VerdictLevel.Fail, "Защищённое соединение не устанавливается",
+                        $"Рукопожатие TLS с {host} {(tls.Outcome == TlsOutcome.Timeout ? "зависает" : "обрывается")}. " +
+                        (r.Sni != null ? Capital(r.Sni.Text) + "." : "") + vpn),
+            };
         }
 
         // Works, but maybe badly
         var problems = new List<string>();
+        if (r.Tls is { Outcome: TlsOutcome.Ok, Cert: CertStatus.UnknownAuthority or CertStatus.Invalid or CertStatus.NameMismatch } badCert)
+            problems.Add(DescribeTls(badCert).Item2);
+        if (r.Tls is { Outcome: TlsOutcome.Alert }) problems.Add("сервер отказал в рукопожатии TLS");
         if (r.Ping is { Received: > 0 } ping)
         {
-            if (ping.LossPercent >= 20)
-                problems.Add($"потери пакетов {ping.LossPercent:0}%" + (trace.LossFrom != null ? $", начиная с узла {trace.LossFrom.Ttl} ({trace.Where})" : ""));
+            if (ping.LossPercent >= TraceAnalysis.LossThreshold)
+                problems.Add(trace.LossFrom == null ? $"потери пакетов {ping.LossPercent:0}%"
+                    : trace.DestinationOnlyLoss ? $"потери {ping.LossPercent:0}% только на самом сервере — он может ограничивать ответы на ping"
+                    : $"потери пакетов {ping.LossPercent:0}%, начиная с узла {trace.LossFrom.Ttl} ({trace.Where})");
             if (ping.AvgMs > 200) problems.Add($"высокая задержка: {ping.AvgMs:0} мс");
         }
+        if (r.Mtu is { Error: null, TooBigReported: false } mtu && mtu.MaxPayload != mtu.FullPayload)
+            problems.Add($"пакеты больше {mtu.PathMtu} байт пропадают без уведомления («чёрная дыра» MTU): мелкие запросы проходят, а крупные загрузки и некоторые сайты зависают");
+        if (r.Quic is { Outcome: QuicOutcome.Timeout })
+            problems.Add("HTTP/3 (UDP 443) не проходит — сайты работают через TCP, но это признак фильтрации UDP");
         if (r.Tcp is { Outcome: TcpOutcome.Ok, Ms: > 300 } slowTcp) problems.Add($"подключение долгое: {slowTcp.Ms:0} мс");
         if (r.SystemDns is { Ok: true, Ms: > 500 } slowDns) problems.Add($"DNS отвечает медленно: {slowDns.Ms:0} мс");
-        if (r.TlsReal is { Outcome: TlsOutcome.Alert }) problems.Add("сервер отказал в рукопожатии TLS");
+        if (r.InterceptionWarning is { } dnsWarning) problems.Add(dnsWarning);
 
         var timings = string.Join(", ", new[]
         {
             r.SystemDns is { Ok: true } d ? $"DNS {d.Ms:0} мс" : "",
             r.Tcp is { Outcome: TcpOutcome.Ok } t ? $"подключение {t.Ms:0} мс" : "",
-            r.TlsReal is { Outcome: TlsOutcome.Ok } s ? $"TLS {s.Ms:0} мс" : "",
+            r.Tls is { Outcome: TlsOutcome.Ok } s ? $"TLS {s.Ms:0} мс" : "",
             r.Ping is { Received: > 0 } p ? $"задержка {p.AvgMs:0} мс" : "",
         }.Where(x => x != ""));
 
@@ -207,6 +346,8 @@ public static class Verdicts
             return new(VerdictLevel.Warn, "Работает, но с проблемами",
                 Capital(string.Join("; ", problems)) + "." + (timings != "" ? $" Замеры: {timings}." : ""));
 
-        return new(VerdictLevel.Ok, "Всё работает", timings != "" ? $"{char.ToUpper(timings[0])}{timings[1..]}." : "Подключение проходит.");
+        return new(VerdictLevel.Ok, "Всё работает", timings != "" ? Capital(timings) + "." : "Подключение проходит.");
     }
+
+    private static string Capitalless(string s) => s.Length == 0 ? s : char.ToLower(s[0]) + s[1..];
 }

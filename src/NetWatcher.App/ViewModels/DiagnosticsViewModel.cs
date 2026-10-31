@@ -17,7 +17,23 @@ public sealed class StepView(string id, string title) : ObservableObject
     public string Text { get => _text; set => Set(ref _text, value); }
 }
 
-public sealed record HopView(int Ttl, string Address, string Time, string Loss, string Owner, bool Silent, bool Reached);
+/// <summary>A line of the MTR-style table.</summary>
+public sealed record HopView(int Ttl, string Address, string Loss, string Avg, string Best, string Worst, string Owner, bool Silent, bool Reached, bool HasLoss)
+{
+    public static HopView From(HopInfo h)
+    {
+        static string Ms(double? v) => v is { } x ? $"{x:0}" : "";
+        return new HopView(
+            h.Ttl,
+            h.Address == null ? "*" : h.Address + (h.Balanced ? $" (+{h.Addresses.Count - 1})" : ""),
+            h.Answered ? $"{h.LossPercent:0}%" : "",
+            Ms(h.AvgMs), Ms(h.BestMs), Ms(h.WorstMs),
+            h.OwnerText,
+            !h.Answered,
+            h.Reached,
+            h.Answered && h.LossPercent > 0);
+    }
+}
 
 /// <summary>The "Проверка соединения" side panel.</summary>
 internal sealed class DiagnosticsViewModel : ObservableObject
@@ -81,6 +97,20 @@ internal sealed class DiagnosticsViewModel : ObservableObject
     public RelayCommand CopyCommand { get; }
     public RelayCommand CloseCommand { get; }
 
+    /// <summary>Refreshes the route table; called after every round of the trace.</summary>
+    private void ShowHops(IReadOnlyList<HopInfo> hops)
+    {
+        Hops.Clear();
+        foreach (var h in hops) Hops.Add(HopView.From(h));
+        Rounds = hops.Count > 0 ? hops.Max(h => h.Sent) : 0;
+        OnPropertyChanged(nameof(HasHops));
+    }
+
+    private int _rounds;
+
+    /// <summary>Probes sent per hop so far.</summary>
+    public int Rounds { get => _rounds; private set => Set(ref _rounds, value); }
+
     /// <summary>Opens the panel; with a target the check starts at once.</summary>
     public void Open(string? target)
     {
@@ -107,7 +137,11 @@ internal sealed class DiagnosticsViewModel : ObservableObject
         Hops.Clear();
         OnPropertyChanged(nameof(HasHops));
         Steps.Clear();
-        foreach (var (id, title) in new[] { ("dns", "DNS"), ("tcp", "Подключение"), ("tls", "Защищённое соединение"), ("ping", "Задержка"), ("trace", "Трасса") })
+        foreach (var (id, title) in new[]
+                 {
+                     ("dns", "DNS"), ("dnsint", "Перехват DNS"), ("tcp", "Подключение"), ("tls", "Защищённое соединение"),
+                     ("quic", "HTTP/3 (QUIC, UDP 443)"), ("ping", "Задержка"), ("trace", "Трасса"), ("mtu", "Размер пакетов (MTU)"),
+                 })
             Steps.Add(new StepView(id, title));
 
         _cts = new CancellationTokenSource();
@@ -116,23 +150,22 @@ internal sealed class DiagnosticsViewModel : ObservableObject
         try
         {
             _report = await Checker.RunAsync(target, _state.Probe, _state.Asn, step => ui.Invoke(() =>
-            {
-                var view = Steps.FirstOrDefault(s => s.Id == step.Id);
-                if (view == null) return;
-                view.Status = step.Status;
-                view.Text = step.Text;
-            }), _cts.Token);
+                {
+                    var view = Steps.FirstOrDefault(s => s.Id == step.Id);
+                    if (view == null)
+                    {
+                        // Steps that appear only when needed (the SNI test) go right after TLS.
+                        view = new StepView(step.Id, step.Title);
+                        var tls = Steps.ToList().FindIndex(s => s.Id == "tls");
+                        Steps.Insert(tls >= 0 ? tls + 1 : Steps.Count, view);
+                    }
+                    view.Status = step.Status;
+                    view.Text = step.Text;
+                }),
+                _cts.Token,
+                hops => ui.Invoke(() => ShowHops(hops)));
 
-            foreach (var h in _report.Hops)
-                Hops.Add(new HopView(
-                    h.Ttl,
-                    h.Address?.ToString() ?? "*",
-                    h.AvgMs is { } ms ? $"{ms:0} мс" : "",
-                    h.Answered && h.LossPercent > 0 ? $"{h.LossPercent:0}%" : "",
-                    h.OwnerText,
-                    !h.Answered,
-                    h.Reached));
-            OnPropertyChanged(nameof(HasHops));
+            ShowHops(_report.Hops);
 
             if (_report.Verdict is { } v)
             {
