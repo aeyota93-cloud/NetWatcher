@@ -98,6 +98,24 @@ public sealed class NavItem : ObservableObject
 
     public bool HasProblems => _problems > 0;
 
+    private string _linkLevel = "";
+    private string _linkText = "";
+
+    /// <summary>"", "Ok", "Warn", "Fail" — the dot next to the program.</summary>
+    public string LinkLevel
+    {
+        get => _linkLevel;
+        set
+        {
+            if (Set(ref _linkLevel, value)) OnPropertyChanged(nameof(HasLink));
+        }
+    }
+
+    /// <summary>"45 мс", "потери 6%", "нет ответа 12 с".</summary>
+    public string LinkText { get => _linkText; set => Set(ref _linkText, value); }
+
+    public bool HasLink => _linkLevel is "Ok" or "Warn" or "Fail";
+
     /// <summary>Heights in pixels of the small activity bars, oldest first.</summary>
     public IReadOnlyList<double> Bars { get => _bars; set => Set(ref _bars, value); }
 }

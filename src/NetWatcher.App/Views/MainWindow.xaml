@@ -390,7 +390,32 @@
                                                     <Run Text="&#xE7BA;" FontFamily="{StaticResource IconFont}" FontSize="10" /><Run Text=" " /><Run Text="{Binding Problems, Mode=OneWay}" />
                                                 </TextBlock>
                                             </Border>
-                                            <TextBlock Text="{Binding Count}" Style="{StaticResource Muted}" FontSize="12" />
+                                            <TextBlock Text="{Binding Count}" Style="{StaticResource Muted}" FontSize="12"
+                                                       Visibility="{Binding HasLink, Converter={StaticResource NotVis}}" />
+                                            <StackPanel Orientation="Horizontal" Visibility="{Binding HasLink, Converter={StaticResource BoolToVis}}"
+                                                        ToolTip="Состояние связи за последние 2 минуты (вкладка «Связь»)">
+                                                <Ellipse Width="8" Height="8" Margin="0,0,5,0" VerticalAlignment="Center">
+                                                    <Ellipse.Style>
+                                                        <Style TargetType="Ellipse">
+                                                            <Setter Property="Fill" Value="{DynamicResource OkBrush}" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding LinkLevel}" Value="Warn"><Setter Property="Fill" Value="{DynamicResource WarnBrush}" /></DataTrigger>
+                                                                <DataTrigger Binding="{Binding LinkLevel}" Value="Fail"><Setter Property="Fill" Value="{DynamicResource DangerBrush}" /></DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Ellipse.Style>
+                                                </Ellipse>
+                                                <TextBlock Text="{Binding LinkText}" FontSize="12">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock" BasedOn="{StaticResource Muted}">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding LinkLevel}" Value="Warn"><Setter Property="Foreground" Value="{DynamicResource WarnBrush}" /><Setter Property="FontWeight" Value="SemiBold" /></DataTrigger>
+                                                                <DataTrigger Binding="{Binding LinkLevel}" Value="Fail"><Setter Property="Foreground" Value="{DynamicResource DangerBrush}" /><Setter Property="FontWeight" Value="SemiBold" /></DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                            </StackPanel>
                                         </StackPanel>
                                         <ItemsControl ItemsSource="{Binding Bars}" Height="14" HorizontalAlignment="Right" Margin="0,2,0,0"
                                                       ToolTip="Активность за последние 7 часов">
@@ -418,6 +443,14 @@
                     <DockPanel>
                         <DockPanel DockPanel.Dock="Top" Margin="16,12,16,0">
                             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Style="{StaticResource BtnSmall}" Margin="0,0,8,0" Command="{Binding ToggleNotifyCommand}"
+                                        Visibility="{Binding IsLinkTab, Converter={StaticResource BoolToVis}}"
+                                        ToolTip="Уведомление Windows, когда сервер программы перестаёт отвечать, и когда связь возвращается">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xEA8F;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,6,0" />
+                                        <TextBlock Text="{Binding NotifyText}" />
+                                    </StackPanel>
+                                </Button>
                                 <Button Style="{StaticResource BtnSmall}" Command="{Binding CopyAllIpsCommand}" ToolTip="Все IP-адреса из списка ниже">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="&#xE8C8;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,6,0" />
@@ -452,6 +485,10 @@
 
                         <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="0,0,0,1" Padding="16,8,16,0">
                             <StackPanel Orientation="Horizontal">
+                                <RadioButton Style="{StaticResource Tab}" GroupName="tab" IsChecked="{Binding IsLinkTab}"
+                                             ToolTip="Отвечают ли серверы программы: задержка, потери, обрывы связи">
+                                    <TextBlock Text="Связь" />
+                                </RadioButton>
                                 <RadioButton Style="{StaticResource Tab}" GroupName="tab" IsChecked="{Binding IsDomainsTab}" ToolTip="Адреса сгруппированы по доменам">
                                     <TextBlock><Run Text="По доменам" /><Run Text=" " /><Run Text="{Binding DomainsCount, Mode=OneWay}" FontSize="11" Foreground="{DynamicResource Text3Brush}" FontWeight="Normal" /></TextBlock>
                                 </RadioButton>
@@ -628,6 +665,317 @@
                                     <DataGridTextColumn Header="Когда" Binding="{Binding When}" Width="92" />
                                 </DataGrid.Columns>
                             </DataGrid>
+
+                            <!-- Link tab: is the program's server answering -->
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" Visibility="{Binding IsLinkTab, Converter={StaticResource BoolToVis}}">
+                                <StackPanel Margin="16,12,16,16">
+                                    <StackPanel.Resources>
+                                        <!-- Coloured summary box: green / amber / red / grey. -->
+                                        <Style x:Key="Hero" TargetType="Border">
+                                            <Setter Property="CornerRadius" Value="8" />
+                                            <Setter Property="Padding" Value="16,12" />
+                                            <Setter Property="BorderThickness" Value="1" />
+                                            <Setter Property="Margin" Value="0,0,0,12" />
+                                            <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+                                            <Setter Property="BorderBrush" Value="{DynamicResource StrokeBrush}" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding LinkLevel}" Value="Ok">
+                                                    <Setter Property="Background" Value="{DynamicResource OkSoftBrush}" />
+                                                    <Setter Property="BorderBrush" Value="{DynamicResource OkBrush}" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding LinkLevel}" Value="Warn">
+                                                    <Setter Property="Background" Value="{DynamicResource WarnSoftBrush}" />
+                                                    <Setter Property="BorderBrush" Value="{DynamicResource WarnStrokeBrush}" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding LinkLevel}" Value="Fail">
+                                                    <Setter Property="Background" Value="{DynamicResource DangerSoftBrush}" />
+                                                    <Setter Property="BorderBrush" Value="{DynamicResource DangerBrush}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                        <Style x:Key="HeroIcon" TargetType="TextBlock">
+                                            <Setter Property="FontFamily" Value="{StaticResource IconFont}" />
+                                            <Setter Property="FontSize" Value="24" />
+                                            <Setter Property="VerticalAlignment" Value="Center" />
+                                            <Setter Property="Margin" Value="0,0,14,0" />
+                                            <Setter Property="Text" Value="&#xE9D9;" />
+                                            <Setter Property="Foreground" Value="{DynamicResource Text3Brush}" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding LinkLevel}" Value="Ok">
+                                                    <Setter Property="Text" Value="&#xE73E;" />
+                                                    <Setter Property="Foreground" Value="{DynamicResource OkBrush}" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding LinkLevel}" Value="Warn">
+                                                    <Setter Property="Text" Value="&#xE7BA;" />
+                                                    <Setter Property="Foreground" Value="{DynamicResource WarnBrush}" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding LinkLevel}" Value="Fail">
+                                                    <Setter Property="Text" Value="&#xE711;" />
+                                                    <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                        <!-- Small coloured state label for servers and cards. -->
+                                        <Style x:Key="StatePill" TargetType="Border">
+                                            <Setter Property="CornerRadius" Value="10" />
+                                            <Setter Property="Padding" Value="8,1" />
+                                            <Setter Property="HorizontalAlignment" Value="Left" />
+                                            <Setter Property="VerticalAlignment" Value="Center" />
+                                            <Setter Property="Background" Value="{DynamicResource HoverBrush}" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Level}" Value="Ok"><Setter Property="Background" Value="{DynamicResource OkSoftBrush}" /></DataTrigger>
+                                                <DataTrigger Binding="{Binding Level}" Value="Warn"><Setter Property="Background" Value="{DynamicResource WarnSoftBrush}" /></DataTrigger>
+                                                <DataTrigger Binding="{Binding Level}" Value="Fail"><Setter Property="Background" Value="{DynamicResource DangerSoftBrush}" /></DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                        <Style x:Key="StateText" TargetType="TextBlock">
+                                            <Setter Property="FontSize" Value="12" />
+                                            <Setter Property="FontWeight" Value="SemiBold" />
+                                            <Setter Property="Foreground" Value="{DynamicResource Text2Brush}" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Level}" Value="Ok"><Setter Property="Foreground" Value="{DynamicResource OkBrush}" /></DataTrigger>
+                                                <DataTrigger Binding="{Binding Level}" Value="Warn"><Setter Property="Foreground" Value="{DynamicResource WarnBrush}" /></DataTrigger>
+                                                <DataTrigger Binding="{Binding Level}" Value="Fail"><Setter Property="Foreground" Value="{DynamicResource DangerBrush}" /></DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                        <Style x:Key="Kpi" TargetType="StackPanel">
+                                            <Setter Property="Margin" Value="22,0,0,0" />
+                                            <Setter Property="VerticalAlignment" Value="Center" />
+                                        </Style>
+                                    </StackPanel.Resources>
+
+                                    <!-- Summary -->
+                                    <Border Style="{StaticResource Hero}">
+                                        <DockPanel>
+                                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Visibility="{Binding LinkHasProgram, Converter={StaticResource BoolToVis}}">
+                                                <StackPanel Style="{StaticResource Kpi}" ToolTip="Средняя задержка до главного сервера за минуту (по пингу)">
+                                                    <TextBlock Text="{Binding LinkLatency}" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Right" />
+                                                    <TextBlock Text="задержка" Style="{StaticResource Muted}" FontSize="11" HorizontalAlignment="Right" />
+                                                </StackPanel>
+                                                <StackPanel Style="{StaticResource Kpi}" ToolTip="Насколько скачет задержка: среднее различие соседних замеров">
+                                                    <TextBlock Text="{Binding LinkJitter}" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Right" />
+                                                    <TextBlock Text="разброс" Style="{StaticResource Muted}" FontSize="11" HorizontalAlignment="Right" />
+                                                </StackPanel>
+                                                <StackPanel Style="{StaticResource Kpi}">
+                                                    <TextBlock Text="{Binding LinkLoss}" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Right" />
+                                                    <TextBlock Text="потери" Style="{StaticResource Muted}" FontSize="11" HorizontalAlignment="Right" />
+                                                </StackPanel>
+                                                <StackPanel Style="{StaticResource Kpi}">
+                                                    <TextBlock Text="{Binding LinkOutages}" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Right" />
+                                                    <TextBlock Text="сбоев" Style="{StaticResource Muted}" FontSize="11" HorizontalAlignment="Right" />
+                                                </StackPanel>
+                                            </StackPanel>
+                                            <TextBlock Style="{StaticResource HeroIcon}" />
+                                            <StackPanel VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding LinkTitle}" FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                                <TextBlock Text="{Binding LinkSubtitle}" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,2,0,0"
+                                                           Visibility="{Binding LinkSubtitle, Converter={StaticResource TextVis}}" />
+                                            </StackPanel>
+                                        </DockPanel>
+                                    </Border>
+
+                                    <!-- No data for this program -->
+                                    <Border Style="{StaticResource Card}" Visibility="{Binding LinkNoData, Converter={StaticResource BoolToVis}}">
+                                        <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap">
+                                            <Run Text="За выбранный период программа не обменивалась данными, пока NetWatcher был запущен." />
+                                            <Run Text="Связь оценивается по пакетам туда и обратно, поэтому видна только у работающих программ. Выберите период длиннее или запустите программу." />
+                                        </TextBlock>
+                                    </Border>
+
+                                    <!-- One program -->
+                                    <StackPanel Visibility="{Binding LinkHasProgram, Converter={StaticResource BoolToVis}}">
+                                        <Border Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12,10">
+                                            <StackPanel>
+                                                <DockPanel Margin="0,0,0,6">
+                                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                                        <Rectangle Width="12" Height="3" Fill="{DynamicResource AccentBrush}" VerticalAlignment="Center" Margin="0,0,5,0" />
+                                                        <TextBlock Text="задержка, мс" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,12,0" />
+                                                        <Rectangle Width="6" Height="10" Fill="{DynamicResource WarnBrush}" VerticalAlignment="Center" Margin="0,0,5,0" />
+                                                        <TextBlock Text="потери" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,12,0" />
+                                                        <Rectangle Width="12" Height="10" Fill="{DynamicResource DangerBrush}" Opacity="0.3" VerticalAlignment="Center" Margin="0,0,5,0" />
+                                                        <TextBlock Text="нет связи" Style="{StaticResource Muted}" FontSize="12" />
+                                                    </StackPanel>
+                                                    <TextBlock Style="{StaticResource Muted}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis">
+                                                        <Run Text="Задержка и потери, " /><Run Text="{Binding LinkWindowText, Mode=OneWay}" />
+                                                    </TextBlock>
+                                                </DockPanel>
+                                                <v:LinkChart Height="150" Points="{Binding LinkChart}" />
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- Servers -->
+                                        <Border Style="{StaticResource Card}" Padding="0" Margin="0,0,0,12">
+                                            <StackPanel>
+                                                <Grid Margin="12,8,12,4">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="2.4*" />
+                                                        <ColumnDefinition Width="58" />
+                                                        <ColumnDefinition Width="1.2*" />
+                                                        <ColumnDefinition Width="74" />
+                                                        <ColumnDefinition Width="64" />
+                                                        <ColumnDefinition Width="56" />
+                                                        <ColumnDefinition Width="84" />
+                                                        <ColumnDefinition Width="1.3*" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <Grid.Resources>
+                                                        <Style TargetType="TextBlock" BasedOn="{StaticResource Caption}" />
+                                                    </Grid.Resources>
+                                                    <TextBlock Text="СЕРВЕР" />
+                                                    <TextBlock Grid.Column="1" Text="ПРОТ." />
+                                                    <TextBlock Grid.Column="2" Text="СОСТОЯНИЕ" />
+                                                    <TextBlock Grid.Column="3" Text="ЗАДЕРЖКА" />
+                                                    <TextBlock Grid.Column="4" Text="РАЗБРОС" />
+                                                    <TextBlock Grid.Column="5" Text="ПОТЕРИ" />
+                                                    <TextBlock Grid.Column="6" Text="ОТВЕТ БЫЛ" />
+                                                    <TextBlock Grid.Column="7" Text="ЗА МИНУТУ ↑ / ↓" ToolTip="Сколько отправлено и получено за последнюю минуту" />
+                                                </Grid>
+                                                <ItemsControl ItemsSource="{Binding LinkServers}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate DataType="{x:Type vm:LinkServerView}">
+                                                            <Border BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="0,1,0,0" Padding="12,6" ToolTip="{Binding Reason}">
+                                                                <Grid>
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="2.4*" />
+                                                                        <ColumnDefinition Width="58" />
+                                                                        <ColumnDefinition Width="1.2*" />
+                                                                        <ColumnDefinition Width="74" />
+                                                                        <ColumnDefinition Width="64" />
+                                                                        <ColumnDefinition Width="56" />
+                                                                        <ColumnDefinition Width="84" />
+                                                                        <ColumnDefinition Width="1.3*" />
+                                                                    </Grid.ColumnDefinitions>
+                                                                    <StackPanel Margin="0,0,8,0">
+                                                                        <TextBlock TextTrimming="CharacterEllipsis">
+                                                                            <Run Text="{Binding Title, Mode=OneWay}" FontWeight="SemiBold" /><Run Text="  " /><Run Text="{Binding Address, Mode=OneWay}" FontFamily="{StaticResource MonoFont}" Foreground="{DynamicResource Text3Brush}" />
+                                                                        </TextBlock>
+                                                                        <TextBlock Text="{Binding Owner}" Style="{StaticResource Muted}" FontSize="12" TextTrimming="CharacterEllipsis" />
+                                                                    </StackPanel>
+                                                                    <Border Grid.Column="1" Style="{StaticResource Tag}" HorizontalAlignment="Left">
+                                                                        <TextBlock Text="{Binding Proto}" FontSize="11" Foreground="{DynamicResource Text2Brush}" />
+                                                                    </Border>
+                                                                    <Border Grid.Column="2" Style="{StaticResource StatePill}">
+                                                                        <TextBlock Text="{Binding State}" Style="{StaticResource StateText}" />
+                                                                    </Border>
+                                                                    <TextBlock Grid.Column="3" Text="{Binding Latency}" VerticalAlignment="Center" />
+                                                                    <TextBlock Grid.Column="4" Text="{Binding Jitter}" VerticalAlignment="Center" />
+                                                                    <TextBlock Grid.Column="5" Text="{Binding Loss}" VerticalAlignment="Center">
+                                                                        <TextBlock.Style>
+                                                                            <Style TargetType="TextBlock">
+                                                                                <Style.Triggers>
+                                                                                    <DataTrigger Binding="{Binding HasLoss}" Value="True">
+                                                                                        <Setter Property="Foreground" Value="{DynamicResource WarnBrush}" />
+                                                                                        <Setter Property="FontWeight" Value="SemiBold" />
+                                                                                    </DataTrigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                        </TextBlock.Style>
+                                                                    </TextBlock>
+                                                                    <TextBlock Grid.Column="6" Text="{Binding LastAnswer}" VerticalAlignment="Center" />
+                                                                    <TextBlock Grid.Column="7" Text="{Binding Traffic}" FontFamily="{StaticResource MonoFont}" FontSize="12" VerticalAlignment="Center" />
+                                                                </Grid>
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- Why -->
+                                        <Border Style="{StaticResource Card}" Margin="0,0,0,12" Visibility="{Binding HasLinkReasons, Converter={StaticResource BoolToVis}}">
+                                            <StackPanel>
+                                                <TextBlock Text="ПОЧЕМУ ТАК РЕШИЛИ" Style="{StaticResource Caption}" />
+                                                <ItemsControl ItemsSource="{Binding LinkReasons}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <DockPanel Margin="0,3">
+                                                                <TextBlock Text="•" Margin="0,0,8,0" Foreground="{DynamicResource Text3Brush}" />
+                                                                <TextBlock Text="{Binding}" TextWrapping="Wrap" />
+                                                            </DockPanel>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- Events -->
+                                        <Border Style="{StaticResource Card}" Margin="0,0,0,12" Visibility="{Binding HasLinkEvents, Converter={StaticResource BoolToVis}}">
+                                            <StackPanel>
+                                                <TextBlock Text="СОБЫТИЯ" Style="{StaticResource Caption}" />
+                                                <ItemsControl ItemsSource="{Binding LinkEvents}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate DataType="{x:Type vm:LinkEventView}">
+                                                            <DockPanel Margin="0,3">
+                                                                <TextBlock Text="{Binding Time}" Width="64" FontFamily="{StaticResource MonoFont}" FontSize="12" Foreground="{DynamicResource Text3Brush}" />
+                                                                <Ellipse Width="8" Height="8" Margin="0,0,10,0" VerticalAlignment="Center">
+                                                                    <Ellipse.Style>
+                                                                        <Style TargetType="Ellipse">
+                                                                            <Setter Property="Fill" Value="{DynamicResource DangerBrush}" />
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding Level}" Value="Ok"><Setter Property="Fill" Value="{DynamicResource OkBrush}" /></DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </Ellipse.Style>
+                                                                </Ellipse>
+                                                                <TextBlock Text="{Binding Text}" TextWrapping="Wrap" />
+                                                            </DockPanel>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </Border>
+                                    </StackPanel>
+
+                                    <!-- All programs: cards -->
+                                    <ItemsControl ItemsSource="{Binding LinkCards}" Visibility="{Binding LinkShowAll, Converter={StaticResource BoolToVis}}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <UniformGrid Columns="3" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="{x:Type vm:LinkCardView}">
+                                                <Button Margin="0,0,12,12" Cursor="Hand" Command="{Binding Data.SelectProgramCommand, Source={StaticResource Proxy}}"
+                                                        CommandParameter="{Binding Key}" ToolTip="Открыть связь этой программы">
+                                                    <Button.Template>
+                                                        <ControlTemplate TargetType="Button">
+                                                            <Border x:Name="b" Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource StrokeBrush}"
+                                                                    BorderThickness="1" CornerRadius="8" Padding="12">
+                                                                <ContentPresenter />
+                                                            </Border>
+                                                            <ControlTemplate.Triggers>
+                                                                <Trigger Property="IsMouseOver" Value="True">
+                                                                    <Setter TargetName="b" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                                                </Trigger>
+                                                            </ControlTemplate.Triggers>
+                                                        </ControlTemplate>
+                                                    </Button.Template>
+                                                    <StackPanel>
+                                                        <DockPanel>
+                                                            <Border DockPanel.Dock="Right" Style="{StaticResource StatePill}" VerticalAlignment="Top">
+                                                                <TextBlock Text="{Binding State}" Style="{StaticResource StateText}" />
+                                                            </Border>
+                                                            <ContentPresenter Content="{Binding Nav}" ContentTemplate="{StaticResource Avatar}" Margin="0,0,10,0" VerticalAlignment="Top" />
+                                                            <StackPanel>
+                                                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                                                <TextBlock Text="{Binding Sub}" Style="{StaticResource Muted}" FontSize="12" TextTrimming="CharacterEllipsis" />
+                                                            </StackPanel>
+                                                        </DockPanel>
+                                                        <v:LinkChart Mini="True" Height="30" Margin="0,10,0,8" Points="{Binding Chart}" />
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <TextBlock Style="{StaticResource Muted}" FontSize="12" Margin="0,0,16,0"><Run Text="задержка " /><Run Text="{Binding Latency, Mode=OneWay}" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" /></TextBlock>
+                                                            <TextBlock Style="{StaticResource Muted}" FontSize="12" Margin="0,0,16,0"><Run Text="потери " /><Run Text="{Binding Loss, Mode=OneWay}" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" /></TextBlock>
+                                                            <TextBlock Style="{StaticResource Muted}" FontSize="12"><Run Text="сбоев " /><Run Text="{Binding Outages, Mode=OneWay}" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" /></TextBlock>
+                                                        </StackPanel>
+                                                    </StackPanel>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <TextBlock Style="{StaticResource Faint}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"
+                                               Text="Связь оценивается без чтения содержимого: по пакетам туда и обратно, повторным отправкам TCP и пингу до серверов раз в 5 секунд. «Нет ответа» — программа продолжает отправлять, а сервер молчит дольше 5 секунд (для UDP — если раньше он отвечал). Если сервер не отвечает на пинг, задержка показывается как «нет пинга». При обрыве NetWatcher сам делает трассу и пишет, где путь обрывается." />
+                                </StackPanel>
+                            </ScrollViewer>
 
                             <!-- First run / empty period -->
                             <ScrollViewer VerticalScrollBarVisibility="Auto" Visibility="{Binding ShowOnboarding, Converter={StaticResource BoolToVis}}">

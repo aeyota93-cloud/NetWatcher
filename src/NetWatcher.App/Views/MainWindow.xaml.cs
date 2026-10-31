@@ -10,6 +10,7 @@ internal partial class MainWindow : Window
 {
     private readonly AppState _state;
     private readonly MainViewModel _vm;
+    private Native.TrayIcon? _tray;
 
     public MainWindow(AppState state)
     {
@@ -34,7 +35,13 @@ internal partial class MainWindow : Window
         {
             _vm.Start();
             SearchBox.Focus();
+            // Notification-area icon for "связь пропала / восстановилась" notifications.
+            _tray = new Native.TrayIcon(this);
+            _tray.Attach();
+            state.LinkService.TitleOf = key => Dispatcher.Invoke(() => _vm.TitleFor(key));
+            state.LinkService.Notify = (title, text, warning) => Dispatcher.BeginInvoke(() => _tray.Show(title, text, warning));
         };
+        Closed += (_, _) => _tray?.Dispose();
         PreviewKeyDown += OnKey;
         _vm.Diagnostics.PropertyChanged += (_, e) =>
         {

@@ -20,6 +20,12 @@ public sealed class Settings
     /// <summary>"System", "Light" or "Dark".</summary>
     public string Theme { get; set; } = "System";
 
+    /// <summary>Windows notification when any program loses its link.</summary>
+    public bool NotifyAll { get; set; }
+
+    /// <summary>Programs (group keys) to notify about when their link is lost.</summary>
+    public List<string> NotifyPrograms { get; set; } = [];
+
     /// <summary>Program list order: by activity (true) or by name.</summary>
     public bool SortByActivity { get; set; } = true;
 

@@ -9,6 +9,12 @@ namespace NetWatcher.App.Monitoring;
 
 internal readonly record struct EtwConnection(int Pid, UInt128 Ip, int Port, string Proto);
 
+/// <summary>Packets and bytes each way for one program–server pair.</summary>
+internal sealed class FlowCounter
+{
+    public long PacketsOut, PacketsIn, BytesOut, BytesIn;
+}
+
 internal readonly record struct EtwDns(int Pid, string Name, string Results, int Status, DateTimeOffset Time);
 
 /// <summary>
@@ -32,6 +38,11 @@ internal sealed class EtwMonitor : IDisposable
     // Per destination: SYN sent again (no answer yet) and data packets sent again (loss).
     private readonly ConcurrentDictionary<EtwConnection, int> _reconnects = new();
     private readonly ConcurrentDictionary<EtwConnection, int> _retransmits = new();
+
+    // Traffic each way per program and server, for the link monitor.
+    private readonly ConcurrentDictionary<EtwConnection, FlowCounter> _flows = new();
+    private volatile HashSet<UInt128> _local = [];
+    private DateTime _localAt = DateTime.MinValue;
     private TraceEventSession? _kernel;
     private TraceEventSession? _dnsSession;
 
@@ -59,6 +70,14 @@ internal sealed class EtwMonitor : IDisposable
             k.TcpIpConnectIPV6 += d => Add(d.ProcessID, d.daddr, d.dport, "TCP");
             k.UdpIpSend += d => Add(d.ProcessID, d.daddr, d.dport, "UDP");
             k.UdpIpSendIPV6 += d => Add(d.ProcessID, d.daddr, d.dport, "UDP");
+            k.TcpIpSend += d => Flow(d.ProcessID, d.saddr, d.sport, d.daddr, d.dport, "TCP", d.size, true);
+            k.TcpIpSendIPV6 += d => Flow(d.ProcessID, d.saddr, d.sport, d.daddr, d.dport, "TCP", d.size, true);
+            k.TcpIpRecv += d => Flow(d.ProcessID, d.saddr, d.sport, d.daddr, d.dport, "TCP", d.size, false);
+            k.TcpIpRecvIPV6 += d => Flow(d.ProcessID, d.saddr, d.sport, d.daddr, d.dport, "TCP", d.size, false);
+            k.UdpIpSend += d => Flow(d.ProcessID, d.saddr, d.sport, d.daddr, d.dport, "UDP", d.size, true);
+            k.UdpIpSendIPV6 += d => Flow(d.ProcessID, d.saddr, d.sport, d.daddr, d.dport, "UDP", d.size, true);
+            k.UdpIpRecv += d => Flow(d.ProcessID, d.saddr, d.sport, d.daddr, d.dport, "UDP", d.size, false);
+            k.UdpIpRecvIPV6 += d => Flow(d.ProcessID, d.saddr, d.sport, d.daddr, d.dport, "UDP", d.size, false);
             k.TcpIpReconnect += d => Count(_reconnects, d.ProcessID, d.daddr, d.dport);
             k.TcpIpReconnectIPV6 += d => Count(_reconnects, d.ProcessID, d.daddr, d.dport);
             k.TcpIpRetransmit += d => Count(_retransmits, d.ProcessID, d.daddr, d.dport);
@@ -113,6 +132,55 @@ internal sealed class EtwMonitor : IDisposable
         if (pid <= 0 || ip == null) return;
         // UDP sends come per packet; keep one entry until the collector takes it.
         _connections.TryAdd(new EtwConnection(pid, IpKey.From(ip), port, proto), 0);
+    }
+
+    /// <summary>
+    /// Counts a packet. Which of the two addresses is the remote one is decided by the list of this
+    /// computer's own addresses, so it does not matter how the event orders them.
+    /// </summary>
+    private void Flow(int pid, IPAddress a, int aPort, IPAddress b, int bPort, string proto, int size, bool outgoing)
+    {
+        if (pid <= 0 || a == null || b == null) return;
+        var local = LocalAddresses();
+        var (remote, port) = local.Contains(IpKey.From(b)) && !local.Contains(IpKey.From(a)) ? (a, aPort) : (b, bPort);
+        var c = _flows.GetOrAdd(new EtwConnection(pid, IpKey.From(remote), port, proto), _ => new FlowCounter());
+        if (outgoing)
+        {
+            Interlocked.Increment(ref c.PacketsOut);
+            Interlocked.Add(ref c.BytesOut, size);
+        }
+        else
+        {
+            Interlocked.Increment(ref c.PacketsIn);
+            Interlocked.Add(ref c.BytesIn, size);
+        }
+    }
+
+    private HashSet<UInt128> LocalAddresses()
+    {
+        if (DateTime.UtcNow - _localAt < TimeSpan.FromSeconds(30)) return _local;
+        _localAt = DateTime.UtcNow;
+        try
+        {
+            _local = System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
+                .SelectMany(n => n.GetIPProperties().UnicastAddresses)
+                .Select(u => IpKey.From(u.Address))
+                .ToHashSet();
+        }
+        catch (System.Net.NetworkInformation.NetworkInformationException)
+        {
+            // Keep the previous list.
+        }
+        return _local;
+    }
+
+    /// <summary>Traffic per program and server since the last call.</summary>
+    public Dictionary<EtwConnection, FlowCounter> TakeFlows()
+    {
+        var result = new Dictionary<EtwConnection, FlowCounter>();
+        foreach (var key in _flows.Keys)
+            if (_flows.TryRemove(key, out var c)) result[key] = c;
+        return result;
     }
 
     private static void Count(ConcurrentDictionary<EtwConnection, int> map, int pid, IPAddress ip, int port)

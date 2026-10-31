@@ -15,6 +15,22 @@ public static class TextFormat
     public static string Number(long n) =>
         n.ToString("N0", System.Globalization.CultureInfo.InvariantCulture).Replace(',', ' ');
 
+    /// <summary>"820 Б", "86 КБ", "1,2 МБ", "3,4 ГБ".</summary>
+    public static string Bytes(long n)
+    {
+        string[] units = ["Б", "КБ", "МБ", "ГБ", "ТБ"];
+        double v = n;
+        var u = 0;
+        while (v >= 1024 && u < units.Length - 1)
+        {
+            v /= 1024;
+            u++;
+        }
+        var text = u == 0 || v >= 10 ? v.ToString("0", System.Globalization.CultureInfo.InvariantCulture)
+            : v.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture).Replace('.', ',');
+        return $"{text} {units[u]}";
+    }
+
     /// <summary>"сейчас", "5 мин", "14:32", "28.10 14:32".</summary>
     public static string Relative(DateTimeOffset now, DateTimeOffset time, TimeSpan liveWindow)
     {

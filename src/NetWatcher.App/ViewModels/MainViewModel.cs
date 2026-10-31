@@ -11,7 +11,7 @@ using NetWatcher.Core.Net;
 
 namespace NetWatcher.App.ViewModels;
 
-internal sealed class MainViewModel : ObservableObject
+internal sealed partial class MainViewModel : ObservableObject
 {
     private const string AllKey = "";
     private const string AppsSection = "Приложения";
@@ -140,6 +140,7 @@ internal sealed class MainViewModel : ObservableObject
 
     public void Start()
     {
+        StartLink();
         UpdateTimer();
         _refreshTimer.Start();
         _clock.Start();
@@ -269,6 +270,7 @@ internal sealed class MainViewModel : ObservableObject
             SelectedItem = null;
             UpdateHeader();
             ApplyTable();
+            ApplyLink();
             UpdateDetails();
             if (Export.IsOpen) Export.Open(ExportContext);
         }
@@ -383,17 +385,20 @@ internal sealed class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(HeaderNav));
     }
 
-    private int _tab;
+    // 3 — "Связь", shown first and open by default.
+    private int _tab = 3;
+    public bool IsLinkTab { get => _tab == 3; set { if (value) SetTab(3); } }
     public bool IsDomainsTab { get => _tab == 0; set { if (value) SetTab(0); } }
     public bool IsAddressesTab { get => _tab == 1; set { if (value) SetTab(1); } }
     public bool IsDnsTab { get => _tab == 2; set { if (value) SetTab(2); } }
-    public bool IsTableTab => _tab != 2;
+    public bool IsTableTab => _tab is 0 or 1;
 
     private void SetTab(int tab)
     {
         if (_tab == tab) return;
         _tab = tab;
-        foreach (var n in new[] { nameof(IsDomainsTab), nameof(IsAddressesTab), nameof(IsDnsTab), nameof(IsTableTab) }) OnPropertyChanged(n);
+        foreach (var n in new[] { nameof(IsDomainsTab), nameof(IsAddressesTab), nameof(IsDnsTab), nameof(IsTableTab), nameof(IsLinkTab) }) OnPropertyChanged(n);
+        if (tab == 3) ApplyLink();
         SelectedItem = null;
         ApplyTable();
     }
@@ -579,6 +584,7 @@ internal sealed class MainViewModel : ObservableObject
             ApplyNav();
             UpdateHeader();
             ApplyTable();
+            ApplyLink();
             UpdateDetails();
             UpdateStatus();
             UpdateLive();
@@ -890,7 +896,7 @@ internal sealed class MainViewModel : ObservableObject
 
     private void UpdateEmptyState()
     {
-        var empty = _tab != 2 && Table.Count == 0;
+        var empty = IsTableTab && Table.Count == 0;
         ShowNothingFound = empty && FiltersActive;
         ShowOnboarding = empty && !FiltersActive;
         if (ShowNothingFound)

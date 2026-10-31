@@ -2,6 +2,7 @@ using System.Net;
 using NetWatcher.App.Native;
 using NetWatcher.Core;
 using NetWatcher.Core.Dns;
+using NetWatcher.Core.Link;
 using NetWatcher.Core.Net;
 using NetWatcher.Core.Storage;
 
@@ -32,8 +33,11 @@ internal sealed class Collector : IDisposable
     public event Action? Ticked;
     public string? LastError { get; private set; }
 
-    public Collector(LogStore store, DnsIndex dns, Func<Settings> settings)
+    private readonly LinkMonitor _link;
+
+    public Collector(LogStore store, DnsIndex dns, LinkMonitor link, Func<Settings> settings)
     {
+        _link = link;
         _store = store;
         _dns = dns;
         _settings = settings;
@@ -124,10 +128,35 @@ internal sealed class Collector : IDisposable
 
         foreach (var c in _etw.TakeConnections())
             Add(c.Pid, IpKey.ToAddress(c.Ip), c.Port, c.Proto);
-        foreach (var (c, n) in _etw.TakeReconnects())
+        var reconnects = _etw.TakeReconnects();
+        var retransmits = _etw.TakeRetransmits();
+        foreach (var (c, n) in reconnects)
             Update(c.Pid, IpKey.ToAddress(c.Ip), c.Port, "TCP", o => o with { NoAnswer = o.NoAnswer + n });
-        foreach (var (c, n) in _etw.TakeRetransmits())
+        foreach (var (c, n) in retransmits)
             Update(c.Pid, IpKey.ToAddress(c.Ip), c.Port, "TCP", o => o with { Retransmits = o.Retransmits + n });
+
+        // Link monitor: packets each way per program and server, with resends.
+        var flows = new Dictionary<(string Group, UInt128 Ip, int Port, string Proto), FlowSample>();
+        void AddFlow(EtwConnection c, long outPk, long inPk, long outB, long inB, int retrans, int noAnswer)
+        {
+            var ip = IpKey.ToAddress(c.Ip);
+            if (IpKey.IsUninteresting(ip, settings.HideLoopback)) return;
+            var p = _processes.Get(c.Pid);
+            var services = Services.ForPid(c.Pid);
+            var group = services == "" ? p.Name : $"{p.Name} · {services}";
+            var key = (group, c.Ip, c.Port, c.Proto);
+            flows[key] = flows.TryGetValue(key, out var f)
+                ? f with
+                {
+                    PacketsOut = f.PacketsOut + outPk, PacketsIn = f.PacketsIn + inPk, BytesOut = f.BytesOut + outB, BytesIn = f.BytesIn + inB,
+                    Retransmits = f.Retransmits + retrans, NoAnswer = f.NoAnswer + noAnswer,
+                }
+                : new FlowSample(group, p.Name, services, p.Path, ip, c.Port, c.Proto, outPk, inPk, outB, inB, retrans, noAnswer);
+        }
+        foreach (var (c, f) in _etw.TakeFlows()) AddFlow(c, f.PacketsOut, f.PacketsIn, f.BytesOut, f.BytesIn, 0, 0);
+        foreach (var (c, n) in retransmits) AddFlow(c, 0, 0, 0, 0, n, 0);
+        foreach (var (c, n) in reconnects) AddFlow(c, 0, 0, 0, 0, 0, n);
+        _link.Add(now, flows.Values);
 
         var dns = new List<DnsObservation>();
         var failures = new List<DnsFailure>();

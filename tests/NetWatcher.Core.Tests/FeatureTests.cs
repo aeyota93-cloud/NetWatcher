@@ -124,6 +124,9 @@ public class FeatureTests
         Assert.Equal("5 мин", TextFormat.Relative(Now, Now.AddMinutes(-5), TimeSpan.FromSeconds(10)));
         Assert.Equal("UDP 443 (QUIC / HTTP3)", TextFormat.Port("UDP", 443));
         Assert.Equal("TCP 5000", TextFormat.Port("TCP", 5000));
+        Assert.Equal("820 Б", TextFormat.Bytes(820));
+        Assert.Equal("86 КБ", TextFormat.Bytes(86 * 1024));
+        Assert.Equal("1,2 МБ", TextFormat.Bytes(1_258_291));
     }
 
     [Fact]

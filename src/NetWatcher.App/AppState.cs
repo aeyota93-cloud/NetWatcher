@@ -12,6 +12,11 @@ internal sealed class AppState : IDisposable
     public Settings Settings { get; }
     public LogStore Store { get; }
     public DnsIndex Dns { get; } = new();
+
+    /// <summary>Link quality per program for the last hour, in memory.</summary>
+    public Core.Link.LinkMonitor Link { get; } = new(TimeSpan.FromHours(1));
+
+    public LinkService LinkService { get; }
     public Collector Collector { get; }
     public RdapClient Rdap { get; } = new(AppPaths.Http);
     public PeeringDbClient PeeringDb { get; } = new(AppPaths.Http, AppPaths.PeeringDbCache);
@@ -29,12 +34,14 @@ internal sealed class AppState : IDisposable
     {
         Settings = Settings.Load(AppPaths.Settings);
         Store = new LogStore(AppPaths.Database);
-        Collector = new Collector(Store, Dns, () => Settings);
+        Collector = new Collector(Store, Dns, Link, () => Settings);
+        LinkService = new LinkService(this);
     }
 
     public void Start()
     {
         Collector.Start();
+        LinkService.Start();
         Task.Run(() =>
         {
             Store.Purge(DateTimeOffset.Now.AddDays(-Settings.RetentionDays));
@@ -77,6 +84,7 @@ internal sealed class AppState : IDisposable
 
     public void Dispose()
     {
+        LinkService.Dispose();
         Collector.Dispose();
         Store.Dispose();
     }
