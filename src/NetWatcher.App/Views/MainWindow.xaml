@@ -15,6 +15,7 @@
         <v:NotEmptyToVisibility x:Key="TextVis" />
         <v:UpperCase x:Key="Upper" />
         <v:BindingProxy x:Key="Proxy" Data="{Binding}" />
+        <v:AllTrueToVisibility x:Key="AllVis" />
 
         <!-- Letter avatar or real icon of a program. -->
         <DataTemplate x:Key="Avatar" DataType="{x:Type vm:NavItem}">
@@ -372,13 +373,17 @@
                                         </Border>
                                     </Grid>
                                     <StackPanel Grid.Column="1" Margin="8,0,6,0" VerticalAlignment="Center">
-                                        <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxWidth="150" />
-                                            <Border Style="{StaticResource NewBadge}" Visibility="{Binding IsNew, Converter={StaticResource BoolToVis}}"
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Title}" />
+                                            <Border Grid.Column="1" Style="{StaticResource NewBadge}" Visibility="{Binding IsNew, Converter={StaticResource BoolToVis}}"
                                                     ToolTip="Впервые вышла в сеть за последние сутки">
                                                 <TextBlock Text="НОВОЕ" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource NewBrush}" />
                                             </Border>
-                                        </StackPanel>
+                                        </Grid>
                                         <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Muted}" FontSize="12" TextTrimming="CharacterEllipsis" />
                                     </StackPanel>
                                     <StackPanel Grid.Column="2" VerticalAlignment="Center">
@@ -418,7 +423,8 @@
                                             </StackPanel>
                                         </StackPanel>
                                         <ItemsControl ItemsSource="{Binding Bars}" Height="14" HorizontalAlignment="Right" Margin="0,2,0,0"
-                                                      ToolTip="Активность за последние 7 часов">
+                                                      ToolTip="Активность за последние 7 часов"
+                                                      Visibility="{Binding HasBars, Converter={StaticResource BoolToVis}}">
                                             <ItemsControl.ItemsPanel>
                                                 <ItemsPanelTemplate>
                                                     <StackPanel Orientation="Horizontal" />
@@ -934,13 +940,14 @@
                                         </ItemsControl.ItemsPanel>
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate DataType="{x:Type vm:LinkCardView}">
-                                                <Button Margin="0,0,12,12" Cursor="Hand" Command="{Binding Data.SelectProgramCommand, Source={StaticResource Proxy}}"
+                                                <Button Margin="0,0,12,12" Cursor="Hand" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                                        VerticalAlignment="Stretch" Command="{Binding Data.SelectProgramCommand, Source={StaticResource Proxy}}"
                                                         CommandParameter="{Binding Key}" ToolTip="Открыть связь этой программы">
                                                     <Button.Template>
                                                         <ControlTemplate TargetType="Button">
                                                             <Border x:Name="b" Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource StrokeBrush}"
                                                                     BorderThickness="1" CornerRadius="8" Padding="12">
-                                                                <ContentPresenter />
+                                                                <ContentPresenter HorizontalAlignment="Stretch" />
                                                             </Border>
                                                             <ControlTemplate.Triggers>
                                                                 <Trigger Property="IsMouseOver" Value="True">
@@ -971,6 +978,39 @@
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
+
+                                    <StackPanel Margin="0,4,0,8">
+                                        <StackPanel.Visibility>
+                                            <MultiBinding Converter="{StaticResource AllVis}">
+                                                <Binding Path="HasLinkIdle" />
+                                                <Binding Path="LinkShowAll" />
+                                            </MultiBinding>
+                                        </StackPanel.Visibility>
+                                        <TextBlock Text="СЕЙЧАС НЕ ОБМЕНИВАЮТСЯ ДАННЫМИ" Style="{StaticResource Caption}" />
+                                        <ItemsControl ItemsSource="{Binding LinkIdle}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <WrapPanel />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="{x:Type vm:LinkCardView}">
+                                                    <Button Style="{StaticResource BtnSmall}" Margin="0,0,8,8" Command="{Binding Data.SelectProgramCommand, Source={StaticResource Proxy}}"
+                                                            CommandParameter="{Binding Key}" ToolTip="{Binding Sub}">
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <ContentPresenter Content="{Binding Nav}" ContentTemplate="{StaticResource Avatar}" Margin="-4,0,6,0">
+                                                                <ContentPresenter.LayoutTransform>
+                                                                    <ScaleTransform ScaleX="0.65" ScaleY="0.65" />
+                                                                </ContentPresenter.LayoutTransform>
+                                                            </ContentPresenter>
+                                                            <TextBlock Text="{Binding Title}" VerticalAlignment="Center" MaxWidth="260" TextTrimming="CharacterEllipsis" />
+                                                            <TextBlock Text="{Binding Outages, StringFormat='  · сбоев {0}'}" Style="{StaticResource Faint}" VerticalAlignment="Center" />
+                                                        </StackPanel>
+                                                    </Button>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
 
                                     <TextBlock Style="{StaticResource Faint}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"
                                                Text="Связь оценивается без чтения содержимого: по пакетам туда и обратно, повторным отправкам TCP и пингу до серверов раз в 5 секунд. «Нет ответа» — программа продолжает отправлять, а сервер молчит дольше 5 секунд (для UDP — если раньше он отвечал). Если сервер не отвечает на пинг, задержка показывается как «нет пинга». При обрыве NetWatcher сам делает трассу и пишет, где путь обрывается." />
@@ -1327,6 +1367,7 @@
         <!-- ============ Status bar ============ -->
         <Border Grid.Row="4" Background="{DynamicResource LayerBrush}" BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="0,1,0,0" Padding="16,6">
             <DockPanel>
+                <TextBlock DockPanel.Dock="Right" Text="{Binding AppVersion}" Style="{StaticResource Faint}" FontSize="12" Margin="16,0,0,0" ToolTip="Версия NetWatcher" />
                 <TextBlock DockPanel.Dock="Right" Text="{Binding TotalsText}" Style="{StaticResource Muted}" FontSize="12" />
                 <StackPanel Orientation="Horizontal">
                     <TextBlock FontSize="12" Margin="0,0,16,0">

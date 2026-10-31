@@ -171,6 +171,32 @@ public class LinkMonitorTests
     }
 
     [Fact]
+    public void One_silent_server_of_many_is_not_a_down_program()
+    {
+        var m = new LinkMonitor(TimeSpan.FromHours(1));
+        var other = IPAddress.Parse("155.133.252.39");
+        var t = T0;
+        for (var s = 0; s < 60; s += 2)
+        {
+            t = T0.AddSeconds(s);
+            // One server answers all the time, the other went silent after 20 s.
+            m.Add(t, [Udp(64, 64), Udp(64, s < 20 ? 64 : 0) with { Ip = other }]);
+        }
+        var p = Assert.Single(m.Snapshot(t, TimeSpan.FromMinutes(5)));
+        Assert.DoesNotContain(p.Chart, c => c.Down);
+        Assert.Contains(p.Chart, c => c.Packets > 0);
+        Assert.Contains(p.Servers, x => x.Level == LinkLevel.Fail);
+    }
+
+    [Fact]
+    public void A_few_tcp_resends_are_not_drawn_as_loss()
+    {
+        var m = new LinkMonitor(TimeSpan.FromHours(1));
+        var t = Feed(m, T0, 60, () => Tcp(200, 200, retrans: 1));
+        Assert.All(Assert.Single(m.Snapshot(t, TimeSpan.FromMinutes(5))).Chart, c => Assert.Equal(0, c.LossPercent));
+    }
+
+    [Fact]
     public void Notes_are_added_to_the_reason()
     {
         var m = new LinkMonitor(TimeSpan.FromHours(1));

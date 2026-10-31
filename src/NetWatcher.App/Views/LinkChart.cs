@@ -42,7 +42,7 @@ public sealed class LinkChart : FrameworkElement
         if (pts == null || pts.Count == 0 || w < 20 || h < 10) return;
 
         var accent = Res("AccentBrush", "#0F6CBD");
-        var warn = Res("WarnBrush", "#9D5D00");
+        var warn = Res("LossBrush", "#C27C0E");
         var danger = Res("DangerBrush", "#C42B1C");
         var grid = Res("StrokeBrush", "#E5E5E5");
         var text = Res("Text3Brush", "#8A8A8A");
@@ -118,40 +118,37 @@ public sealed class LinkChart : FrameworkElement
         dc.DrawText(lastL, new Point(w - 4 - lastL.Width, h - lastL.Height));
     }
 
-    private static void RenderMini(DrawingContext dc, IReadOnlyList<ChartPoint> pts, double w, double h, Brush accent, Brush warn, Brush danger)
+    /// <summary>
+    /// Card chart: a bar only where there was traffic. Height follows latency when the server
+    /// answers ping, otherwise the amount of traffic; amber for loss, red where the link was down.
+    /// </summary>
+    private static void RenderMini(DrawingContext dc, IReadOnlyList<ChartPoint> pts, double w, double h, Brush accent, Brush loss, Brush danger)
     {
-        var max = pts.Where(p => p.LatencyMs != null).Select(p => p.LatencyMs!.Value).DefaultIfEmpty(1).Max();
+        var maxLat = pts.Where(p => p.LatencyMs != null).Select(p => p.LatencyMs!.Value).DefaultIfEmpty(0).Max();
+        var maxPk = Math.Log10(1 + pts.Select(p => p.Packets).DefaultIfEmpty(0).Max());
         var step = w / pts.Count;
-        var faint = accent.Clone();
-        faint.Opacity = 0.6;
+        var bar = Math.Max(1.5, step * 0.62);
+        var normal = accent.Clone();
+        normal.Opacity = 0.7;
         var down = danger.Clone();
-        down.Opacity = 0.35;
+        down.Opacity = 0.45;
         for (var i = 0; i < pts.Count; i++)
         {
             var p = pts[i];
-            Brush brush;
+            if (p.Packets == 0 && !p.Down) continue;
+            Brush brush = normal;
             double bh;
             if (p.Down)
             {
                 brush = down;
                 bh = h;
             }
-            else if (p.LossPercent > 0)
-            {
-                brush = warn;
-                bh = Math.Max(3, h * Math.Min(1, p.LossPercent / 50));
-            }
-            else if (p.LatencyMs is { } ms)
-            {
-                brush = faint;
-                bh = Math.Max(3, h * 0.25 + h * 0.75 * ms / Math.Max(max, 1));
-            }
+            else if (p.LatencyMs is { } ms && maxLat > 0)
+                bh = h * (0.3 + 0.7 * ms / maxLat);
             else
-            {
-                brush = faint;
-                bh = 2;
-            }
-            dc.DrawRectangle(brush, null, new Rect(i * step, h - bh, Math.Max(1, step * 0.65), bh));
+                bh = maxPk > 0 ? h * (0.25 + 0.75 * Math.Log10(1 + p.Packets) / maxPk) : h * 0.4;
+            if (!p.Down && p.LossPercent >= 5) brush = loss;
+            dc.DrawRectangle(brush, null, new Rect(i * step, h - bh, bar, bh));
         }
     }
 }

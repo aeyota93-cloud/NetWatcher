@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Windows;
+using NetWatcher.App.Native;
 using NetWatcher.Core.Asn;
 
 namespace NetWatcher.App.Views;
@@ -24,6 +25,7 @@ internal partial class SettingsWindow : Window
         AsnInfo.Text = state.AsnStatus;
         AsnButton.Content = state.Asn.Count > 0 ? "Обновить базу" : "Скачать базу";
         ShowDbInfo();
+        VersionText.Text = "NetWatcher " + AppInfo.Version;
     }
 
     private void ShowDbInfo() =>
@@ -65,6 +67,27 @@ internal partial class SettingsWindow : Window
                 MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
         _state.Store.Clear();
         ShowDbInfo();
+    }
+
+    private void OnImportAsn(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Файл базы владельцев IP",
+            Filter = "База iptoasn (ip2asn-combined.tsv.gz)|*.gz;*.tsv|Все файлы (*.*)|*.*",
+        };
+        if (dialog.ShowDialog(this) != true) return;
+        try
+        {
+            _state.Asn = AsnUpdater.Import(dialog.FileName, AppPaths.AsnDatabase);
+            _state.SetAsnLoaded();
+            AsnInfo.Text = _state.AsnStatus;
+            AsnButton.Content = "Обновить базу";
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
+        {
+            AsnInfo.Text = "Файл не подошёл: " + ex.Message;
+        }
     }
 
     private async void OnDownloadAsn(object sender, RoutedEventArgs e)

@@ -65,9 +65,13 @@ public sealed class NavItem : ObservableObject
     /// <summary>"" for "all", then "Приложения" or "Службы Windows"; the list is grouped by it.</summary>
     public string Section { get; }
     public string Path { get; }
-    public ImageSource? Icon => IconCache.Get(Path);
+    /// <summary>
+    /// Programs get their own icon. Windows services mostly live in svchost.exe and would all
+    /// share its icon, so they get a letter on a neutral background instead.
+    /// </summary>
+    public ImageSource? Icon => Section == "Службы Windows" ? null : IconCache.Get(Path);
     public bool HasIcon => Icon != null;
-    public Brush Color => AppInfo.ColorFor(Key);
+    public Brush Color => Section == "Службы Windows" ? AppInfo.ServiceColor : AppInfo.ColorFor(Key);
     public string Letter => AppInfo.LetterFor(Title);
     public DateTimeOffset LastSeen { get; set; }
     public int Addresses { get; set; }
@@ -117,7 +121,16 @@ public sealed class NavItem : ObservableObject
     public bool HasLink => _linkLevel is "Ok" or "Warn" or "Fail";
 
     /// <summary>Heights in pixels of the small activity bars, oldest first.</summary>
-    public IReadOnlyList<double> Bars { get => _bars; set => Set(ref _bars, value); }
+    public IReadOnlyList<double> Bars
+    {
+        get => _bars;
+        set
+        {
+            if (Set(ref _bars, value)) OnPropertyChanged(nameof(HasBars));
+        }
+    }
+
+    public bool HasBars => _bars.Any(b => b > 0);
 }
 
 public enum ItemKind

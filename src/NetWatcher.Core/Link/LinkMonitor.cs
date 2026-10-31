@@ -55,7 +55,7 @@ public sealed record ServerLink(
     string Reason);
 
 /// <summary>One point of a chart: average latency, loss and whether the link was down.</summary>
-public readonly record struct ChartPoint(DateTimeOffset Time, double? LatencyMs, double LossPercent, bool Down);
+public readonly record struct ChartPoint(DateTimeOffset Time, double? LatencyMs, double LossPercent, bool Down, long Packets = 0);
 
 /// <summary>State of a program as a whole.</summary>
 public sealed record ProgramLink(
@@ -380,11 +380,33 @@ public sealed class LinkMonitor(TimeSpan history)
             }
         }
 
-        var down = new bool[points];
-        foreach (var o in servers.SelectMany(s => Outages(s, now)))
+        // A program is down in a bucket only when every server it talked to then was silent:
+        // one of thirty servers not answering is not "no link".
+        var packets = new long[points];
+        var activeServers = new int[points];
+        var silentServers = new int[points];
+        foreach (var s in servers)
         {
-            if ((o.End ?? now) < from) continue;
-            for (var b = Bucket(o.Start < from ? from : o.Start); b <= Bucket(o.End ?? now); b++) down[b] = true;
+            var active = new bool[points];
+            foreach (var t in s.Ticks)
+            {
+                if (t.Time < from || t.Out + t.In == 0) continue;
+                var b = Bucket(t.Time);
+                active[b] = true;
+                packets[b] += t.Out + t.In;
+            }
+            var silent = new bool[points];
+            foreach (var o in Outages(s, now))
+            {
+                if ((o.End ?? now) < from) continue;
+                for (var b = Bucket(o.Start < from ? from : o.Start); b <= Bucket(o.End ?? now); b++) silent[b] = true;
+            }
+            for (var b = 0; b < points; b++)
+            {
+                if (!active[b]) continue;
+                activeServers[b]++;
+                if (silent[b]) silentServers[b]++;
+            }
         }
 
         var result = new List<ChartPoint>(points);
@@ -394,10 +416,12 @@ public sealed class LinkMonitor(TimeSpan history)
             if (anyPingOk && pingAll[b] > 0 && pingOk[b] < pingAll[b]) loss = 100.0 * (pingAll[b] - pingOk[b]) / pingAll[b];
             else if (outPk[b] > 0)
             {
+                // A few resends are normal TCP life; only a noticeable share counts as loss.
                 var r = Math.Min(100, resends[b] * 100.0 / outPk[b]);
-                if (r >= 2) loss = r;
+                if (resends[b] >= 3 && r >= 5) loss = r;
             }
-            result.Add(new ChartPoint(from + TimeSpan.FromTicks((long)(step * b)), pingOk[b] > 0 ? pingSum[b] / pingOk[b] : null, loss, down[b]));
+            var down = activeServers[b] > 0 && silentServers[b] == activeServers[b];
+            result.Add(new ChartPoint(from + TimeSpan.FromTicks((long)(step * b)), pingOk[b] > 0 ? pingSum[b] / pingOk[b] : null, loss, down, packets[b]));
         }
         return result;
     }

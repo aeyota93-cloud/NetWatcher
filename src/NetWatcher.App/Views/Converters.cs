@@ -24,6 +24,16 @@ public sealed class NotEmptyToVisibility : IValueConverter
         throw new NotSupportedException();
 }
 
+/// <summary>Visible only when every bound value is true.</summary>
+public sealed class AllTrueToVisibility : IMultiValueConverter
+{
+    public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture) =>
+        values.All(v => v is true) ? Visibility.Visible : Visibility.Collapsed;
+
+    public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
 /// <summary>Upper-cases section names in the program list.</summary>
 public sealed class UpperCase : IValueConverter
 {

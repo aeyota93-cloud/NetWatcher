@@ -16,6 +16,14 @@ internal static class AppInfo
         Freeze("#038387"), Freeze("#986F0B"), Freeze("#4F6BED"), Freeze("#E3008C"), Freeze("#6B7280"),
     ];
 
+    /// <summary>"0.4.1" — the version of this build.</summary>
+    public static string Version { get; } =
+        (System.Reflection.CustomAttributeExtensions.GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>(typeof(AppInfo).Assembly)
+            ?.InformationalVersion ?? "").Split('+')[0];
+
+    /// <summary>Neutral grey for Windows services.</summary>
+    public static Brush ServiceColor { get; } = Freeze("#6B7280");
+
     /// <summary>"Google Chrome" for chrome.exe, read from the file description.</summary>
     public static string FriendlyName(string process, string path)
     {

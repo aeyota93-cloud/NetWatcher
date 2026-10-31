@@ -3,3 +3,4 @@ obj/
 artifacts/
 *.user
 .vs/
+src/NetWatcher.App/Assets/ip2asn-combined.tsv.gz

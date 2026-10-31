@@ -28,6 +28,35 @@ jobs:
       - name: Тесты
         run: dotnet test tests/NetWatcher.Core.Tests -c Release
 
+      # База владельцев IP встраивается в NetWatcher.exe, чтобы ничего не скачивать при первом запуске.
+      # Сначала оригинал с iptoasn.com, при неудаче — недельная копия из релиза asn-db.
+      # Если не получилось нигде, программа соберётся без встроенной базы.
+      - name: База владельцев IP
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $dst = "src/NetWatcher.App/Assets/ip2asn-combined.tsv.gz"
+          $sources = @(
+            "https://iptoasn.com/data/ip2asn-combined.tsv.gz",
+            "https://github.com/${{ github.repository }}/releases/download/asn-db/ip2asn-combined.tsv.gz"
+          )
+          foreach ($url in $sources) {
+            try {
+              Invoke-WebRequest $url -OutFile $dst -UseBasicParsing -TimeoutSec 120
+              $gz = [IO.Compression.GZipStream]::new([IO.File]::OpenRead($dst), [IO.Compression.CompressionMode]::Decompress)
+              $reader = [IO.StreamReader]::new($gz)
+              $lines = 0
+              while ($null -ne $reader.ReadLine()) { $lines++ }
+              $reader.Dispose()
+              if ($lines -gt 100000) { Write-Host "Встроена база из $url, строк: $lines"; exit 0 }
+              Write-Host "Слишком мало строк ($lines) в $url"
+            } catch {
+              Write-Host "Не удалось с $url : $_"
+            }
+          }
+          Remove-Item $dst -ErrorAction SilentlyContinue
+          exit 1
+
       - name: Сборка NetWatcher.exe
         run: dotnet publish src/NetWatcher.App -c Release -r win-x64 -o artifacts/publish
 

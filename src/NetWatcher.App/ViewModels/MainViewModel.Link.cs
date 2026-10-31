@@ -42,6 +42,9 @@ internal sealed partial class MainViewModel
         OnPropertyChanged(nameof(ToggleNotifyCommand));
     }
 
+    /// <summary>"v0.4.1" in the status bar.</summary>
+    public string AppVersion => "v" + AppInfo.Version;
+
     public RelayCommand? SelectProgramCommand { get; private set; }
     public RelayCommand? ToggleNotifyCommand { get; private set; }
 
@@ -76,6 +79,24 @@ internal sealed partial class MainViewModel
     public ObservableCollection<LinkEventView> LinkEvents { get; } = [];
     public ObservableCollection<string> LinkReasons { get; } = [];
     public ObservableCollection<LinkCardView> LinkCards { get; } = [];
+
+    /// <summary>Programs that talked earlier in the period but are quiet now — a compact line, not big cards.</summary>
+    public ObservableCollection<LinkCardView> LinkIdle { get; } = [];
+
+    private bool _hasLinkIdle;
+    public bool HasLinkIdle { get => _hasLinkIdle; private set => Set(ref _hasLinkIdle, value); }
+
+    private readonly Dictionary<string, NavItem> _cardAvatars = [];
+
+    /// <summary>The program's list entry, or a stand-in with the same icon and letter when it is not listed for this period.</summary>
+    private NavItem AvatarFor(ProgramLink p)
+    {
+        if (Nav.FirstOrDefault(n => n.Key == p.GroupKey) is { } nav) return nav;
+        if (!_cardAvatars.TryGetValue(p.GroupKey, out var item))
+            _cardAvatars[p.GroupKey] = item = new NavItem(p.GroupKey, p.Services != "" || p.Process == "System" ? "Службы Windows" : "Приложения", p.Path);
+        item.Title = TitleFor(p.GroupKey);
+        return item;
+    }
 
     private bool _hasLinkReasons, _hasLinkEvents;
     public bool HasLinkReasons { get => _hasLinkReasons; private set => Set(ref _hasLinkReasons, value); }
@@ -246,7 +267,7 @@ internal sealed partial class MainViewModel
             ? $"Интернет в целом работает: отвечают {string.Join(", ", ok.Take(3))}{(ok.Count > 3 ? " и другие" : "")}"
             : fails > 0 ? "Ни одна программа не получает ответов — похоже, проблема с интернетом или сетью" : "";
 
-        Replace(LinkCards, programs.Select(p =>
+        LinkCardView Card(ProgramLink p)
         {
             var servers = p.Servers.Count;
             return new LinkCardView(
@@ -259,8 +280,11 @@ internal sealed partial class MainViewModel
                 $"{p.LossPercent:0}%",
                 p.Outages.ToString(),
                 p.Chart.Count > 60 ? p.Chart.Skip(p.Chart.Count - 60).ToList() : p.Chart,
-                Nav.FirstOrDefault(n => n.Key == p.GroupKey));
-        }));
+                AvatarFor(p));
+        }
+        Replace(LinkCards, programs.Where(p => p.Level != Core.Link.LinkLevel.Idle).Select(Card));
+        Replace(LinkIdle, programs.Where(p => p.Level == Core.Link.LinkLevel.Idle).Select(Card));
+        HasLinkIdle = LinkIdle.Count > 0;
     }
 
     private static void Replace<T>(ObservableCollection<T> target, IEnumerable<T> items)

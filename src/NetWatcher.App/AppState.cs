@@ -52,15 +52,17 @@ internal sealed class AppState : IDisposable
 
     private void LoadAsn()
     {
-        if (!File.Exists(AppPaths.AsnDatabase))
-        {
-            AsnStatus = "База владельцев IP не скачана";
-            AsnLoading = false;
-            return;
-        }
         try
         {
             AsnStatus = "Загружается база владельцев IP…";
+            // A copy is built into the program: use it on first start, and when it is newer
+            // than the one on disk (a newer release of NetWatcher).
+            if (EmbeddedAsnIsNewer()) ExtractEmbeddedAsn();
+            if (!File.Exists(AppPaths.AsnDatabase))
+            {
+                AsnStatus = "База владельцев IP не скачана";
+                return;
+            }
             Asn = AsnDatabase.LoadFile(AppPaths.AsnDatabase);
             SetAsnLoaded();
         }
@@ -72,6 +74,26 @@ internal sealed class AppState : IDisposable
         {
             AsnLoading = false;
         }
+    }
+
+    private const string EmbeddedAsnName = "ip2asn-combined.tsv.gz";
+
+    private static bool EmbeddedAsnIsNewer()
+    {
+        if (typeof(AppState).Assembly.GetManifestResourceInfo(EmbeddedAsnName) == null) return false;
+        if (!File.Exists(AppPaths.AsnDatabase)) return true;
+        var built = Environment.ProcessPath is { } exe ? File.GetLastWriteTimeUtc(exe) : DateTime.MinValue;
+        return File.GetLastWriteTimeUtc(AppPaths.AsnDatabase) < built;
+    }
+
+    private static void ExtractEmbeddedAsn()
+    {
+        using var res = typeof(AppState).Assembly.GetManifestResourceStream(EmbeddedAsnName);
+        if (res == null) return;
+        Directory.CreateDirectory(AppPaths.DataDir);
+        var tmp = AppPaths.AsnDatabase + ".embedded";
+        using (var file = File.Create(tmp)) res.CopyTo(file);
+        File.Move(tmp, AppPaths.AsnDatabase, overwrite: true);
     }
 
     public void SetAsnLoaded()

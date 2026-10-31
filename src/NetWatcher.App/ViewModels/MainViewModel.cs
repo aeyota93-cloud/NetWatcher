@@ -294,7 +294,6 @@ internal sealed partial class MainViewModel : ObservableObject
     private void ApplyNav()
     {
         var names = _state.Collector.Services.DisplayNames;
-        var maxActivity = Math.Max(1, _activity.Values.SelectMany(v => v).DefaultIfEmpty(0).Max());
         var newSince = Analysis.NewSince(DateTimeOffset.Now, _logStart);
         var existing = Nav.Skip(1).ToDictionary(n => n.Key);
         var items = new List<NavItem>();
@@ -312,8 +311,10 @@ internal sealed partial class MainViewModel : ObservableObject
             item.LastSeen = g.Max(r => r.LastSeen);
             item.IsNew = newSince is { } s && _groupFirstSeen.TryGetValue(g.Key, out var f) && f >= s;
             item.Problems = g.Count(r => r.Health.IsProblem);
-            item.Bars = (_activity.GetValueOrDefault(g.Key) ?? new int[7])
-                .Select(v => v == 0 ? 1.0 : 2 + 12 * Math.Sqrt(v / (double)maxActivity)).ToList();
+            // Each program on its own scale, so a quiet one still shows its rhythm; empty hours draw nothing.
+            var hours = _activity.GetValueOrDefault(g.Key) ?? new int[7];
+            var own = Math.Max(1, hours.Max());
+            item.Bars = hours.Select(v => v == 0 ? 0.0 : 3 + 11 * v / (double)own).ToList();
             _groupTitles[g.Key] = item.Title;
             items.Add(item);
         }
