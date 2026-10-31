@@ -1,0 +1,44 @@
+<Window x:Class="NetWatcher.App.Views.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:ClassModifier="internal"
+        Title="Настройки" Width="540" SizeToContent="Height" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Style="{StaticResource BaseWindow}">
+    <StackPanel Margin="16">
+        <TextBlock Text="Журнал" Style="{StaticResource Header}" Margin="0,0,0,8" />
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="90" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition />
+                <RowDefinition />
+            </Grid.RowDefinitions>
+            <TextBlock Text="Сколько дней хранить историю (1–365)" VerticalAlignment="Center" />
+            <TextBox x:Name="Retention" Grid.Column="1" Padding="4" Margin="0,2" />
+            <TextBlock Grid.Row="1" Text="Как часто опрашивать соединения, секунд (1–60)" VerticalAlignment="Center" />
+            <TextBox x:Name="Poll" Grid.Row="1" Grid.Column="1" Padding="4" Margin="0,2" />
+        </Grid>
+        <CheckBox x:Name="HideLoopback" Content="Скрывать обращения к самому компьютеру (127.0.0.1, ::1)" Margin="0,8,0,0" />
+        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+            <TextBlock x:Name="DbInfo" Style="{StaticResource Muted}" VerticalAlignment="Center" />
+            <Button Content="Открыть папку" Margin="12,0,0,0" Click="OnOpenFolder" />
+            <Button Content="Очистить историю" Click="OnClear" />
+        </StackPanel>
+
+        <TextBlock Text="База владельцев IP" Style="{StaticResource Header}" Margin="0,20,0,4" />
+        <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap"
+                   Text="Таблица «диапазон адресов → номер сети (AS) → владелец» с iptoasn.com, около 7 МБ. Нужна для колонок «Владелец», «Сеть» и списка «Сети владельцев». Обновляется раз в час на сайте; скачивать заново достаточно раз в месяц." />
+        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+            <Button x:Name="AsnButton" Content="Скачать базу" Margin="0" Click="OnDownloadAsn" />
+            <TextBlock x:Name="AsnInfo" Margin="12,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="360" />
+        </StackPanel>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,24,0,0">
+            <Button Content="Сохранить" Style="{StaticResource PrimaryButton}" IsDefault="True" Click="OnSave" />
+            <Button Content="Отмена" IsCancel="True" />
+        </StackPanel>
+    </StackPanel>
+</Window>

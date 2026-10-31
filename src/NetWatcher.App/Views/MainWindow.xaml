@@ -1,0 +1,212 @@
+<Window x:Class="NetWatcher.App.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:ClassModifier="internal"
+        xmlns:vm="clr-namespace:NetWatcher.App.ViewModels"
+        Title="NetWatcher — кто куда ходит в сеть"
+        Width="1280" Height="760" MinWidth="820" MinHeight="480"
+        WindowStartupLocation="CenterScreen"
+        Style="{StaticResource BaseWindow}">
+
+    <Window.Resources>
+        <vm:InverseBoolConverter x:Key="Inverse" />
+    </Window.Resources>
+
+    <Window.InputBindings>
+        <KeyBinding Key="F5" Command="{Binding RefreshCommand}" />
+    </Window.InputBindings>
+
+    <DockPanel>
+        <!-- Search and period -->
+        <Border DockPanel.Dock="Top" Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1" Padding="12,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <Grid MaxWidth="640" HorizontalAlignment="Stretch">
+                    <TextBox x:Name="SearchBox" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                             Padding="8,6,28,6" VerticalContentAlignment="Center" FontSize="14"
+                             ToolTip="Ищет по программе, службе, IP, порту, домену, владельцу сети и стране. Несколько слов — все должны совпасть. Подсеть вида 142.250.0.0/15 находит адреса внутри неё." />
+                    <TextBlock Text="Поиск: программа, служба, IP, домен, подсеть, владелец…  (Ctrl+F)"
+                               Margin="11,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" Style="{StaticResource Muted}">
+                        <TextBlock.Visibility>
+                            <Binding Path="Text.IsEmpty" ElementName="SearchBox">
+                                <Binding.Converter>
+                                    <BooleanToVisibilityConverter />
+                                </Binding.Converter>
+                            </Binding>
+                        </TextBlock.Visibility>
+                    </TextBlock>
+                    <Button Content="✕" HorizontalAlignment="Right" Margin="0,0,2,0" Padding="6,2" Background="Transparent" BorderThickness="0"
+                            Command="{Binding ClearSearchCommand}" ToolTip="Очистить поиск (Esc)" />
+                </Grid>
+
+                <ComboBox Grid.Column="1" Margin="12,0,0,0" MinWidth="190"
+                          ItemsSource="{Binding Periods}" SelectedItem="{Binding Period}" ToolTip="За какой период показывать" />
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="8,0,0,0">
+                    <ToggleButton Content="⏸ Пауза" Padding="10,5" Margin="4,0,0,0" IsChecked="{Binding Paused}"
+                                  ToolTip="Остановить автообновление экрана. Запись в журнал продолжается." />
+                    <Button Content="⟳ Обновить" Command="{Binding RefreshCommand}" ToolTip="F5" />
+                    <Button Content="⚙ Настройки" Click="OnSettings" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Status bar -->
+        <Border DockPanel.Dock="Bottom" Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="0,1,0,0" Padding="12,5">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Right" Text="{Binding Summary}" Style="{StaticResource Muted}" />
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="{Binding CaptureStatus}" Style="{StaticResource Muted}" />
+                    <TextBlock Text="  ·  " Style="{StaticResource Muted}" />
+                    <TextBlock Text="{Binding AsnStatus}" Style="{StaticResource Muted}" />
+                    <TextBlock Text="{Binding Error}" Foreground="{StaticResource Danger}" Margin="12,0,0,0" />
+                    <TextBlock Text="{Binding Notice}" Foreground="{StaticResource Accent}" Margin="12,0,0,0" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <Grid Margin="10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="300" MinWidth="200" />
+                <ColumnDefinition Width="8" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Programs and services -->
+            <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="6">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="Программы и службы" Style="{StaticResource Header}" Margin="12,10,12,6" />
+                    <ListBox ItemsSource="{Binding Groups}" SelectedItem="{Binding SelectedGroup}" BorderThickness="0"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled" VirtualizingPanel.IsVirtualizing="True">
+                        <ListBox.ContextMenu>
+                            <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                                <MenuItem Header="Копировать все IP" Command="{Binding CopyGroupIpsCommand}"
+                                          CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                <MenuItem Header="Копировать все домены" Command="{Binding CopyGroupDomainsCommand}"
+                                          CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                <MenuItem Header="Копировать название" Command="{Binding CopyGroupCommand}"
+                                          CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                            </ContextMenu>
+                        </ListBox.ContextMenu>
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Padding" Value="8,5" />
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="ToolTip" Value="{Binding Path}" />
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:GroupView}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="22" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Image Source="{Binding Icon}" Width="16" Height="16" VerticalAlignment="Top" Margin="0,2,0,0" />
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Muted}" FontSize="12" TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                    <Border Grid.Column="2" Background="{StaticResource AccentSoft}" CornerRadius="9" Padding="7,1" Margin="6,0,0,0" VerticalAlignment="Top">
+                                        <TextBlock Text="{Binding Count}" FontSize="12" Foreground="{StaticResource Accent}" />
+                                    </Border>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+
+            <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch" Background="Transparent" />
+
+            <TabControl Grid.Column="2" Padding="0" Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}">
+                <TabItem Header="  Адреса  ">
+                    <DataGrid x:Name="Grid" ItemsSource="{Binding Rows}" AutoGenerateColumns="False" IsReadOnly="True"
+                              CanUserAddRows="False" CanUserDeleteRows="False" SelectionMode="Extended" SelectionUnit="FullRow"
+                              HeadersVisibility="Column" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="{StaticResource Border}"
+                              BorderThickness="0" RowHeight="24" ClipboardCopyMode="ExcludeHeader"
+                              EnableRowVirtualization="True" VirtualizingPanel.IsVirtualizingWhenGrouping="True"
+                              MouseDoubleClick="OnRowDoubleClick">
+                        <DataGrid.ContextMenu>
+                            <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                                <MenuItem Header="Копировать IP" InputGestureText="Ctrl+Shift+C" Command="{Binding CopyIpCommand}"
+                                          CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                <MenuItem Header="Копировать домены" Command="{Binding CopyDomainCommand}"
+                                          CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                <MenuItem Header="Копировать сеть владельца" Command="{Binding CopyNetworkCommand}"
+                                          CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                <MenuItem Header="Копировать строки целиком" InputGestureText="Ctrl+C" Command="{Binding CopyRowCommand}"
+                                          CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                <Separator />
+                                <MenuItem Header="Найти всё с этим IP" Command="{Binding SearchIpCommand}"
+                                          CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                <MenuItem Header="Найти всё с этим доменом" Command="{Binding SearchDomainCommand}"
+                                          CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                <MenuItem Header="Найти всё этой программы" Command="{Binding SearchProcessCommand}"
+                                          CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                <Separator />
+                                <MenuItem Header="Подробно о сети (RDAP)…" Command="{Binding RdapCommand}"
+                                          CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                <MenuItem Header="Открыть папку программы" Command="{Binding OpenFolderCommand}"
+                                          CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                            </ContextMenu>
+                        </DataGrid.ContextMenu>
+                        <DataGrid.Columns>
+                            <DataGridTemplateColumn Header="Программа" SortMemberPath="Process" Width="150" ClipboardContentBinding="{Binding Process}">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" ToolTip="{Binding Path}">
+                                            <Image Source="{Binding Icon}" Width="16" Height="16" Margin="2,0,6,0" />
+                                            <TextBlock Text="{Binding Process}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="Служба" Binding="{Binding Services}" Width="150" />
+                            <DataGridTextColumn Header="IP-адрес" Binding="{Binding Ip}" SortMemberPath="IpSort" Width="130" FontFamily="Consolas" />
+                            <DataGridTextColumn Header="Порт" Binding="{Binding Port}" Width="55" />
+                            <DataGridTextColumn Header="Прот." Binding="{Binding Proto}" Width="48" />
+                            <DataGridTextColumn Header="Домен" Binding="{Binding Domains}" Width="200" />
+                            <DataGridTextColumn Header="Владелец" Binding="{Binding Owner}" Width="170" />
+                            <DataGridTextColumn Header="Сеть" Binding="{Binding Network}" Width="140" FontFamily="Consolas" />
+                            <DataGridTextColumn Header="Страна" Binding="{Binding Country}" Width="55" />
+                            <DataGridTextColumn Header="Впервые" Binding="{Binding FirstSeen, StringFormat='dd.MM HH:mm:ss'}" Width="100" />
+                            <DataGridTextColumn Header="Последний раз" Binding="{Binding LastSeen, StringFormat='dd.MM HH:mm:ss'}" Width="105" />
+                            <DataGridTextColumn Header="Раз" Binding="{Binding Hits}" Width="50" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </TabItem>
+
+                <TabItem Header="  Списки и подсети  ">
+                    <DockPanel Margin="12">
+                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
+                            <ComboBox ItemsSource="{Binding ListModes}" SelectedItem="{Binding ListModeOption}" MinWidth="260" />
+                            <RadioButton Content="1.2.3.0/24" Margin="16,0,0,0" VerticalAlignment="Center" GroupName="fmt"
+                                         IsChecked="{Binding UseMask, Converter={StaticResource Inverse}}" />
+                            <RadioButton Content="1.2.3.0 255.255.255.0" Margin="12,0,0,0" VerticalAlignment="Center" GroupName="fmt"
+                                         IsChecked="{Binding UseMask}" />
+                            <CheckBox Content="Только IPv4" Margin="16,0,0,0" VerticalAlignment="Center" IsChecked="{Binding Ipv4Only}" />
+                        </StackPanel>
+                        <DockPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                <Button Content="Копировать всё" Style="{StaticResource PrimaryButton}" Command="{Binding CopyListCommand}" />
+                                <Button Content="Сохранить в файл…" Command="{Binding SaveListCommand}" />
+                            </StackPanel>
+                            <TextBlock Text="{Binding ListSummary}" Style="{StaticResource Muted}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                        </DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,8"
+                                   Text="Список строится по тому, что видно на вкладке «Адреса»: выбранная слева программа, поиск и период. Подходит для правил файрвола и раздельного туннелирования VPN." />
+                        <TextBox Text="{Binding ListText, Mode=OneWay}" IsReadOnly="True" FontFamily="Consolas" FontSize="13"
+                                 VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" AcceptsReturn="True" Padding="6" />
+                    </DockPanel>
+                </TabItem>
+            </TabControl>
+        </Grid>
+    </DockPanel>
+</Window>
