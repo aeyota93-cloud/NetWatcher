@@ -16,6 +16,12 @@ internal sealed class AppState : IDisposable
     /// <summary>Link quality per program for the last hour, in memory.</summary>
     public Core.Link.LinkMonitor Link { get; } = new(TimeSpan.FromHours(1));
 
+    /// <summary>Router and internet latency, idle and under load, for the last hour, in memory.</summary>
+    public Core.Link.QualityMonitor Quality { get; } = new(TimeSpan.FromHours(1));
+
+    /// <summary>The last active test under load, if any was run.</summary>
+    public Core.Link.LoadTestResult? LastLoadTest { get; set; }
+
     public LinkService LinkService { get; }
     public AlertService Alerts { get; }
     public BlockService Blocks { get; } = new();
@@ -53,7 +59,7 @@ internal sealed class AppState : IDisposable
     {
         Settings = Settings.Load(AppPaths.Settings);
         Store = new LogStore(AppPaths.Database);
-        Collector = new Collector(Store, Dns, Link, () => Settings);
+        Collector = new Collector(Store, Dns, Link, Quality, () => Settings);
         LinkService = new LinkService(this);
         Alerts = new AlertService(this);
         Collector.DnsAnswers += Blocks.OnDns;

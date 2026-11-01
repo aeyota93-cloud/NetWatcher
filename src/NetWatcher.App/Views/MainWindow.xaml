@@ -966,6 +966,86 @@
                                         </Border>
                                     </StackPanel>
 
+                                    <!-- All programs: connection quality (router, internet, load, AIM scores) -->
+                                    <Border Style="{StaticResource Card}" Margin="0,0,0,12" Visibility="{Binding LinkShowAll, Converter={StaticResource BoolToVis}}">
+                                        <StackPanel>
+                                            <DockPanel>
+                                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
+                                                    <TextBlock Text="{Binding QualityProgress}" Style="{StaticResource Muted}" FontSize="12" VerticalAlignment="Center"
+                                                               Margin="0,0,10,0" MaxWidth="320" TextTrimming="CharacterEllipsis" ToolTip="{Binding QualityProgress}" />
+                                                    <Button Style="{StaticResource BtnSmall}" Content="Проверить под нагрузкой…" Command="{Binding RunTestCommand}"
+                                                            Visibility="{Binding QualityTestIdle, Converter={StaticResource BoolToVis}}"
+                                                            ToolTip="Около 20 секунд: скачивание и отправка на полной скорости, задержка в это время" />
+                                                    <Button Style="{StaticResource BtnSmall}" Content="Остановить" Command="{Binding CancelTestCommand}"
+                                                            Visibility="{Binding QualityTestBusy, Converter={StaticResource BoolToVis}}" />
+                                                </StackPanel>
+                                                <StackPanel>
+                                                    <TextBlock Text="Качество подключения" FontSize="14" FontWeight="SemiBold" />
+                                                    <TextBlock Text="за последние 10 минут" Style="{StaticResource Muted}" FontSize="12" />
+                                                </StackPanel>
+                                            </DockPanel>
+                                            <TextBlock Margin="0,10,0,0" Style="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap"
+                                                       Visibility="{Binding QualityOn, Converter={StaticResource NotVis}}"
+                                                       Text="Опорные пинги выключены в настройках — включите их, чтобы видеть качество до роутера и до интернета." />
+                                            <Grid Margin="0,10,0,0" Visibility="{Binding QualityOn, Converter={StaticResource BoolToVis}}">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition /><RowDefinition /><RowDefinition />
+                                                </Grid.RowDefinitions>
+                                                <Grid.Resources>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="FontSize" Value="12.5" />
+                                                        <Setter Property="Margin" Value="0,2,16,2" />
+                                                        <Setter Property="TextWrapping" Value="Wrap" />
+                                                    </Style>
+                                                </Grid.Resources>
+                                                <TextBlock Text="{Binding QualityGatewayLabel}" Foreground="{DynamicResource Text3Brush}"
+                                                           ToolTip="Домашняя сеть: кабель или Wi-Fi до роутера" />
+                                                <TextBlock Grid.Column="1" Text="{Binding QualityGateway}" />
+                                                <TextBlock Grid.Row="1" Text="{Binding QualityInternetLabel}" Foreground="{DynamicResource Text3Brush}"
+                                                           ToolTip="Весь путь до интернета; задержка и разброс — в спокойные моменты" />
+                                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding QualityInternet}" />
+                                                <TextBlock Grid.Row="2" Text="Под нагрузкой" Foreground="{DynamicResource Text3Brush}"
+                                                           ToolTip="Насколько растёт задержка, когда линия занята скачиванием или отправкой (bufferbloat)" />
+                                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding QualityLoad}" />
+                                            </Grid>
+                                            <ItemsControl ItemsSource="{Binding QualityChips}" Margin="0,10,0,0">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <WrapPanel />
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border CornerRadius="12" Padding="10,3" Margin="0,0,8,4" ToolTip="{Binding Tip}">
+                                                            <Border.Style>
+                                                                <Style TargetType="Border">
+                                                                    <Setter Property="Background" Value="{DynamicResource OkSoftBrush}" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding Level}" Value="Warn"><Setter Property="Background" Value="{DynamicResource WarnSoftBrush}" /></DataTrigger>
+                                                                        <DataTrigger Binding="{Binding Level}" Value="Fail"><Setter Property="Background" Value="{DynamicResource DangerSoftBrush}" /></DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Border.Style>
+                                                            <TextBlock FontSize="12.5">
+                                                                <Run Text="{Binding Title, Mode=OneWay}" FontWeight="SemiBold" /><Run Text=" · " /><Run Text="{Binding ClassText, Mode=OneWay}" />
+                                                            </TextBlock>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                            <TextBlock Text="{Binding QualityHint}" Margin="0,6,0,0" FontSize="12.5" TextWrapping="Wrap" Foreground="{DynamicResource WarnBrush}"
+                                                       Visibility="{Binding QualityHint, Converter={StaticResource TextVis}}" />
+                                            <TextBlock Text="{Binding QualityTest}" Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap" Style="{StaticResource Muted}"
+                                                       Visibility="{Binding QualityTest, Converter={StaticResource TextVis}}" />
+                                            <TextBlock Margin="0,6,0,0" FontSize="11" Style="{StaticResource Faint}" TextWrapping="Wrap"
+                                                       Text="Оценки — по методике Cloudflare AIM; они появляются, когда известен рост задержки под нагрузкой, а «Видео» — после теста скорости. «Под нагрузкой» без теста — по вашему же трафику: это нагрузка, какая была, а не предел линии." />
+                                        </StackPanel>
+                                    </Border>
+
                                     <!-- All programs: cards -->
                                     <ItemsControl ItemsSource="{Binding LinkCards}" Visibility="{Binding LinkShowAll, Converter={StaticResource BoolToVis}}">
                                         <ItemsControl.ItemsPanel>

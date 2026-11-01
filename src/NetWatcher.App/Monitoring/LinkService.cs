@@ -36,6 +36,7 @@ internal sealed class LinkService(AppState state) : IDisposable
     {
         _ = Task.Run(() => PingLoop(_stop.Token));
         _ = Task.Run(() => WatchLoop(_stop.Token));
+        _ = Task.Run(() => QualityLoop(_stop.Token));
     }
 
     private async Task PingLoop(CancellationToken ct)
@@ -98,6 +99,88 @@ internal sealed class LinkService(AppState state) : IDisposable
         }
         _statsOn.IntersectWith(open);
         foreach (var (key, rtt) in best) state.Link.AddConnectionRtt(key, now, rtt);
+    }
+
+    // Internet reference points: Cloudflare and Google public DNS answer ping from almost everywhere.
+    private static readonly IPAddress[] InternetTargets = [IPAddress.Parse("1.1.1.1"), IPAddress.Parse("8.8.8.8")];
+    private int _internetTarget;
+    private int _internetMisses;
+    private IPAddress? _gateway;
+    private DateTime _gatewayAt = DateTime.MinValue;
+
+    /// <summary>The router and the internet reference point being pinged now, for the window.</summary>
+    public (IPAddress? Gateway, IPAddress Internet) QualityTargets => (_gateway, InternetTargets[_internetTarget]);
+
+    /// <summary>
+    /// Every 2 seconds: ping the router (is the home network, often Wi-Fi, fine?) and an internet point (the
+    /// whole way out). Together with the computer's traffic this shows latency under load. Can be turned off.
+    /// </summary>
+    private async Task QualityLoop(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                if (state.Settings.QualityPings)
+                {
+                    if (DateTime.UtcNow - _gatewayAt > TimeSpan.FromMinutes(1))
+                    {
+                        _gateway = DefaultGateway();
+                        _gatewayAt = DateTime.UtcNow;
+                    }
+                    var now = DateTimeOffset.Now;
+                    var internet = InternetTargets[_internetTarget];
+                    var gatewayTask = _gateway is { } gw ? PingRtt(gw, ct) : Task.FromResult<double?>(null);
+                    var internetTask = PingRtt(internet, ct);
+                    var (g, i) = (await gatewayTask.ConfigureAwait(false), await internetTask.ConfigureAwait(false));
+                    if (_gateway != null) state.Quality.AddPing(true, now, g);
+                    state.Quality.AddPing(false, now, i);
+                    // A reference point that stops answering (blocked in this network): try the other one.
+                    _internetMisses = i == null ? _internetMisses + 1 : 0;
+                    if (_internetMisses >= 10)
+                    {
+                        _internetTarget = (_internetTarget + 1) % InternetTargets.Length;
+                        _internetMisses = 0;
+                    }
+                }
+            }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                // A failed round is skipped.
+            }
+            await Task.Delay(TimeSpan.FromSeconds(2), ct).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>IPv4 gateway of the first working network adapter that has one.</summary>
+    private static IPAddress? DefaultGateway()
+    {
+        try
+        {
+            return NetworkInterface.GetAllNetworkInterfaces()
+                .Where(n => n.OperationalStatus == OperationalStatus.Up && n.NetworkInterfaceType != NetworkInterfaceType.Loopback)
+                .SelectMany(n => n.GetIPProperties().GatewayAddresses)
+                .Select(g => g.Address)
+                .FirstOrDefault(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork && !a.Equals(IPAddress.Any));
+        }
+        catch (NetworkInformationException)
+        {
+            return null;
+        }
+    }
+
+    private static async Task<double?> PingRtt(IPAddress ip, CancellationToken ct)
+    {
+        using var ping = new Ping();
+        try
+        {
+            var r = await ping.SendPingAsync(ip, TimeSpan.FromSeconds(1), new byte[32], null, ct).ConfigureAwait(false);
+            return r.Status == IPStatus.Success ? r.RoundtripTime : null;
+        }
+        catch (PingException)
+        {
+            return null;
+        }
     }
 
     private async Task PingOne(IPAddress ip, CancellationToken ct)

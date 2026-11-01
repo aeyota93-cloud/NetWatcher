@@ -44,6 +44,9 @@ public sealed class Settings
     /// <summary>Browsers visit new countries and networks with every site: only their first start is news.</summary>
     public bool AlertSkipBrowsers { get; set; } = true;
 
+    /// <summary>Ping the router and an internet reference point every 2 s, for connection quality.</summary>
+    public bool QualityPings { get; set; } = true;
+
     /// <summary>When NetWatcher started learning what is normal; alerts start a day later.</summary>
     public DateTimeOffset? LearningSince { get; set; }
 

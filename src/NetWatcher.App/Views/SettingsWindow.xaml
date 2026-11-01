@@ -37,6 +37,15 @@
             </StackPanel>
         </Border>
 
+        <TextBlock Text="Качество подключения" FontSize="15" FontWeight="SemiBold" Margin="0,22,0,8" />
+        <Border Style="{StaticResource Card}">
+            <StackPanel>
+                <CheckBox x:Name="QualityPings" Content="Опорные пинги: роутер и 1.1.1.1 (или 8.8.8.8) раз в 2 секунды" />
+                <TextBlock Style="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="24,4,0,0"
+                           Text="Нужны для карточки «Качество подключения» во вкладке «Связь»: задержка до роутера и до интернета и её рост под нагрузкой. Это 32 байта раз в 2 секунды на каждую точку." />
+            </StackPanel>
+        </Border>
+
         <TextBlock Text="Журнал" FontSize="15" FontWeight="SemiBold" Margin="0,22,0,8" />
         <Border Style="{StaticResource Card}">
             <StackPanel>

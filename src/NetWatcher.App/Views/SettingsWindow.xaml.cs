@@ -17,6 +17,7 @@ internal partial class SettingsWindow : Window
         Poll.Text = state.Settings.PollSeconds.ToString();
         HideLoopback.IsChecked = state.Settings.HideLoopback;
         AlertProgram.IsChecked = state.Settings.AlertNewProgram;
+        QualityPings.IsChecked = state.Settings.QualityPings;
         AlertCountry.IsChecked = state.Settings.AlertNewCountry;
         AlertNetwork.IsChecked = state.Settings.AlertNewNetwork;
         AlertSkipBrowsers.IsChecked = state.Settings.AlertSkipBrowsers;
@@ -59,6 +60,7 @@ internal partial class SettingsWindow : Window
         s.PollSeconds = poll;
         s.HideLoopback = HideLoopback.IsChecked == true;
         s.AlertNewProgram = AlertProgram.IsChecked == true;
+        s.QualityPings = QualityPings.IsChecked == true;
         s.AlertNewCountry = AlertCountry.IsChecked == true;
         s.AlertNewNetwork = AlertNetwork.IsChecked == true;
         s.AlertSkipBrowsers = AlertSkipBrowsers.IsChecked == true;

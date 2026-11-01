@@ -38,6 +38,7 @@ internal sealed partial class MainViewModel
             if (p is string key && Nav.FirstOrDefault(n => n.Key == key) is { } nav) SelectedNav = nav;
         });
         ToggleNotifyCommand = new RelayCommand(ToggleNotify);
+        InitQuality();
         OnPropertyChanged(nameof(SelectProgramCommand));
         OnPropertyChanged(nameof(ToggleNotifyCommand));
     }
@@ -153,6 +154,7 @@ internal sealed partial class MainViewModel
             LinkHasProgram = false;
             LinkNoData = programs.Count == 0;
             ApplyOverview(programs);
+            ApplyQuality();
             return;
         }
 

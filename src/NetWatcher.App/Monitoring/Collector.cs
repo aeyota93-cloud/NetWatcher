@@ -37,10 +37,12 @@ internal sealed class Collector : IDisposable
     public string? LastError { get; private set; }
 
     private readonly LinkMonitor _link;
+    private readonly QualityMonitor _quality;
 
-    public Collector(LogStore store, DnsIndex dns, LinkMonitor link, Func<Settings> settings)
+    public Collector(LogStore store, DnsIndex dns, LinkMonitor link, QualityMonitor quality, Func<Settings> settings)
     {
         _link = link;
+        _quality = quality;
         _store = store;
         _dns = dns;
         _settings = settings;
@@ -174,6 +176,16 @@ internal sealed class Collector : IDisposable
         foreach (var (c, n) in retransmits) AddFlow(c, 0, 0, 0, 0, n, 0);
         foreach (var (c, n) in reconnects) AddFlow(c, 0, 0, 0, 0, 0, n);
         _link.Add(now, flows.Values);
+
+        // Traffic to and from the internet (not the local network), for latency under load.
+        long internetIn = 0, internetOut = 0;
+        foreach (var (c, f) in etwFlows)
+        {
+            if (IpKey.IsPrivate(IpKey.ToAddress(c.Ip)) || IpKey.IsUninteresting(IpKey.ToAddress(c.Ip), true)) continue;
+            internetIn += f.BytesIn;
+            internetOut += f.BytesOut;
+        }
+        _quality.AddTraffic(now, internetIn, internetOut);
 
         var dns = new List<DnsObservation>();
         var failures = new List<DnsFailure>();
