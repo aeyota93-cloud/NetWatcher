@@ -40,7 +40,8 @@ internal sealed class EtwMonitor : IDisposable
     private readonly ConcurrentDictionary<EtwConnection, int> _retransmits = new();
 
     // Traffic each way per program and server, for the link monitor.
-    private readonly ConcurrentDictionary<EtwConnection, FlowCounter> _flows = new();
+    private readonly Lock _flowsLock = new();
+    private Dictionary<EtwConnection, FlowCounter> _flows = new();
     private volatile HashSet<UInt128> _local = [];
     private DateTime _localAt = DateTime.MinValue;
     private TraceEventSession? _kernel;
@@ -143,16 +144,20 @@ internal sealed class EtwMonitor : IDisposable
         if (pid <= 0 || a == null || b == null) return;
         var local = LocalAddresses();
         var (remote, port) = local.Contains(IpKey.From(b)) && !local.Contains(IpKey.From(a)) ? (a, aPort) : (b, bPort);
-        var c = _flows.GetOrAdd(new EtwConnection(pid, IpKey.From(remote), port, proto), _ => new FlowCounter());
-        if (outgoing)
+        var key = new EtwConnection(pid, IpKey.From(remote), port, proto);
+        lock (_flowsLock)
         {
-            Interlocked.Increment(ref c.PacketsOut);
-            Interlocked.Add(ref c.BytesOut, size);
-        }
-        else
-        {
-            Interlocked.Increment(ref c.PacketsIn);
-            Interlocked.Add(ref c.BytesIn, size);
+            if (!_flows.TryGetValue(key, out var c)) _flows[key] = c = new FlowCounter();
+            if (outgoing)
+            {
+                c.PacketsOut++;
+                c.BytesOut += size;
+            }
+            else
+            {
+                c.PacketsIn++;
+                c.BytesIn += size;
+            }
         }
     }
 
@@ -177,10 +182,14 @@ internal sealed class EtwMonitor : IDisposable
     /// <summary>Traffic per program and server since the last call.</summary>
     public Dictionary<EtwConnection, FlowCounter> TakeFlows()
     {
-        var result = new Dictionary<EtwConnection, FlowCounter>();
-        foreach (var key in _flows.Keys)
-            if (_flows.TryRemove(key, out var c)) result[key] = c;
-        return result;
+        var next = new Dictionary<EtwConnection, FlowCounter>();
+        lock (_flowsLock)
+        {
+            // Writers cannot retain a counter from the dictionary being handed off.
+            var result = _flows;
+            _flows = next;
+            return result;
+        }
     }
 
     private static void Count(ConcurrentDictionary<EtwConnection, int> map, int pid, IPAddress ip, int port)

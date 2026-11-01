@@ -162,4 +162,74 @@ public class AuditFixesTests
         dns.Clear();
         Assert.Empty(dns.Get(Site, "Telegram.exe"));
     }
+    // ------------------------------------------------------------ stage 3: link monitor and log
+
+    [Fact]
+    public void A_minor_server_failing_is_a_warning_not_no_link()
+    {
+        var m = new LinkMonitor(TimeSpan.FromHours(1));
+        var minor = IPAddress.Parse("155.133.252.39");
+        for (var s = 0; s <= 30; s += 2)
+            m.Add(T0.AddSeconds(s), [Udp(100, 100), Udp(5, s < 10 ? 5 : 0) with { Ip = minor }]);
+        var p = m.Snapshot(T0.AddSeconds(30), TimeSpan.FromMinutes(5)).Single();
+        Assert.Equal(LinkLevel.Warn, p.Level);
+        Assert.Equal("не отвечает 1 из 2 серверов", p.StateText);
+    }
+
+    [Fact]
+    public void The_main_server_failing_is_no_link()
+    {
+        var m = new LinkMonitor(TimeSpan.FromHours(1));
+        var minor = IPAddress.Parse("155.133.252.39");
+        for (var s = 0; s <= 30; s += 2)
+            m.Add(T0.AddSeconds(s), [Udp(100, s < 10 ? 100 : 0), Udp(5, 5) with { Ip = minor }]);
+        Assert.Equal(LinkLevel.Fail, m.Snapshot(T0.AddSeconds(30), TimeSpan.FromMinutes(5)).Single().Level);
+    }
+
+    [Fact]
+    public void Unmeasured_loss_is_unknown_not_zero()
+    {
+        var m = Played(() => Udp(20, 20));
+        Assert.Null(m.Snapshot(T0.AddSeconds(10), TimeSpan.FromMinutes(5)).Single().LossPercent);
+    }
+
+    [Fact]
+    public void A_server_without_ping_draws_no_loss_next_to_one_with_ping()
+    {
+        var m = new LinkMonitor(TimeSpan.FromHours(1));
+        var quiet = IPAddress.Parse("155.133.252.39");
+        for (var s = 0; s <= 60; s += 2) m.Add(T0.AddSeconds(s), [Udp(10, 10), Udp(10, 10) with { Ip = quiet }]);
+        for (var s = 0; s <= 60; s += 5)
+        {
+            m.AddPing(Game, T0.AddSeconds(s), 30);
+            m.AddPing(quiet, T0.AddSeconds(s), null);
+        }
+        Assert.All(m.Snapshot(T0.AddSeconds(60), TimeSpan.FromMinutes(1)).Single().Chart, c => Assert.Equal(0, c.LossPercent));
+    }
+
+    [Fact]
+    public void Old_problems_of_the_hour_stay_out_of_a_short_period()
+    {
+        var dir = Directory.CreateTempSubdirectory("nw-hour").FullName;
+        try
+        {
+            using (var store = new Storage.LogStore(Path.Combine(dir, "log.db")))
+            {
+                var hour = new DateTimeOffset(2026, 10, 31, 10, 0, 0, TimeSpan.Zero);
+                store.Write([
+                    new Observation("a.exe", "", "", "TCP", Site, 443, hour.AddMinutes(1), NoAnswer: 2),
+                    new Observation("a.exe", "", "", "TCP", Site, 443, hour.AddMinutes(50), Established: true),
+                ], []);
+                var now = Assert.Single(store.Query(hour.AddMinutes(49)));
+                Assert.Equal(0, now.NoAnswer);
+                Assert.Equal(1, now.Established);
+                Assert.Equal(2, Assert.Single(store.Query(hour)).NoAnswer);
+            }
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            Directory.Delete(dir, true);
+        }
+    }
 }

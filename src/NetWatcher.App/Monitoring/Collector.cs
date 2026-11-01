@@ -111,7 +111,9 @@ internal sealed class Collector : IDisposable
             Add(row.Pid, row.RemoteIp, row.RemotePort, "TCP");
             if (row.State == TcpState.Established)
                 Update(row.Pid, row.RemoteIp, row.RemotePort, "TCP", o => o with { Established = true });
-            else if (row.State == TcpState.SynSent)
+            // With the kernel events running, every resent SYN is already counted from them; counting a
+            // stuck attempt here too would make one slow connection look like two failed ones.
+            else if (row.State == TcpState.SynSent && !_etw.KernelRunning)
             {
                 var key = (row.Pid, row.LocalPort, IpKey.From(row.RemoteIp), row.RemotePort);
                 stillWaiting.Add(key);

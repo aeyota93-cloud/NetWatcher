@@ -215,7 +215,7 @@ internal sealed partial class MainViewModel
         }
         LinkLatency = p.LatencyMs is { } ms ? $"{ms:0} мс" : "—";
         LinkJitter = p.JitterMs is { } j ? $"±{j:0} мс" : "—";
-        LinkLoss = $"{p.LossPercent:0}%";
+        LinkLoss = p.LossPercent is { } lp ? $"{lp:0}%" : "—";
         LinkOutages = p.Outages.ToString();
         LinkChart = p.Chart;
 
@@ -297,7 +297,7 @@ internal sealed partial class MainViewModel
                 p.Level.ToString(),
                 p.Level switch { Core.Link.LinkLevel.Ok => "работает", Core.Link.LinkLevel.Idle => "простаивает", _ => p.StateText },
                 p.LatencyMs is { } ms ? $"{ms:0} мс" : "—",
-                $"{p.LossPercent:0}%",
+                p.LossPercent is { } cardLoss ? $"{cardLoss:0}%" : "—",
                 p.Outages.ToString(),
                 p.Chart.Count > 60 ? p.Chart.Skip(p.Chart.Count - 60).ToList() : p.Chart,
                 AvatarFor(p));

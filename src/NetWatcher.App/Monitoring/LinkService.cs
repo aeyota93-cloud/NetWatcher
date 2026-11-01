@@ -88,6 +88,7 @@ internal sealed class LinkService(AppState state) : IDisposable
     {
         var programs = state.Link.Snapshot(now, TimeSpan.FromMinutes(2), chartPoints: 1);
         var anyOk = programs.Any(p => p.Level == LinkLevel.Ok);
+        foreach (var key in _traced.Where(t => DateTime.UtcNow - t.Value > RetraceAfter).Select(t => t.Key).ToList()) _traced.Remove(key);
 
         foreach (var p in programs)
         {

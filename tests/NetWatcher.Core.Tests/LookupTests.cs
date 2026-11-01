@@ -98,18 +98,35 @@ public class LookupTests
     }
 
     [Fact]
-    public void Dns_index_prefers_the_same_process()
+    public void Dns_index_uses_only_the_process_own_domains_when_available()
     {
         var idx = new DnsIndex();
         var ip = IPAddress.Parse("104.16.1.1");
         var t = DateTimeOffset.UtcNow;
         idx.Add(ip, "other.example.", "chrome.exe", t.AddMinutes(1));
         idx.Add(ip, "Telegram.org", "telegram.exe", t);
-        Assert.Equal(["telegram.org", "other.example"], idx.Get(ip, "Telegram.exe"));
-        Assert.Equal(["other.example", "telegram.org"], idx.Get(ip, null));
+        idx.Add(ip, "api.telegram.org", "TELEGRAM.EXE", t.AddSeconds(10));
+        Assert.Equal(["api.telegram.org", "telegram.org"], idx.Get(ip, "Telegram.exe"));
+        Assert.Equal(["api.telegram.org"], idx.Get(ip, "telegram.exe", 1));
 
         idx.RemoveOlderThan(t.AddSeconds(30));
         Assert.Equal(["other.example"], idx.Get(ip, "telegram.exe"));
+    }
+
+    [Fact]
+    public void Dns_index_falls_back_to_all_domains_newest_first()
+    {
+        var idx = new DnsIndex();
+        var ip = IPAddress.Parse("104.16.1.1");
+        var t = DateTimeOffset.UtcNow;
+        idx.Add(ip, "older.example", "chrome.exe", t);
+        idx.Add(ip, "newer.example", "firefox.exe", t.AddSeconds(10));
+        idx.Add(ip, "older.example", "firefox.exe", t.AddSeconds(-10));
+
+        Assert.Equal(["newer.example", "older.example"], idx.Get(ip, "telegram.exe"));
+        Assert.Equal(["newer.example", "older.example"], idx.Get(ip, null));
+        Assert.Equal(["newer.example"], idx.Get(ip, "telegram.exe", 1));
+        Assert.Equal(["newer.example"], idx.Get(ip, null, 1));
     }
 
     [Fact]

@@ -71,6 +71,18 @@ public sealed class LogStore : IDisposable
         }
         foreach (var c in new[] { "est", "noanswer", "retrans" })
             if (!columns.Contains(c)) Exec($"ALTER TABLE seen ADD COLUMN {c} INTEGER NOT NULL DEFAULT 0;");
+        // Columns added in 0.5: when the hour's last problem and last open connection happened, so that a
+        // short period does not inherit the counters of the whole hour. Old rows get their last sighting.
+        if (!columns.Contains("problem_at"))
+        {
+            Exec("ALTER TABLE seen ADD COLUMN problem_at INTEGER NOT NULL DEFAULT 0;");
+            Exec("UPDATE seen SET problem_at = last_seen WHERE noanswer + retrans > 0;");
+        }
+        if (!columns.Contains("est_at"))
+        {
+            Exec("ALTER TABLE seen ADD COLUMN est_at INTEGER NOT NULL DEFAULT 0;");
+            Exec("UPDATE seen SET est_at = last_seen WHERE est > 0;");
+        }
     }
 
     public void Write(IReadOnlyCollection<Observation> seen, IReadOnlyCollection<DnsObservation> dns)
@@ -84,8 +96,9 @@ public sealed class LogStore : IDisposable
             {
                 cmd.Transaction = tx;
                 cmd.CommandText = """
-                    INSERT INTO seen(bucket, process, services, proto, remote_ip, remote_port, path, first_seen, last_seen, hits, est, noanswer, retrans)
-                    VALUES($b, $p, $s, $pr, $ip, $port, $path, $t, $t, 1, $est, $na, $rt)
+                    INSERT INTO seen(bucket, process, services, proto, remote_ip, remote_port, path, first_seen, last_seen, hits, est, noanswer, retrans, problem_at, est_at)
+                    VALUES($b, $p, $s, $pr, $ip, $port, $path, $t, $t, 1, $est, $na, $rt,
+                           CASE WHEN $na + $rt > 0 THEN $t ELSE 0 END, CASE WHEN $est > 0 THEN $t ELSE 0 END)
                     ON CONFLICT(bucket, process, services, proto, remote_ip, remote_port) DO UPDATE SET
                       last_seen = max(last_seen, excluded.last_seen),
                       first_seen = min(first_seen, excluded.first_seen),
@@ -93,6 +106,8 @@ public sealed class LogStore : IDisposable
                       est = est + excluded.est,
                       noanswer = noanswer + excluded.noanswer,
                       retrans = retrans + excluded.retrans,
+                      problem_at = max(problem_at, excluded.problem_at),
+                      est_at = max(est_at, excluded.est_at),
                       path = CASE WHEN excluded.path <> '' THEN excluded.path ELSE path END;
                     """;
                 var b = cmd.Parameters.Add("$b", SqliteType.Integer);
@@ -204,7 +219,10 @@ public sealed class LogStore : IDisposable
             using var cmd = _db.CreateCommand();
             cmd.CommandText = """
                 SELECT process, services, proto, remote_ip, remote_port, max(path),
-                       min(first_seen), max(last_seen), sum(hits), sum(est), sum(noanswer), sum(retrans)
+                       min(first_seen), max(last_seen), sum(hits),
+                       sum(CASE WHEN est_at >= $from THEN est ELSE 0 END),
+                       sum(CASE WHEN problem_at >= $from THEN noanswer ELSE 0 END),
+                       sum(CASE WHEN problem_at >= $from THEN retrans ELSE 0 END)
                 FROM seen
                 WHERE last_seen >= $from
                 GROUP BY process, services, proto, remote_ip, remote_port
