@@ -63,13 +63,13 @@ public static class UpdateInstaller
                 throw new UpdateException("Подготовленный файл NetWatcher.exe не найден.");
             // Copy first: an interrupted cross-volume copy must never become the installed exe.
             File.Copy(update.ExecutablePath, transaction.IncomingPath, false);
+            // Only documents that were unpacked with the program: a lone exe on the desktop stays alone.
             foreach (var name in Documents)
             {
-                if (!File.Exists(Path.Combine(update.DirectoryPath, name)))
-                    continue;
                 var target = Path.Combine(transaction.InstallDirectory, name);
-                var backup = File.Exists(target) ? File.ReadAllBytes(target) : null;
-                transaction.Documents.Add((target, backup));
+                if (!File.Exists(Path.Combine(update.DirectoryPath, name)) || !File.Exists(target))
+                    continue;
+                transaction.Documents.Add((target, File.ReadAllBytes(target)));
             }
             token.ThrowIfCancellationRequested();
             // A previous successful update may have left a locked backup. Fail before replacing anything.

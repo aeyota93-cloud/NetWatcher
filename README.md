@@ -307,3 +307,11 @@ dotnet publish src/NetWatcher.App -c Release -r win-x64 -o artifacts/publish
   разбор DNS-ответов и таблицы TCP, журнал SQLite, поиск. Покрыто тестами.
 - `src/NetWatcher.App` — приложение WPF: системные вызовы Windows, ETW, окна.
 - `tests/NetWatcher.Core.Tests` — тесты ядра.
+
+## Обновление с 0.8.0–0.8.1
+
+Если баннер «Обновить» появился, но кнопка не реагирует, один раз обновите программу вручную:
+скачайте [последний релиз](https://github.com/aeyota93-cloud/NetWatcher/releases/latest),
+закройте NetWatcher (в том числе в области уведомлений), замените `NetWatcher.exe` из архива и запустите снова.
+Журнал, настройки и блокировки сохранятся: они хранятся отдельно в `%LOCALAPPDATA%\NetWatcher`.
+В версии 0.8.2 исправлена привязка кнопок обновления к командам.

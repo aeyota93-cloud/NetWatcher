@@ -34,15 +34,19 @@ internal sealed partial class MainViewModel
     /// <summary>Progress or the reason it failed; also the answer to a manual check in the settings.</summary>
     public string UpdateMessage { get => _updateMessage; private set => Set(ref _updateMessage, value); }
 
-    public RelayCommand InstallUpdateCommand { get; private set; } = null!;
-    public RelayCommand CheckUpdatesCommand { get; private set; } = null!;
-    public RelayCommand DismissUpdateCommand { get; private set; } = null!;
+    public RelayCommand? InstallUpdateCommand { get; private set; }
+    public RelayCommand? CheckUpdatesCommand { get; private set; }
+    public RelayCommand? DismissUpdateCommand { get; private set; }
 
     private void InitUpdates()
     {
         InstallUpdateCommand = new RelayCommand(_ => _ = InstallUpdateAsync(), _ => _release != null && !UpdateBusy);
         CheckUpdatesCommand = new RelayCommand(_ => _ = CheckUpdatesAsync(true), _ => !UpdateBusy);
         DismissUpdateCommand = new RelayCommand(() => UpdateAvailable = false);
+        // Created after the window bound to them (see StartLink): tell the buttons.
+        OnPropertyChanged(nameof(InstallUpdateCommand));
+        OnPropertyChanged(nameof(CheckUpdatesCommand));
+        OnPropertyChanged(nameof(DismissUpdateCommand));
         _ = UpdateLoopAsync();
     }
 

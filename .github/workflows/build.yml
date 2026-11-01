@@ -26,7 +26,7 @@ jobs:
           dotnet-version: "10.0.x"
 
       - name: Тесты
-        run: dotnet test tests/NetWatcher.Core.Tests -c Release
+        run: dotnet test NetWatcher.sln -c Release
 
       # Справочные базы встраиваются в NetWatcher.exe, чтобы ничего не скачивать при первом запуске.
       # Сначала оригинальные источники, при неудаче — недельные копии из служебных релизов.
@@ -100,6 +100,7 @@ jobs:
           target_commitish: ${{ github.sha }}
           name: NetWatcher ${{ inputs.version || github.ref_name }}
           generate_release_notes: true
+          body_path: docs/releases/${{ inputs.version || github.ref_name }}.md
           files: |
             artifacts/NetWatcher-win-x64.zip
             artifacts/NetWatcher-win-x64.zip.sha256
