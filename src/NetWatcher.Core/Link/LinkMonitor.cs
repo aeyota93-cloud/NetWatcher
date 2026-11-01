@@ -83,7 +83,7 @@ public sealed record ProgramLink(
     string StateText,
     double? LatencyMs,
     double? JitterMs,
-    double LossPercent,
+    double? LossPercent,
     int Outages,
     IReadOnlyList<ServerLink> Servers,
     IReadOnlyList<Outage> OutageList,
@@ -238,10 +238,21 @@ public sealed class LinkMonitor(TimeSpan history)
         foreach (var (key, s) in _servers.ToList())
         {
             var cut = s.Ticks.FindIndex(t => now - t.Time <= history);
-            if (cut < 0) _servers.Remove(key);
+            if (cut < 0)
+            {
+                _servers.Remove(key);
+                _notes.Remove(key);
+            }
             else if (cut > 0) s.Ticks.RemoveRange(0, cut);
         }
         foreach (var key in _connRtt.Keys.Where(k => !_servers.ContainsKey(k)).ToList()) _connRtt.Remove(key);
+
+        // Pings of addresses nobody talks to any more would otherwise stay for as long as the program runs.
+        foreach (var (key, list) in _pings.ToList())
+        {
+            list.RemoveAll(p => now - p.Time > history);
+            if (list.Count == 0) _pings.Remove(key);
+        }
     }
 
     // ---------------------------------------------------------------- analysis
@@ -268,10 +279,19 @@ public sealed class LinkMonitor(TimeSpan history)
         var active = links.Where(l => l.Level != LinkLevel.Idle).ToList();
         var level = active.Count == 0 ? LinkLevel.Idle : active.Max(l => l.Level);
         var main = active.Where(l => l.LatencyMs != null).OrderByDescending(l => l.PacketsOut + l.PacketsIn).FirstOrDefault();
-        var loss = active.Select(l => l.LossPercent ?? 0).DefaultIfEmpty(0).Max();
+        // Loss nobody measured is unknown, not zero.
+        var loss = active.Where(l => l.LossPercent != null).Select(l => l.LossPercent).DefaultIfEmpty(null).Max();
         var worst = active.OrderByDescending(l => l.Level).FirstOrDefault();
+
+        // One silent server of several is not "no link" — unless it is the one the program talks to most.
+        var failing = active.Count(l => l.Level == LinkLevel.Fail);
+        var busiest = active.OrderByDescending(l => l.PacketsOut + l.PacketsIn).FirstOrDefault();
+        var partial = level == LinkLevel.Fail && failing < active.Count && busiest?.Level != LinkLevel.Fail;
+        if (partial) level = LinkLevel.Warn;
+
         var state = level switch
         {
+            LinkLevel.Warn when partial => $"не отвечает {failing} из {TextFormat.Plural(active.Count, "сервера", "серверов", "серверов")}",
             LinkLevel.Fail or LinkLevel.Warn => worst!.StateText,
             LinkLevel.Ok => main?.LatencyMs is { } ms ? $"{ms:0} мс" : "работает",
             _ => "простаивает",
@@ -334,10 +354,10 @@ public sealed class LinkMonitor(TimeSpan history)
         }
         else if (s.Proto == "TCP" && retrans >= 5 && outPk > 0 && retrans * 100.0 / outPk >= 5)
         {
+            // Resends per send event are a sign of loss, not its share: a send event may carry many packets.
             level = LinkLevel.Warn;
-            loss = Math.Min(100, retrans * 100.0 / outPk);
-            text = $"потери ~{loss:0}%";
-            reason = $"TCP: {TextFormat.Plural(retrans, "повторная отправка", "повторные отправки", "повторных отправок")} из {outPk} пакетов за минуту";
+            text = $"повторы TCP ~{Math.Min(100, retrans * 100.0 / outPk):0}%";
+            reason = $"TCP: {TextFormat.Plural(retrans, "повторная отправка", "повторные отправки", "повторных отправок")} на {outPk} отправок за минуту — признак потерь, но не их точная доля";
         }
         else if (s.Proto == "UDP" && s.EverAnswered == null && s.Ticks.Sum(t => t.Out) >= 10)
         {
@@ -349,7 +369,7 @@ public sealed class LinkMonitor(TimeSpan history)
         {
             level = LinkLevel.Ok;
             text = "работает";
-            loss = pingable ? pingLoss : s.Proto == "TCP" && outPk > 0 ? retrans * 100.0 / outPk : null;
+            loss = pingable ? pingLoss : null;
             reason = "";
         }
 
@@ -367,6 +387,7 @@ public sealed class LinkMonitor(TimeSpan history)
     {
         var result = new List<Outage>();
         DateTimeOffset? lastIn = null;
+        DateTimeOffset? lastTick = null;
         DateTimeOffset? silenceStart = null;
         var retransInSilence = 0;
         var answeredBefore = false;
@@ -379,6 +400,15 @@ public sealed class LinkMonitor(TimeSpan history)
 
         foreach (var t in s.Ticks)
         {
+            // A pause in the traffic: the program stopped trying, so an open silence ends here.
+            if (lastTick is { } prev && t.Time - prev > IdleAfter && silenceStart != null)
+            {
+                Close(prev);
+                silenceStart = null;
+                retransInSilence = 0;
+            }
+            lastTick = t.Time;
+
             if (t.In > 0)
             {
                 Close(t.Time);
@@ -390,7 +420,9 @@ public sealed class LinkMonitor(TimeSpan history)
             }
             if (t.Out > 0 || t.Retrans > 0 || t.NoAnswer > 0)
             {
-                silenceStart ??= lastIn ?? t.Time;
+                // Silence runs from the last answer only while the exchange is continuous; after
+                // an idle pause it starts with the first packet that went unanswered.
+                silenceStart ??= lastIn is { } li && t.Time - li <= IdleAfter ? li : t.Time;
                 retransInSilence += t.Retrans + t.NoAnswer;
             }
         }
@@ -438,7 +470,9 @@ public sealed class LinkMonitor(TimeSpan history)
         var anyPingOk = false;
         foreach (var key in servers.Select(s => IpKey.From(s.Ip)).Distinct())
         {
-            if (!_pings.TryGetValue(key, out var list)) continue;
+            // A server that never answers ping is not losing anything; counting its silence would draw
+            // loss as soon as another server of the program does answer.
+            if (!_pings.TryGetValue(key, out var list) || !list.Any(p => p.Rtt != null)) continue;
             foreach (var p in list)
             {
                 if (p.Time < from) continue;

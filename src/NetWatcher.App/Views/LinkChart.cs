@@ -54,9 +54,10 @@ public sealed class LinkChart : FrameworkElement
             return;
         }
 
-        const double left = 30, bottom = 16, top = 6;
-        var plotW = w - left - 4;
+        const double left = 64, right = 40, bottom = 26, top = 8;
+        var plotW = w - left - right;
         var plotH = h - bottom - top;
+        if (plotW <= 0 || plotH <= 0) return;
         var max = pts.Where(p => p.LatencyMs != null).Select(p => p.LatencyMs!.Value).DefaultIfEmpty(0).Max();
         var scale = Math.Max(100, Math.Ceiling(max / 50) * 50);
         double X(int i) => left + i * plotW / Math.Max(1, pts.Count - 1);
@@ -70,10 +71,21 @@ public sealed class LinkChart : FrameworkElement
         for (var v = 0.0; v <= scale; v += scale / 3)
         {
             var y = Math.Round(Y(v)) + 0.5;
-            dc.DrawLine(pen, new Point(left, y), new Point(w - 4, y));
-            var l = Label($"{v:0}");
+            dc.DrawLine(pen, new Point(left, y), new Point(w - right, y));
+            var l = Label($"{v:0} мс");
             dc.DrawText(l, new Point(left - 6 - l.Width, y - l.Height / 2));
         }
+
+        // Loss scale uses the full plot height, independently of latency.
+        for (var loss = 0; loss <= 100; loss += 50)
+        {
+            var l = Label($"{loss}%");
+            l.SetForegroundBrush(warn);
+            var y = top + plotH - loss / 100.0 * plotH;
+            dc.DrawText(l, new Point(w - right + 6, y - l.Height / 2));
+        }
+
+        dc.PushClip(new RectangleGeometry(new Rect(left, top, plotW, plotH)));
 
         // Bands where the link was down.
         var band = danger.Clone();
@@ -85,7 +97,7 @@ public sealed class LinkChart : FrameworkElement
             dc.DrawRectangle(band, null, new Rect(x0, top, plotW / pts.Count + 0.5, plotH));
         }
 
-        // Loss bars (percent on the same height as 0–100).
+        // Loss bars (100% fills the plot height).
         var barW = Math.Max(2, plotW / pts.Count * 0.6);
         for (var i = 0; i < pts.Count; i++)
         {
@@ -110,12 +122,14 @@ public sealed class LinkChart : FrameworkElement
             prev = p;
         }
 
+        dc.Pop();
+
         // Time axis.
         var span = pts[^1].Time - pts[0].Time;
         var first = Label($"−{Math.Round(span.TotalMinutes)} мин");
         dc.DrawText(first, new Point(left, h - first.Height));
         var lastL = Label("сейчас");
-        dc.DrawText(lastL, new Point(w - 4 - lastL.Width, h - lastL.Height));
+        dc.DrawText(lastL, new Point(w - right - lastL.Width, h - lastL.Height));
     }
 
     /// <summary>

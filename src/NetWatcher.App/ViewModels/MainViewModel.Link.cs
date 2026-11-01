@@ -107,9 +107,8 @@ internal sealed partial class MainViewModel
         ? _state.Settings.NotifyAll
         : _state.Settings.NotifyAll || _state.Settings.NotifyPrograms.Contains(SelectedNav.Key);
 
-    public string NotifyText => NotifyOn
-        ? "Уведомления включены"
-        : SelectedNav is null or { IsAll: true } ? "Уведомлять о пропаже связи у любой программы" : "Уведомлять о пропаже связи";
+    // Short on purpose: the header shares its line with the program's name. The tooltip says the rest.
+    public string NotifyText => NotifyOn ? "Уведомления включены" : "Уведомлять о сбоях";
 
     private void ToggleNotify()
     {
@@ -163,6 +162,26 @@ internal sealed partial class MainViewModel
         LinkHasProgram = program != null;
         LinkNoData = program == null;
         if (program != null) ApplyProgram(program, programs, now);
+        else if (!ApplyNoCapture())
+        {
+            // Not the previous program's summary: there is simply nothing to judge.
+            LinkLevel = "Idle";
+            LinkTitle = "Нет данных о связи";
+            LinkSubtitle = "Связь проверяется, только пока программа что-то отправляет";
+        }
+    }
+
+    /// <summary>Without the kernel's network events there is nothing to judge: say so instead of "all fine".</summary>
+    private bool ApplyNoCapture()
+    {
+        if (_state.Collector.KernelCapture) return false;
+        LinkNoData = false; // "the program sent nothing" would contradict "we cannot see what it sends"
+        LinkLevel = "Idle";
+        LinkTitle = "Монитор связи не работает";
+        LinkSubtitle = _state.Collector.IsElevated
+            ? "Windows не отдаёт сетевые события: " + (_state.Collector.CaptureError ?? "причина неизвестна")
+            : "Нужны права администратора: без них Windows не сообщает, какие пакеты отправляют и получают программы";
+        return true;
     }
 
     private string ServerName(IPAddress ip, string process) =>
@@ -198,7 +217,7 @@ internal sealed partial class MainViewModel
         }
         LinkLatency = p.LatencyMs is { } ms ? $"{ms:0} мс" : "—";
         LinkJitter = p.JitterMs is { } j ? $"±{j:0} мс" : "—";
-        LinkLoss = $"{p.LossPercent:0}%";
+        LinkLoss = p.LossPercent is { } lp ? $"{lp:0}%" : "—";
         LinkOutages = p.Outages.ToString();
         LinkChart = p.Chart;
 
@@ -260,9 +279,9 @@ internal sealed partial class MainViewModel
         var fails = programs.Count(p => p.Level == Core.Link.LinkLevel.Fail);
         var warns = programs.Count(p => p.Level == Core.Link.LinkLevel.Warn);
         var ok = programs.Where(p => p.Level == Core.Link.LinkLevel.Ok).Select(p => TitleFor(p.GroupKey)).ToList();
-        LinkLevel = fails > 0 ? "Fail" : warns > 0 ? "Warn" : programs.Count > 0 ? "Ok" : "Idle";
+        LinkLevel = fails > 0 ? "Fail" : warns > 0 ? "Warn" : ok.Count > 0 ? "Ok" : "Idle";
         LinkTitle = fails == 0 && warns == 0
-            ? "Связь в порядке у всех программ"
+            ? ok.Count > 0 ? "Связь в порядке у всех программ" : "Сейчас программы не обмениваются данными"
             : string.Join(", ", new[]
             {
                 fails > 0 ? TextFormat.Plural(fails, "программа без связи", "программы без связи", "программ без связи") : "",
@@ -271,6 +290,7 @@ internal sealed partial class MainViewModel
         LinkSubtitle = ok.Count > 0
             ? $"Интернет в целом работает: отвечают {string.Join(", ", ok.Take(3))}{(ok.Count > 3 ? " и другие" : "")}"
             : fails > 0 ? "Ни одна программа не получает ответов — похоже, проблема с интернетом или сетью" : "";
+        ApplyNoCapture();
 
         LinkCardView Card(ProgramLink p)
         {
@@ -282,7 +302,7 @@ internal sealed partial class MainViewModel
                 p.Level.ToString(),
                 p.Level switch { Core.Link.LinkLevel.Ok => "работает", Core.Link.LinkLevel.Idle => "простаивает", _ => p.StateText },
                 p.LatencyMs is { } ms ? $"{ms:0} мс" : "—",
-                $"{p.LossPercent:0}%",
+                p.LossPercent is { } cardLoss ? $"{cardLoss:0}%" : "—",
                 p.Outages.ToString(),
                 p.Chart.Count > 60 ? p.Chart.Skip(p.Chart.Count - 60).ToList() : p.Chart,
                 AvatarFor(p));

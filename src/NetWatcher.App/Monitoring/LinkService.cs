@@ -219,6 +219,7 @@ internal sealed class LinkService(AppState state) : IDisposable
     {
         var programs = state.Link.Snapshot(now, TimeSpan.FromMinutes(2), chartPoints: 1);
         var anyOk = programs.Any(p => p.Level == LinkLevel.Ok);
+        foreach (var key in _traced.Where(t => DateTime.UtcNow - t.Value > RetraceAfter).Select(t => t.Key).ToList()) _traced.Remove(key);
 
         foreach (var p in programs)
         {
@@ -247,7 +248,8 @@ internal sealed class LinkService(AppState state) : IDisposable
             }
             else if (p.Level != LinkLevel.Fail && alert.Down)
             {
-                if (wanted)
+                // Idle means the program stopped trying, not that the server answered again.
+                if (wanted && p.Level != LinkLevel.Idle)
                     Notify?.Invoke($"{title}: связь восстановилась", $"Простой {(int)(now - alert.Since).TotalSeconds} с.", false);
                 _alerts[p.GroupKey] = alert with { Down = false };
             }

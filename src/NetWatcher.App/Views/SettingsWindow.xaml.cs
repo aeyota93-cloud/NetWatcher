@@ -80,6 +80,7 @@ internal partial class SettingsWindow : Window
                 MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
         _state.Store.Clear();
         _state.Alerts.Reset();
+        _state.Dns.Clear();
         ShowDbInfo();
     }
 

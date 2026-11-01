@@ -41,14 +41,15 @@ public sealed record HopInfo(
     public string OwnerText => Address == null ? "" : IsPrivate ? "локальная сеть" : Asn?.OwnerText ?? "";
 }
 
-/// <summary>What to check: a name or an address and a port.</summary>
-public sealed record CheckTarget(string? Host, IPAddress? Ip, int Port)
+/// <summary>What to check: a name or an address and a port; <paramref name="Udp"/> for a UDP service.</summary>
+public sealed record CheckTarget(string? Host, IPAddress? Ip, int Port, bool Udp = false)
 {
-    public string Display => (Host ?? Ip?.ToString() ?? "") + (Port is 443 or 0 ? "" : ":" + Port);
+    public string Display => (Udp ? "udp://" : "") + (Host ?? Ip?.ToString() ?? "") + (Port is 443 or 0 && !Udp ? "" : ":" + Port);
 
     /// <summary>
     /// Accepts "example.com", "example.com:8443", "https://example.com/page", "1.2.3.4",
-    /// "1.2.3.4:80", "[2a00::1]:443". The port defaults to 443 (80 for http://).
+    /// "1.2.3.4:80", "[2a00::1]:443", "udp://1.2.3.4:27015". The port defaults to 443 (80 for http://);
+    /// a UDP service needs its port.
     /// </summary>
     public static CheckTarget? Parse(string? text, int defaultPort = 443)
     {
@@ -58,6 +59,8 @@ public sealed record CheckTarget(string? Host, IPAddress? Ip, int Port)
         if (t.Contains("://"))
         {
             if (!Uri.TryCreate(t, UriKind.Absolute, out var uri) || uri.Host == "") return null;
+            if (uri.Scheme == "udp")
+                return uri.IsDefaultPort ? null : Make(uri.Host.Trim('[', ']'), uri.Port) is { } u ? u with { Udp = true } : null;
             port = uri.IsDefaultPort ? (uri.Scheme == "http" ? 80 : 443) : uri.Port;
             return Make(uri.Host.Trim('[', ']'), port);
         }
@@ -100,6 +103,16 @@ public sealed class CheckReport
     public DnsProbe? SystemResolver { get; set; }
     public string? InterceptionWarning { get; set; }
     public IPAddress? Address { get; set; }
+
+    /// <summary>The site's first address that did not connect when another one did.</summary>
+    public (IPAddress Ip, TcpProbe Tcp)? FailedAddress { get; set; }
+
+    /// <summary>System and independent DNS point to different networks and no valid certificate explained it.</summary>
+    public bool DnsMismatch { get; set; }
+
+    /// <summary>The check goes through a VPN or a local proxy: what it measures is that tunnel.</summary>
+    public string? Tunnel { get; set; }
+
     public TcpProbe? Tcp { get; set; }
     public TlsProbe? Tls { get; set; }
     public SniResult? Sni { get; set; }
@@ -122,6 +135,7 @@ public sealed class CheckReport
             sb.AppendLine($"Итог: {Verdict.Title}");
             sb.AppendLine(Verdict.Text);
         }
+        if (Tunnel != null) sb.AppendLine($"Проверка шла через VPN: {Tunnel}. Замеры описывают VPN, а не путь через провайдера.");
         sb.AppendLine();
         foreach (var s in Steps)
         {
@@ -203,6 +217,7 @@ public static class Checker
             report.IndependentDns = indTask.Result;
             var (status, text) = Verdicts.DescribeDns(report.SystemDns, report.IndependentDns, asn);
             Step("dns", "DNS", status, text);
+            report.DnsMismatch = !report.SystemDns.Sinkhole && Verdicts.Mismatch(report.SystemDns, report.IndependentDns, asn);
             report.Address = report.SystemDns.Addresses.FirstOrDefault(a => !IpKey.IsSinkhole(a))
                              ?? report.IndependentDns.Addresses.FirstOrDefault();
         }
@@ -228,58 +243,91 @@ public static class Checker
             return report;
         }
 
-        // 2. TCP
-        Step("tcp", "Подключение", StepStatus.Running, $"{ip} порт {target.Port}…");
-        report.Tcp = await probe.ConnectAsync(ip, target.Port, ct).ConfigureAwait(false);
-        Step("tcp", "Подключение", report.Tcp.Outcome == TcpOutcome.Ok ? (report.Tcp.Ms > 300 ? StepStatus.Warn : StepStatus.Ok) : StepStatus.Fail,
-            Verdicts.DescribeTcp(report.Tcp, ip, target.Port));
+        report.Tunnel = probe.TunnelTo(ip);
 
-        var https = target.Host != null && target.Port is 443 or 8443;
-
-        // 3. TLS to the site, with the certificate checked.
-        if (report.Tcp.Outcome == TcpOutcome.Ok && https)
+        if (target.Udp)
         {
-            Step("tls", "Защищённое соединение", StepStatus.Running, "рукопожатие TLS…");
-            report.Tls = await probe.TlsAsync(ip, target.Port, target.Host!, ct).ConfigureAwait(false);
-            var (status, text) = Verdicts.DescribeTls(report.Tls);
-            Step("tls", "Защищённое соединение", status, text);
-
-            // OONI ts-017: a valid certificate for the name means the DNS answer was genuine,
-            // even when another resolver points to a different network (a CDN picking a nearer server).
-            if (report is { SystemDns: { } sys, IndependentDns: { } ind, Tls: { Outcome: TlsOutcome.Ok, Cert: CertStatus.Valid } }
-                && Verdicts.Mismatch(sys, ind, asn))
-                Step("dns", "DNS", StepStatus.Ok,
-                    $"{sys.Addresses[0]} за {sys.Ms:0} мс; независимый DNS дал адрес другой сети, но сертификат сайта действителен — это CDN, а не подмена");
-
-            // 3a. When the handshake fails: is it the name? OONI ts-024 — the same neutral server,
-            // once with the site's name and once with a control name.
-            if (report.Tls.Cut || report.Tls.Outcome is TlsOutcome.Alert or TlsOutcome.Error)
+            // A UDP service answers only its own protocol: a TCP connection or a TLS handshake says nothing about it.
+            Step("tcp", "Подключение", StepStatus.Skipped, "это UDP-служба: подключение по TCP ничего о ней не скажет");
+            Step("tls", "Защищённое соединение", StepStatus.Skipped, "у UDP-службы нет TLS-рукопожатия");
+            Step("quic", "HTTP/3 (QUIC, UDP 443)", StepStatus.Skipped, "не относится к этой службе");
+        }
+        else
+        {
+            // 2. TCP. A browser tries the other address family when the first one fails; so do we,
+            // otherwise a broken IPv6 makes a working site look unreachable.
+            Step("tcp", "Подключение", StepStatus.Running, $"{ip} порт {target.Port}…");
+            report.Tcp = await probe.ConnectAsync(ip, target.Port, ct).ConfigureAwait(false);
+            if (report.Tcp.Outcome != TcpOutcome.Ok && target.Host != null
+                && report.SystemDns?.Addresses.FirstOrDefault(a => a.AddressFamily != ip.AddressFamily && !IpKey.IsSinkhole(a)) is { } other)
             {
-                Step("sni", "Фильтр по имени (SNI)", StepStatus.Running, $"сравниваем с контрольным именем {ControlSni}…");
-                report.Sni = await RunSniAsync(probe, target.Host!, ct).ConfigureAwait(false);
-                Step("sni", "Фильтр по имени (SNI)", report.Sni.IsInterference || report.Sni.Code == "anomaly.timeout" ? StepStatus.Fail
-                    : report.Sni.Code == "success.got_server_hello" ? StepStatus.Ok : StepStatus.Warn, report.Sni.Text);
+                Step("tcp", "Подключение", StepStatus.Running, $"{ip} не отвечает, пробуем {other}…");
+                var second = await probe.ConnectAsync(other, target.Port, ct).ConfigureAwait(false);
+                if (second.Outcome == TcpOutcome.Ok)
+                {
+                    report.FailedAddress = (ip, report.Tcp);
+                    report.Address = ip = other;
+                    report.Tcp = second;
+                }
             }
-        }
-        else
-        {
-            Step("tls", "Защищённое соединение", StepStatus.Skipped,
-                report.Tcp.Outcome != TcpOutcome.Ok ? "нет подключения" : target.Host == null ? "нужно имя сайта, а не IP" : "порт не HTTPS");
-        }
+            var tcpText = Verdicts.DescribeTcp(report.Tcp, ip, target.Port);
+            if (report.FailedAddress is { } failed)
+                tcpText += $"; первый адрес {failed.Ip} не подключается ({Verdicts.DescribeTcp(failed.Tcp, failed.Ip, target.Port)})";
+            Step("tcp", "Подключение", report.Tcp.Outcome == TcpOutcome.Ok ? (report.Tcp.Ms > 300 || report.FailedAddress != null ? StepStatus.Warn : StepStatus.Ok) : StepStatus.Fail,
+                tcpText);
 
-        // 4. HTTP/3: only if the site says it speaks it, otherwise silence proves nothing.
-        if (report.Tls is { Outcome: TlsOutcome.Ok } && target.Port == 443)
-        {
-            Step("quic", "HTTP/3 (QUIC, UDP 443)", StepStatus.Running, "проверяем…");
-            report.Http3Advertised = await probe.AdvertisesHttp3Async(target.Host!, target.Port, ct).ConfigureAwait(false);
-            if (report.Http3Advertised == true)
-                report.Quic = await probe.QuicAsync(ip, target.Port, target.Host!, ct).ConfigureAwait(false);
-            var (qs, qt) = Verdicts.DescribeQuic(report.Http3Advertised, report.Quic);
-            Step("quic", "HTTP/3 (QUIC, UDP 443)", qs, qt);
-        }
-        else
-        {
-            Step("quic", "HTTP/3 (QUIC, UDP 443)", StepStatus.Skipped, "нужно работающее HTTPS-соединение");
+            var https = target.Host != null && target.Port is 443 or 8443;
+
+            // 3. TLS to the site, with the certificate checked.
+            if (report.Tcp.Outcome == TcpOutcome.Ok && https)
+            {
+                Step("tls", "Защищённое соединение", StepStatus.Running, "рукопожатие TLS…");
+                report.Tls = await probe.TlsAsync(ip, target.Port, target.Host!, ct).ConfigureAwait(false);
+                var (status, text) = Verdicts.DescribeTls(report.Tls);
+                Step("tls", "Защищённое соединение", status, text);
+
+                // OONI ts-017: a valid certificate for the name means the DNS answer was genuine,
+                // even when another resolver points to a different network (a CDN picking a nearer server).
+                if (report is { SystemDns: { } sys, IndependentDns: { } ind, Tls: { Outcome: TlsOutcome.Ok, Cert: CertStatus.Valid } }
+                    && Verdicts.Mismatch(sys, ind, asn))
+                {
+                    report.DnsMismatch = false;
+                    Step("dns", "DNS", StepStatus.Ok,
+                        $"{sys.Addresses[0]} за {sys.Ms:0} мс; независимый DNS дал адрес другой сети, но сертификат сайта действителен — это CDN, а не подмена");
+                }
+
+                // 3a. When the handshake fails: is it the name? OONI ts-024 — the same neutral server,
+                // once with the site's name and once with a control name.
+                if (report.Tls.Cut || report.Tls.Outcome is TlsOutcome.Alert or TlsOutcome.Error)
+                {
+                    Step("sni", "Фильтр по имени (SNI)", StepStatus.Running, $"сравниваем с контрольным именем {ControlSni}…");
+                    report.Sni = await RunSniAsync(probe, target.Host!, ct).ConfigureAwait(false);
+                    Step("sni", "Фильтр по имени (SNI)", report.Sni.IsInterference || report.Sni.Code == "anomaly.timeout" ? StepStatus.Fail
+                        : report.Sni.Code == "success.got_server_hello" ? StepStatus.Ok : StepStatus.Warn, report.Sni.Text);
+                }
+            }
+            else
+            {
+                Step("tls", "Защищённое соединение", StepStatus.Skipped,
+                    report.Tcp.Outcome != TcpOutcome.Ok ? "нет подключения" : target.Host == null ? "нужно имя сайта, а не IP" : "порт не HTTPS");
+            }
+
+            // 4. HTTP/3: only if the site says it speaks it, otherwise silence proves nothing.
+            if (report.Tls is { Outcome: TlsOutcome.Ok } && target.Port == 443)
+            {
+                Step("quic", "HTTP/3 (QUIC, UDP 443)", StepStatus.Running, "проверяем…");
+                var h3Port = await probe.Http3PortAsync(target.Host!, target.Port, ct).ConfigureAwait(false);
+                report.Http3Advertised = h3Port == null ? null : h3Port > 0;
+                if (h3Port > 0)
+                    report.Quic = await probe.QuicAsync(ip, h3Port.Value, target.Host!, ct).ConfigureAwait(false);
+                var (qs, qt) = Verdicts.DescribeQuic(report.Http3Advertised, report.Quic);
+                if (h3Port is > 0 and not 443) qt += $" (сайт объявил HTTP/3 на UDP-порту {h3Port})";
+                Step("quic", "HTTP/3 (QUIC, UDP 443)", qs, qt);
+            }
+            else
+            {
+                Step("quic", "HTTP/3 (QUIC, UDP 443)", StepStatus.Skipped, "нужно работающее HTTPS-соединение");
+            }
         }
 
         // 5. Ping and the MTR-style trace together, then the packet size.
@@ -294,7 +342,22 @@ public static class Checker
 
         report.Hops = ToHops(traceTask.Result);
         var trace = report.Trace = TraceAnalysis.Of(report.Hops, asn.Lookup(ip));
-        Step("trace", "Трасса", trace.Reached ? (trace.LossFrom != null ? StepStatus.Warn : StepStatus.Ok) : StepStatus.Warn, trace.Text);
+        if (!trace.Reached && report.Tcp?.Outcome == TcpOutcome.Ok)
+        {
+            // The connection works, so silence to ICMP is the server's (or its network's) choice, not a break.
+            var last = trace.LastAnswered is { } l ? $"; последний ответивший узел — {l.Ttl} ({trace.Where})" : "";
+            Step("trace", "Трасса", StepStatus.Ok, $"сервер не отвечает на трассировку — это нормально: подключение к нему проходит{last}");
+        }
+        else
+        {
+            Step("trace", "Трасса", trace.Reached ? (trace.LossFrom != null && !trace.DestinationOnlyLoss ? StepStatus.Warn : StepStatus.Ok) : StepStatus.Warn, trace.Text);
+        }
+
+        // Answering a public address in a few milliseconds and in one hop is something only a local
+        // tunnel can do: then every measurement here describes the VPN, not the path to the site.
+        report.Tunnel ??= report is { Tcp: { Outcome: TcpOutcome.Ok, Ms: < 3 }, Trace: { Reached: true } } && report.Hops.Count == 1 && !IpKey.IsPrivate(ip)
+            ? $"подключение за {report.Tcp!.Ms:0} мс и трасса в один узел до публичного адреса — так отвечает локальный VPN или прокси"
+            : null;
 
         Step("mtu", "Размер пакетов (MTU)", StepStatus.Running, "ищем самый большой проходящий пакет…");
         report.Mtu = await probe.MtuAsync(ip, ct).ConfigureAwait(false);

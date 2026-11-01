@@ -29,15 +29,17 @@ public sealed class DnsIndex
         }
     }
 
-    /// <summary>Domains for the address: those the process itself asked first, newest first.</summary>
+    /// <summary>Domains the process itself asked, or all known if none, newest first.</summary>
     public IReadOnlyList<string> Get(IPAddress ip, string? process, int max = 5)
     {
         lock (_lock)
         {
             if (!_byIp.TryGetValue(IpKey.From(ip), out var list)) return [];
-            return list
-                .OrderByDescending(e => process != null && string.Equals(e.Process, process, StringComparison.OrdinalIgnoreCase))
-                .ThenByDescending(e => e.LastSeen)
+            var entries = process != null && list.Any(e => string.Equals(e.Process, process, StringComparison.OrdinalIgnoreCase))
+                ? list.Where(e => string.Equals(e.Process, process, StringComparison.OrdinalIgnoreCase))
+                : list;
+            return entries
+                .OrderByDescending(e => e.LastSeen)
                 .Select(e => e.Domain)
                 .Distinct()
                 .Take(max)
@@ -76,6 +78,12 @@ public sealed class DnsIndex
                 if (list.Count == 0) _byIp.Remove(key);
             }
         }
+    }
+
+    /// <summary>Forgets everything, e.g. when the user clears the history.</summary>
+    public void Clear()
+    {
+        lock (_lock) _byIp.Clear();
     }
 
     public int Count

@@ -126,7 +126,8 @@ public class LinkMonitorTests
         var t = Feed(m, T0, 30, () => Tcp(100, 100, retrans: 10));
         var p = Assert.Single(m.Snapshot(t, TimeSpan.FromMinutes(15)));
         Assert.Equal(LinkLevel.Warn, p.Level);
-        Assert.Equal("потери ~10%", p.StateText);
+        Assert.Equal("повторы TCP ~10%", p.StateText);
+        Assert.Null(p.LossPercent); // resends are not a measured loss
     }
 
     [Fact]

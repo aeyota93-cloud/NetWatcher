@@ -719,7 +719,9 @@ internal sealed partial class MainViewModel : ObservableObject
                 : owners.Items + (asns.Count > 0 ? $" ({string.Join(", ", asns.Take(4))}{(asns.Count > 4 ? "…" : "")})" : "");
             _details["SumCountries"] = string.Join(", ", rows.Select(r => r.CountryText).Where(c => c != "").Distinct().Take(8)) is { Length: > 0 } c ? c : "—";
             _details["SumNoDomain"] = ips.Count == 0 ? "—" : noDomain == 0 ? "нет"
-                : $"{noDomain} из {ips.Count}" + (noDomain * 2 > ips.Count ? " — программа часто ходит напрямую по IP" : "");
+                : $"{noDomain} из {ips.Count}" + (!_state.Collector.DnsCapture ? " — домены не видны: журнал DNS работает только с правами администратора"
+                    : noDomain * 2 > ips.Count ? (SelectedNav?.IsAll == true ? " — программы часто ходят напрямую по IP" : " — программа часто ходит напрямую по IP")
+                    : "");
             SumNetworksText = owners.Text;
             if (SelectedNav is { IsAll: false } && rows.Count > 0)
                 Explain("Sum", Explanations.Builtin.ForProgram(rows[0].Process, rows[0].Services), null);
@@ -837,6 +839,8 @@ internal sealed partial class MainViewModel : ObservableObject
         RdapBusy = true;
         void Show(string text)
         {
+            // The user may have picked another address while the registry was answering.
+            if (SelectedItem?.Rows.FirstOrDefault()?.RemoteIpText != row.RemoteIpText) return;
             _details["RdapFor"] = row.RemoteIpText;
             _details["Rdap"] = text;
             HasRdap = true;
@@ -1157,6 +1161,8 @@ internal sealed partial class MainViewModel : ObservableObject
         var r = item?.Rows.FirstOrDefault();
         if (r == null) return null;
         var host = r.PrimaryDomain != "" ? r.PrimaryDomain : r.RemoteIp.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6 ? $"[{r.RemoteIpText}]" : r.RemoteIpText;
+        // A UDP row is checked as a UDP service: a TCP connection to its port would say nothing about it.
+        if (r.Proto == "UDP") return $"udp://{host}:{r.RemotePort}";
         return r.RemotePort == 443 ? host : $"{host}:{r.RemotePort}";
     }
 
@@ -1165,6 +1171,7 @@ internal sealed partial class MainViewModel : ObservableObject
         if (asn is not { } n || n <= 0) return;
         void Show(string text)
         {
+            if (SelectedItem?.Rows.FirstOrDefault()?.Asn?.Asn != n) return;
             _details["PdbFor"] = n.ToString();
             _details["Pdb"] = text;
             HasPdb = true;

@@ -38,6 +38,10 @@ public sealed record SniResult(string Code, string Text)
                 new("interference.invalid_certificate", "с именем сайта пришёл недействительный сертификат — ответ подменён по дороге"),
             TlsOutcome.Ok =>
                 new("success.got_server_hello", $"нейтральный сервер {helper} с именем сайта отвечает нормально — фильтра по имени нет"),
+            // Many helpers (example.org sits behind Cloudflare) refuse a name they do not serve with a TLS
+            // alert. The alert comes from the server after it read the ClientHello: the name got through.
+            TlsOutcome.Alert =>
+                new("success.got_server_hello", $"нейтральный сервер {helper} получил имя сайта и сам ответил отказом TLS — фильтра по имени нет"),
             TlsOutcome.Reset =>
                 new("interference.reset", $"с именем сайта соединение сбрасывается, с контрольным {helper} — проходит"),
             TlsOutcome.Closed =>
@@ -150,19 +154,21 @@ public static class Verdicts
         if (asn.Count == 0)
             return (StepStatus.Skipped, "нужна база владельцев IP, чтобы понять, кто ответил." + resolver);
 
-        bool? Google(WhoamiProbe w) => w.Resolver == null ? null : asn.Lookup(w.Resolver)?.Asn == Checker.GoogleAsn;
-        var u = Google(udp);
-        var t = Google(tcp);
+        var u = ResolverOf(udp, asn);
+        var t = ResolverOf(tcp, asn);
         const string caveat = " Это признак, а не доказательство.";
 
-        if (u == false)
+        if (u == ResolverKind.Other)
             return (StepStatus.Warn, $"запросы к 8.8.8.8 по UDP перехватываются: ответил резолвер {udp.Resolver}{Owner(udp.Resolver!, asn)}" +
-                                     (t == true ? ", а по TCP — Google, как и должно быть" : "") + "." + caveat + resolver);
-        if (t == false)
+                                     (t == ResolverKind.Google ? ", а по TCP — Google, как и должно быть" : "") + "." + caveat + resolver);
+        if (t == ResolverKind.Other)
             return (StepStatus.Warn, $"запросы к 8.8.8.8 по TCP перехватываются: ответил резолвер {tcp.Resolver}{Owner(tcp.Resolver!, asn)}." + caveat + resolver);
-        if (u == null && t == true)
+        if (u == ResolverKind.Unknown || t == ResolverKind.Unknown)
+            return (StepStatus.Skipped, $"ответил адрес {(u == ResolverKind.Unknown ? udp.Resolver : tcp.Resolver)}, которого нет в базе владельцев IP — " +
+                                        "понять, Google это или перехват, нельзя. Обновите базу владельцев." + resolver);
+        if (u == ResolverKind.NoAnswer && t == ResolverKind.Google)
             return (StepStatus.Warn, "внешний DNS 8.8.8.8 по UDP не отвечает, по TCP — отвечает: UDP-порт 53 к чужим DNS закрыт." + resolver);
-        if (u == null && t == null)
+        if (u == ResolverKind.NoAnswer && t == ResolverKind.NoAnswer)
             return (StepStatus.Warn, $"8.8.8.8 не отвечает напрямую ни по UDP, ни по TCP ({udp.Error}) — сеть пропускает только свой DNS." + resolver);
         return (StepStatus.Ok, "запросы к 8.8.8.8 доходят до Google без подмены." + resolver);
     }
@@ -171,13 +177,35 @@ public static class Verdicts
     public static string? InterceptionSummary(WhoamiProbe udp, WhoamiProbe tcp, AsnDatabase asn)
     {
         if (asn.Count == 0) return null;
-        bool? Google(WhoamiProbe w) => w.Resolver == null ? null : asn.Lookup(w.Resolver)?.Asn == Checker.GoogleAsn;
-        var u = Google(udp);
-        var t = Google(tcp);
-        if (u == false || t == false) return "запросы к публичному DNS перехватываются по дороге";
-        if (u == null && t == true) return "UDP-порт 53 к чужим DNS закрыт";
-        if (u == null && t == null) return "публичные DNS напрямую недоступны";
+        var u = ResolverOf(udp, asn);
+        var t = ResolverOf(tcp, asn);
+        if (u == ResolverKind.Other || t == ResolverKind.Other) return "запросы к публичному DNS перехватываются по дороге";
+        if (u == ResolverKind.Unknown || t == ResolverKind.Unknown) return null;
+        if (u == ResolverKind.NoAnswer && t == ResolverKind.Google) return "UDP-порт 53 к чужим DNS закрыт";
+        if (u == ResolverKind.NoAnswer && t == ResolverKind.NoAnswer) return "публичные DNS напрямую недоступны";
         return null;
+    }
+
+    /// <summary>Who answered a question sent straight to 8.8.8.8.</summary>
+    public enum ResolverKind
+    {
+        /// <summary>No answer at all.</summary>
+        NoAnswer,
+        Google,
+
+        /// <summary>A known network that is not Google: the question was intercepted.</summary>
+        Other,
+
+        /// <summary>The address is missing from the owner database: nothing can be concluded.</summary>
+        Unknown,
+    }
+
+    public static ResolverKind ResolverOf(WhoamiProbe w, AsnDatabase asn)
+    {
+        if (w.Resolver == null) return ResolverKind.NoAnswer;
+        var owner = asn.Lookup(w.Resolver);
+        if (owner == null) return ResolverKind.Unknown;
+        return owner.Asn == Checker.GoogleAsn ? ResolverKind.Google : ResolverKind.Other;
     }
 
     private static string Owner(IPAddress ip, AsnDatabase asn) =>
@@ -203,7 +231,7 @@ public static class Verdicts
             CertStatus.Invalid => (StepStatus.Warn, "сертификат недействителен: истёк или повреждён"),
             _ => (StepStatus.Ok, $"установлено за {tls.Ms:0} мс"),
         },
-        TlsOutcome.Alert => (StepStatus.Warn, "сервер ответил ошибкой TLS — он доступен, но отказал в рукопожатии"),
+        TlsOutcome.Alert => (StepStatus.Fail, "сервер ответил ошибкой TLS — он доступен, но защищённое соединение не установлено"),
         TlsOutcome.Reset => (StepStatus.Fail, "соединение сброшено во время рукопожатия"),
         TlsOutcome.Closed => (StepStatus.Fail, "соединение закрыто во время рукопожатия"),
         TlsOutcome.Timeout => (StepStatus.Fail, "рукопожатие зависло"),
@@ -237,7 +265,8 @@ public static class Verdicts
         if (m.MaxPayload == m.FullPayload) return (StepStatus.Ok, $"пакеты полного размера ({m.PathMtu} байт) проходят");
         if (m.TooBigReported)
             return (StepStatus.Ok, $"MTU пути {m.PathMtu} байт, сеть честно сообщает об ограничении (так бывает с PPPoE, VPN и туннелями)");
-        return (StepStatus.Warn, $"пакеты больше {m.PathMtu} байт пропадают без уведомления — похоже на «чёрную дыру» MTU");
+        return (StepStatus.Warn, $"пакеты больше {m.PathMtu} байт пропадают без уведомления — похоже на «чёрную дыру» MTU, " +
+                                 "но так же выглядит сервер, который не отвечает на большие ping");
     }
 
     private static string Capital(string s) => s.Length == 0 ? s : char.ToUpper(s[0]) + s[1..];
@@ -267,6 +296,19 @@ public static class Verdicts
                     "Ни системный, ни независимый DNS не ответили. Похоже, нет подключения к интернету или DNS полностью недоступен." + vpn);
         }
 
+        // A UDP service: only the path to the server can be checked, not the service itself.
+        if (r.Target.Udp && r.Address != null)
+        {
+            const string service = " Работает ли сама служба, так не проверить: она отвечает только своей программе — смотрите вкладку «Связь».";
+            if (r.Ping is { Received: > 0 } up)
+                return up.LossPercent >= TraceAnalysis.LossThreshold
+                    ? new(VerdictLevel.Warn, "Сервер доступен, но теряет пакеты", $"Задержка {up.AvgMs:0} мс, потери {up.LossPercent:0}%." + service + vpn)
+                    : new(VerdictLevel.Ok, "Сервер доступен по сети", $"Задержка {up.AvgMs:0} мс, потерь нет." + service);
+            return new(VerdictLevel.Warn, "Сервер не отвечает на проверочные пакеты",
+                "Многие игровые и голосовые серверы не отвечают на ping, так что это не доказывает, что сервер недоступен." +
+                (r.Hops.Count > 0 ? $" Трасса: {trace.Text}." : "") + service);
+        }
+
         // Connection
         if (r.Tcp is { } tcp && r.Address is { } ip)
         {
@@ -290,9 +332,15 @@ public static class Verdicts
             }
         }
 
-        // TLS, explained by the OONI ts-024 SNI test
-        if (r.Tls is { } tls && (tls.Cut || tls.Outcome == TlsOutcome.Error))
+        // TLS, explained by the OONI ts-024 SNI test. An alert also means HTTPS did not open.
+        if (r.Tls is { } tls && (tls.Cut || tls.Outcome is TlsOutcome.Error or TlsOutcome.Alert))
         {
+            var failed = tls.Outcome switch
+            {
+                TlsOutcome.Timeout => "зависает",
+                TlsOutcome.Alert => "заканчивается ошибкой TLS от сервера",
+                _ => "обрывается",
+            };
             const string method = " Проверено по методике OONI (ts-024): нейтральный сервер, имя сайта против контрольного.";
             return r.Sni?.Code switch
             {
@@ -305,10 +353,13 @@ public static class Verdicts
                         $"На нейтральном сервере {Capitalless(r.Sni.Text)}. OONI относит такой результат к аномалиям: он типичен для фильтра по имени, но доказательством не является." + method),
                 "success.got_server_hello" =>
                     new(VerdictLevel.Fail, "Защищённое соединение с сайтом не устанавливается",
-                        $"Фильтра по имени не видно: {r.Sni.Text}. Вероятнее блокировка адреса сайта или сбой на его стороне.{vpn}"),
+                        $"Фильтра по имени не видно: {r.Sni.Text}. " +
+                        (tls.Outcome == TlsOutcome.Alert
+                            ? "Сервер сайта сам отказывает в защищённом соединении: сбой или настройка на его стороне."
+                            : "Вероятнее блокировка адреса сайта или сбой на его стороне.") + vpn),
                 _ =>
                     new(VerdictLevel.Fail, "Защищённое соединение не устанавливается",
-                        $"Рукопожатие TLS с {host} {(tls.Outcome == TlsOutcome.Timeout ? "зависает" : "обрывается")}. " +
+                        $"Рукопожатие TLS с {host} {failed}. " +
                         (r.Sni != null ? Capital(r.Sni.Text) + "." : "") + vpn),
             };
         }
@@ -317,7 +368,6 @@ public static class Verdicts
         var problems = new List<string>();
         if (r.Tls is { Outcome: TlsOutcome.Ok, Cert: CertStatus.UnknownAuthority or CertStatus.Invalid or CertStatus.NameMismatch } badCert)
             problems.Add(DescribeTls(badCert).Item2);
-        if (r.Tls is { Outcome: TlsOutcome.Alert }) problems.Add("сервер отказал в рукопожатии TLS");
         if (r.Ping is { Received: > 0 } ping)
         {
             if (ping.LossPercent >= TraceAnalysis.LossThreshold)
@@ -327,12 +377,16 @@ public static class Verdicts
             if (ping.AvgMs > 200) problems.Add($"высокая задержка: {ping.AvgMs:0} мс");
         }
         if (r.Mtu is { Error: null, TooBigReported: false } mtu && mtu.MaxPayload != mtu.FullPayload)
-            problems.Add($"пакеты больше {mtu.PathMtu} байт пропадают без уведомления («чёрная дыра» MTU): мелкие запросы проходят, а крупные загрузки и некоторые сайты зависают");
+            problems.Add($"пакеты больше {mtu.PathMtu} байт пропадают без уведомления — возможна «чёрная дыра» MTU, при которой мелкие запросы проходят, а крупные загрузки зависают");
         if (r.Quic is { Outcome: QuicOutcome.Timeout })
             problems.Add("HTTP/3 (UDP 443) не проходит — сайты работают через TCP, но это признак фильтрации UDP");
         if (r.Tcp is { Outcome: TcpOutcome.Ok, Ms: > 300 } slowTcp) problems.Add($"подключение долгое: {slowTcp.Ms:0} мс");
         if (r.SystemDns is { Ok: true, Ms: > 500 } slowDns) problems.Add($"DNS отвечает медленно: {slowDns.Ms:0} мс");
         if (r.InterceptionWarning is { } dnsWarning) problems.Add(dnsWarning);
+        if (r.DnsMismatch)
+            problems.Add("системный и независимый DNS дают адреса разных сетей, а сертификат сайта, который снял бы подозрение, не проверялся — это может быть CDN или подмена");
+        if (r.FailedAddress is { } firstAddress)
+            problems.Add($"адрес {firstAddress.Ip} ({(firstAddress.Ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6 ? "IPv6" : "IPv4")}) не подключается, сайт работает через {r.Address}");
 
         var timings = string.Join(", ", new[]
         {
