@@ -206,6 +206,15 @@ public sealed class TableItem : ObservableObject
     public string MarkKind { get => _markKind; private set => Set(ref _markKind, value); }
     public string MarkTip { get => _markTip; private set => Set(ref _markTip, value); }
 
+    private string _blockTip = "";
+
+    /// <summary>A NetWatcher block covers this line; the tooltip says which.</summary>
+    public bool IsBlocked => _blockTip != "";
+    public string BlockTip { get => _blockTip; private set { if (Set(ref _blockTip, value)) OnPropertyChanged(nameof(IsBlocked)); } }
+
+    public void SetBlock(Core.Blocking.BlockRule? rule) =>
+        BlockTip = rule == null ? "" : $"Заблокировано: {rule.Describe()}\nСнять — правой кнопкой → «Снять блокировку…» или в окне «Блокировки»";
+
     private string _countryTip = "";
     public string CountryTip { get => _countryTip; private set => Set(ref _countryTip, value); }
     public string Network { get => _network; private set => Set(ref _network, value); }

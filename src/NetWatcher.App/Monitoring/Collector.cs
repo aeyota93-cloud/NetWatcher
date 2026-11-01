@@ -31,6 +31,9 @@ internal sealed class Collector : IDisposable
     public ServiceTable Services { get; } = new();
 
     public event Action? Ticked;
+
+    /// <summary>DNS answers of the last tick, for rules that follow a domain's addresses.</summary>
+    public event Action<IReadOnlyCollection<DnsObservation>>? DnsAnswers;
     public string? LastError { get; private set; }
 
     private readonly LinkMonitor _link;
@@ -46,6 +49,14 @@ internal sealed class Collector : IDisposable
 
     /// <summary>Program file name of a running process, as the log writes it.</summary>
     public string ProcessName(int pid) => _processes.Get(pid).Name;
+
+    /// <summary>"cs2.exe" or "svchost.exe · BITS" — the group a process's traffic is counted under.</summary>
+    public string GroupKeyOf(int pid)
+    {
+        var name = _processes.Get(pid).Name;
+        var services = Services.ForPid(pid);
+        return services == "" ? name : $"{name} · {services}";
+    }
 
     public bool DnsCapture => _etw.DnsRunning;
     public bool IsElevated { get; } = Microsoft.Diagnostics.Tracing.Session.TraceEventSession.IsElevated() == true;
@@ -190,6 +201,7 @@ internal sealed class Collector : IDisposable
         }
 
         _store.Write(seen.Values.ToList(), dns);
+        if (dns.Count > 0) DnsAnswers?.Invoke(dns);
         _store.WriteDnsFailures(failures);
 
         if (DateTime.UtcNow - _purgedAt > TimeSpan.FromHours(1))

@@ -20,7 +20,8 @@ public enum TcpState
     DeleteTcb = 12,
 }
 
-public readonly record struct TcpRow(TcpState State, IPAddress LocalIp, int LocalPort, IPAddress RemoteIp, int RemotePort, int Pid)
+/// <param name="FromIpv6Table">Read from the IPv6 table: IPv4 addresses there are dual-stack sockets.</param>
+public readonly record struct TcpRow(TcpState State, IPAddress LocalIp, int LocalPort, IPAddress RemoteIp, int RemotePort, int Pid, bool FromIpv6Table = false)
 {
     /// <summary>A live conversation with someone: not a listening socket and not a closed one.</summary>
     public bool IsActive => State is >= TcpState.SynSent and <= TcpState.LastAck;
@@ -66,7 +67,8 @@ public static class TcpTableParser
         Port(r[20..]),
         IpKey.Normalize(new IPAddress(r.Slice(24, 16))),
         Port(r[44..]),
-        BinaryPrimitives.ReadInt32LittleEndian(r[52..]));
+        BinaryPrimitives.ReadInt32LittleEndian(r[52..]),
+        FromIpv6Table: true);
 
     private static int Port(ReadOnlySpan<byte> p) => p[0] << 8 | p[1];
 }

@@ -1,0 +1,38 @@
+<Window x:Class="NetWatcher.App.Views.BlockWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:ClassModifier="internal"
+        Title="Заблокировать" Width="600" SizeToContent="Height" MaxHeight="820" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Icon="pack://application:,,,/NetWatcher;component/Assets/NetWatcher.ico"
+        Style="{StaticResource BaseWindow}">
+    <DockPanel>
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="20,12,20,20">
+            <Button x:Name="BlockButton" Style="{StaticResource BtnPrimary}" Content="Заблокировать" IsDefault="True" Click="OnBlock" />
+            <Button Style="{StaticResource Btn}" Content="Отмена" IsCancel="True" Margin="8,0,0,0" />
+        </StackPanel>
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="20,20,20,0">
+                <TextBlock x:Name="Heading" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" />
+                <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,4,0,12"
+                           Text="Правило брандмауэра Windows запретит исходящие соединения. Оно действует и когда NetWatcher закрыт; снять — в окне «Блокировки» или в самом брандмауэре." />
+                <TextBlock Text="ЧТО ЗАБЛОКИРОВАТЬ" Style="{StaticResource Caption}" />
+                <Border Style="{StaticResource Card}">
+                    <StackPanel x:Name="Choices" />
+                </Border>
+                <CheckBox x:Name="OnlyProgram" Margin="0,10,0,0" Checked="OnChanged" Unchecked="OnChanged" />
+                <Border x:Name="WarningBox" Margin="0,12,0,0" Padding="12,8" CornerRadius="6" Background="{DynamicResource WarnSoftBrush}"
+                        BorderBrush="{DynamicResource WarnStrokeBrush}" BorderThickness="1">
+                    <TextBlock x:Name="Warning" TextWrapping="Wrap" />
+                </Border>
+                <TextBlock Text="КОМАНДА" Style="{StaticResource Caption}" Margin="0,14,0,0" />
+                <Border Style="{StaticResource Field}" Padding="10,8">
+                    <TextBox x:Name="Command" IsReadOnly="True" BorderThickness="0" Background="Transparent" TextWrapping="Wrap"
+                             Foreground="{DynamicResource TextBrush}" FontFamily="{StaticResource MonoFont}" FontSize="11.5" MaxHeight="140"
+                             VerticalScrollBarVisibility="Auto" />
+                </Border>
+                <TextBlock x:Name="Error" Margin="0,8,0,0" TextWrapping="Wrap" Foreground="{DynamicResource DangerBrush}" />
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</Window>

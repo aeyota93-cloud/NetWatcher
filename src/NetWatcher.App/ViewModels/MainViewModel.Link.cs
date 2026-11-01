@@ -213,12 +213,14 @@ internal sealed partial class MainViewModel
                 s.Proto,
                 s.Level.ToString(),
                 s.StateText,
-                s.LatencyMs is { } l ? $"{l:0} мс" : s.Pingable ? "—" : "нет пинга",
+                s.LatencyMs is { } l ? $"{l:0} мс" + (s.LatencyFrom == Core.Link.LatencySource.Connection ? " (TCP)" : "") : s.Pingable ? "—" : "нет пинга",
                 s.JitterMs is { } jj ? $"±{jj:0} мс" : "—",
                 s.LossPercent is { } loss ? $"{loss:0}%" : "—",
                 s.LastAnswer is { } la ? (now - la < TimeSpan.FromSeconds(5) ? "сейчас" : $"{(int)(now - la).TotalSeconds} с назад") : "—",
                 $"{TextFormat.Bytes(s.BytesOut)} / {TextFormat.Bytes(s.BytesIn)}",
-                s.Reason != "" ? s.Reason : (s.Pingable ? "" : "Сервер не отвечает на пинг — задержку измерить нельзя, это не ошибка"),
+                s.Reason != "" ? s.Reason
+                    : s.LatencyFrom == Core.Link.LatencySource.Connection ? "Сервер не отвечает на пинг; задержка — по самому TCP-соединению программы (её измеряет Windows)"
+                    : s.Pingable || s.Proto == "TCP" ? "" : "Сервер не отвечает на пинг, а у UDP нет подтверждений — задержку измерить нельзя, это не ошибка",
                 (s.LossPercent ?? 0) >= 1);
         }));
 

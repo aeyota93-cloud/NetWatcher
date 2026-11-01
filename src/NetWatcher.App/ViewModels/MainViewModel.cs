@@ -7,6 +7,8 @@ using System.Windows.Threading;
 using NetWatcher.App.Native;
 using NetWatcher.Core;
 using NetWatcher.Core.Asn;
+using NetWatcher.Core.Blocking;
+using NetWatcher.Core.Catalog;
 using NetWatcher.Core.Net;
 
 namespace NetWatcher.App.ViewModels;
@@ -115,6 +117,15 @@ internal sealed partial class MainViewModel : ObservableObject
         WhoElseCommand = new RelayCommand(() => SearchFor(SelectedItem?.Rows.FirstOrDefault()?.RemoteIpText));
         RdapCommand = new RelayCommand(p => _ = RdapAsync(Rows(p).FirstOrDefault() ?? SelectedItem?.Rows.FirstOrDefault()));
         OpenFolderCommand = new RelayCommand(p => OpenFolder(Rows(p).FirstOrDefault()?.Path));
+        BlockCommand = new RelayCommand(p => OpenBlock(Rows(p) is { Count: > 0 } r ? r : SelectedItem?.Rows.ToList() ?? []));
+        UnblockCommand = new RelayCommand(p => Unblock(Rows(p) is { Count: > 0 } r ? r : SelectedItem?.Rows.ToList() ?? []));
+        OpenBlocksCommand = new RelayCommand(OpenBlocks);
+        OpenHistoryCommand = new RelayCommand(() => new Views.HistoryWindow { Owner = Application.Current.MainWindow }.ShowDialog());
+        _state.Blocks.Changed += () => Application.Current?.Dispatcher.BeginInvoke(() =>
+        {
+            OnPropertyChanged(nameof(BlocksText));
+            ApplyTable();
+        });
         CloseConnectionCommand = new RelayCommand(p => CloseConnections(Rows(p) is { Count: > 0 } r ? r : SelectedItem?.Rows.ToList() ?? []));
         UndoCopyCommand = new RelayCommand(UndoCopy);
         OpenExportCommand = new RelayCommand(() => Export.Open(ExportContext));
@@ -469,10 +480,14 @@ internal sealed partial class MainViewModel : ObservableObject
         string Net(DestinationRow r) => r.NetworkText(AddressFormat.Cidr);
         string Prog(DestinationRow r) => _groupTitles.GetValueOrDefault(r.GroupKey, r.Process);
 
+        var blocks = _state.Blocks.Rules;
+        BlockRule? BlockOf(DestinationRow r) => blocks.FirstOrDefault(b => b.Covers(r));
+
         TableItem Item(string key, ItemKind kind, IReadOnlyList<DestinationRow> list, string domain)
         {
             var item = existing.GetValueOrDefault(key) ?? new TableItem(key, kind);
             item.Update(list, domain, Net, Prog, now, LiveWindow);
+            item.SetBlock(list.Select(BlockOf).FirstOrDefault(b => b != null));
             return item;
         }
 
@@ -488,6 +503,7 @@ internal sealed partial class MainViewModel : ObservableObject
                 var group = Item("g:" + g.Key, ItemKind.Group, g.Rows, g.Domain);
                 group.IsExpanded = autoExpand || _expanded.Contains(g.Key);
                 group.Update(g.Rows, g.Domain, Net, Prog, now, LiveWindow);
+                group.SetBlock(g.Rows.Select(BlockOf).FirstOrDefault(b => b != null));
                 wanted.Add(group);
                 if (group.IsExpanded)
                     foreach (var r in g.Rows)
@@ -683,6 +699,9 @@ internal sealed partial class MainViewModel : ObservableObject
         var rdap = _details.GetValueOrDefault("Rdap", "");
         var keepPdb = (For: _details.GetValueOrDefault("PdbFor"), Text: _details.GetValueOrDefault("Pdb", ""));
         _details.Clear();
+        // Every key the window binds to must exist: a missing one leaves its block visible and empty.
+        Explain("What", null, null);
+        Explain("Sum", null, null);
         var item = SelectedItem;
         HasRdap = false;
         HasPdb = false;
@@ -702,6 +721,8 @@ internal sealed partial class MainViewModel : ObservableObject
             _details["SumNoDomain"] = ips.Count == 0 ? "—" : noDomain == 0 ? "нет"
                 : $"{noDomain} из {ips.Count}" + (noDomain * 2 > ips.Count ? " — программа часто ходит напрямую по IP" : "");
             SumNetworksText = owners.Text;
+            if (SelectedNav is { IsAll: false } && rows.Count > 0)
+                Explain("Sum", Explanations.Builtin.ForProgram(rows[0].Process, rows[0].Services), null);
             var marked = rows.Where(r => r.Catalog is { Tag: not Core.Catalog.DomainTag.None }).ToList();
             var trackerDomains = marked.Where(r => r.Catalog!.Tag != Core.Catalog.DomainTag.Telemetry).Select(r => r.PrimaryDomain).Distinct().Count();
             var telemetryDomains = marked.Where(r => r.Catalog!.Tag == Core.Catalog.DomainTag.Telemetry).Select(r => r.PrimaryDomain).Distinct().Count();
@@ -764,6 +785,10 @@ internal sealed partial class MainViewModel : ObservableObject
                 _details["Pdb"] = cachedNet.ToText();
                 HasPdb = true;
             }
+            var single = rows.Select(r => r.GroupKey).Distinct().Count() == 1;
+            Explain("What",
+                single ? Explanations.Builtin.ForProgram(first.Process, first.Services) : null,
+                (groupDomain != "" ? groupDomain : domains.FirstOrDefault()) is { } d ? Explanations.Builtin.ForDomain(d) : null);
             _details["Country"] = Core.Geo.Countries.Describe(first.ServerCountry, first.RegisteredCountry);
             long sIn = rows.Sum(r => r.BytesIn), sOut = rows.Sum(r => r.BytesOut);
             _details["Traffic"] = sIn + sOut > 0 ? $"{TextFormat.Traffic(sIn, sOut)} ({_period.Title.ToLowerInvariant()})" : "не замечен";
@@ -783,6 +808,18 @@ internal sealed partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(D));
         OnPropertyChanged(nameof(HasSelection));
         OnPropertyChanged(nameof(NoSelection));
+    }
+
+    /// <summary>The "ЧТО ЭТО" card: the program (or service) and the domain in plain words.</summary>
+    private void Explain(string prefix, Explanation? program, Explanation? domain)
+    {
+        _details[prefix + "ProgramTitle"] = program?.Title ?? "";
+        _details[prefix + "Program"] = program?.What ?? "";
+        _details[prefix + "ProgramBlock"] = program is { Block.Length: > 0 } p ? "Если заблокировать: " + p.Block : "";
+        _details[prefix + "DomainTitle"] = domain?.Title ?? "";
+        _details[prefix + "Domain"] = domain?.What ?? "";
+        _details[prefix + "DomainBlock"] = domain is { Block.Length: > 0 } d ? "Если заблокировать: " + d.Block : "";
+        _details[prefix + "Any"] = program != null || domain != null ? "1" : "";
     }
 
     private static string When(DateTimeOffset t)
@@ -1057,6 +1094,43 @@ internal sealed partial class MainViewModel : ObservableObject
     public RelayCommand RdapCommand { get; }
     public RelayCommand OpenFolderCommand { get; }
     public RelayCommand CloseConnectionCommand { get; }
+    public RelayCommand BlockCommand { get; }
+    public RelayCommand UnblockCommand { get; }
+    public RelayCommand OpenBlocksCommand { get; }
+    public RelayCommand OpenHistoryCommand { get; }
+
+    /// <summary>"Блокировки (3)" on the toolbar.</summary>
+    public string BlocksText => _state.Blocks.Rules.Count is var n and > 0 ? $"Блокировки ({n})" : "Блокировки";
+
+    private void OpenBlock(List<DestinationRow> rows)
+    {
+        if (rows.Count == 0) return;
+        var window = new Views.BlockWindow(_state, rows, r => _groupTitles.GetValueOrDefault(r.GroupKey, r.Process)) { Owner = Application.Current.MainWindow };
+        if (window.ShowDialog() == true && window.Created is { } rule)
+            ShowToast(rule.Describe(), false, "Заблокировано:");
+    }
+
+    private void Unblock(List<DestinationRow> rows)
+    {
+        var owner = Application.Current.MainWindow;
+        var rules = _state.Blocks.Rules.Where(b => rows.Any(b.Covers)).ToList();
+        if (rules.Count == 0)
+        {
+            MessageBox.Show(owner, "Эти адреса не заблокированы через NetWatcher.", "Снять блокировку", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        var list = string.Join("\n", rules.Select(r => "• " + r.Describe()));
+        if (MessageBox.Show(owner, $"Снять блокировки?\n\n{list}", "Снять блокировку", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+        var failed = rules.Select(r => _state.Blocks.Remove(r)).Where(r => !r.Ok).Select(r => r.Message).ToList();
+        if (failed.Count > 0) MessageBox.Show(owner, string.Join("\n", failed), "Снять блокировку", MessageBoxButton.OK, MessageBoxImage.Warning);
+        else ShowToast(TextFormat.Plural(rules.Count, "блокировка", "блокировки", "блокировок"), false, "Снято:");
+    }
+
+    private void OpenBlocks()
+    {
+        new Views.BlocksWindow(_state) { Owner = Application.Current.MainWindow }.ShowDialog();
+        OnPropertyChanged(nameof(BlocksText));
+    }
     public RelayCommand UndoCopyCommand { get; }
     public RelayCommand OpenExportCommand { get; }
     public RelayCommand OpenVpnExportCommand { get; }

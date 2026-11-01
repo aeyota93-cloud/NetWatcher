@@ -18,6 +18,7 @@ internal sealed class AppState : IDisposable
 
     public LinkService LinkService { get; }
     public AlertService Alerts { get; }
+    public BlockService Blocks { get; } = new();
     public Collector Collector { get; }
     public RdapClient Rdap { get; } = new(AppPaths.Http);
     public PeeringDbClient PeeringDb { get; } = new(AppPaths.Http, AppPaths.PeeringDbCache);
@@ -55,6 +56,7 @@ internal sealed class AppState : IDisposable
         Collector = new Collector(Store, Dns, Link, () => Settings);
         LinkService = new LinkService(this);
         Alerts = new AlertService(this);
+        Collector.DnsAnswers += Blocks.OnDns;
     }
 
     public void Start()
@@ -70,6 +72,7 @@ internal sealed class AppState : IDisposable
         Task.Run(LoadAsn);
         Task.Run(LoadGeo);
         Task.Run(LoadCatalog);
+        Task.Run(Blocks.Verify);
     }
 
     private void LoadAsn()

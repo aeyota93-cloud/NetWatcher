@@ -22,6 +22,10 @@ internal sealed class LinkService(AppState state) : IDisposable
     private readonly Dictionary<string, DateTime> _traced = [];
     private readonly Dictionary<string, (bool Down, DateTime NotifiedAt, DateTimeOffset Since)> _alerts = [];
 
+    // Connections whose extended statistics were switched on, so it is done once per connection.
+    private readonly HashSet<TcpRow> _statsOn = [];
+    private bool _statsDenied;
+
     /// <summary>Shows a Windows notification; set by the main window once it has a tray icon.</summary>
     public Action<string, string, bool>? Notify { get; set; }
 
@@ -43,6 +47,7 @@ internal sealed class LinkService(AppState state) : IDisposable
                 var now = DateTimeOffset.Now;
                 var targets = state.Link.PingTargets(now, 16);
                 await Task.WhenAll(targets.Select(ip => PingOne(ip, ct))).ConfigureAwait(false);
+                ReadConnectionRtt(now);
             }
             catch (Exception e) when (e is not OperationCanceledException)
             {
@@ -50,6 +55,49 @@ internal sealed class LinkService(AppState state) : IDisposable
             }
             await Task.Delay(PingEvery, ct).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    /// The round trip time Windows keeps for each open TCP connection of the programs being watched.
+    /// It gives a latency for servers that ignore ping. Collection is switched on per connection
+    /// (administrator only); without the rights this is skipped for the rest of the run.
+    /// </summary>
+    private void ReadConnectionRtt(DateTimeOffset now)
+    {
+        if (_statsDenied) return;
+        var wanted = state.Link.ActiveTcpServers(now, TimeSpan.FromSeconds(30));
+        if (wanted.Count == 0)
+        {
+            _statsOn.Clear();
+            return;
+        }
+        var best = new Dictionary<string, double>();
+        var open = new HashSet<TcpRow>();
+        var asked = 0;
+        foreach (var row in TcpTable.Read())
+        {
+            if (!TcpEStats.Usable(row) || asked >= 256) continue;
+            var key = LinkMonitor.KeyOf(state.Collector.GroupKeyOf(row.Pid), "TCP", row.RemoteIp, row.RemotePort);
+            if (!wanted.Contains(key)) continue;
+            asked++;
+            open.Add(row);
+            if (!_statsOn.Contains(row))
+            {
+                var result = TcpStats.Enable(row);
+                if (result == TcpStats.AccessDenied)
+                {
+                    _statsDenied = true;
+                    return;
+                }
+                if (result != 0) continue;
+                _statsOn.Add(row);
+            }
+            // SmoothedRtt is 0 until TCP has a sample; several connections to one server: the best one.
+            if (TcpStats.Read(row) is { SmoothedRtt: > 0 } stats)
+                best[key] = best.TryGetValue(key, out var b) ? Math.Min(b, stats.SmoothedRtt) : stats.SmoothedRtt;
+        }
+        _statsOn.IntersectWith(open);
+        foreach (var (key, rtt) in best) state.Link.AddConnectionRtt(key, now, rtt);
     }
 
     private async Task PingOne(IPAddress ip, CancellationToken ct)

@@ -52,6 +52,10 @@
             <MenuItem Header="Открыть папку программы" Command="{Binding OpenFolderCommand}"
                       CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
             <Separator />
+            <MenuItem Header="Заблокировать…" Command="{Binding BlockCommand}"
+                      CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+            <MenuItem Header="Снять блокировку…" Command="{Binding UnblockCommand}"
+                      CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
             <MenuItem Header="Разорвать соединение…" Command="{Binding CloseConnectionCommand}"
                       ToolTip="Закрыть открытые TCP-соединения программы с этим адресом: она увидит обрыв и подключится заново"
                       CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
@@ -220,6 +224,13 @@
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#xE9D9;" Style="{StaticResource Icon}" Margin="0,0,8,0" />
                         <TextBlock Text="Проверить" />
+                    </StackPanel>
+                </Button>
+                <Button Style="{StaticResource Btn}" Height="36" Margin="0,0,8,0" Command="{Binding OpenBlocksCommand}"
+                        ToolTip="Правила брандмауэра, созданные из NetWatcher">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE72E;" Style="{StaticResource Icon}" Margin="0,0,8,0" />
+                        <TextBlock Text="{Binding BlocksText}" />
                     </StackPanel>
                 </Button>
                 <Button Style="{StaticResource Btn}" Height="36" Command="{Binding OpenExportCommand}" ToolTip="Ctrl+E">
@@ -572,6 +583,11 @@
                                                             </Style>
                                                         </TextBlock.Style>
                                                     </TextBlock>
+                                                    <Border CornerRadius="8" Padding="6,0" Margin="0,0,8,0" VerticalAlignment="Center"
+                                                            Background="{DynamicResource DangerSoftBrush}" ToolTip="{Binding BlockTip}"
+                                                            Visibility="{Binding IsBlocked, Converter={StaticResource BoolToVis}}">
+                                                        <TextBlock Text="заблокировано" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource DangerBrush}" />
+                                                    </Border>
                                                     <Border Style="{StaticResource DomainMark}" ToolTip="{Binding MarkTip}"
                                                             Visibility="{Binding HasMark, Converter={StaticResource BoolToVis}}">
                                                         <TextBlock Text="{Binding Mark}" FontSize="10.5" FontWeight="SemiBold" />
@@ -1279,6 +1295,24 @@
                                 </Grid>
                             </Border>
 
+                            <StackPanel Visibility="{Binding D[WhatAny], Converter={StaticResource TextVis}}">
+                                <TextBlock Text="ЧТО ЭТО" Style="{StaticResource Caption}" />
+                                <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                                    <StackPanel>
+                                        <StackPanel Visibility="{Binding D[WhatProgramTitle], Converter={StaticResource TextVis}}">
+                                            <TextBlock Text="{Binding D[WhatProgramTitle]}" FontWeight="SemiBold" FontSize="12.5" TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding D[WhatProgram]}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                            <TextBlock Text="{Binding D[WhatProgramBlock]}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0" Style="{StaticResource Muted}" />
+                                        </StackPanel>
+                                        <StackPanel Margin="0,10,0,0" Visibility="{Binding D[WhatDomainTitle], Converter={StaticResource TextVis}}">
+                                            <TextBlock Text="{Binding D[WhatDomainTitle]}" FontWeight="SemiBold" FontSize="12.5" TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding D[WhatDomain]}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                            <TextBlock Text="{Binding D[WhatDomainBlock]}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0" Style="{StaticResource Muted}" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+
                             <WrapPanel Margin="0,0,0,12">
                                 <Button Style="{StaticResource BtnPrimarySmall}" Margin="0,0,8,8" Command="{Binding OpenCheckCommand}"
                                         ToolTip="Почему не работает: DNS, подключение, блокировка по имени, задержка, трасса (Ctrl+D)">
@@ -1347,7 +1381,7 @@
                                         <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
                                     <Grid.RowDefinitions>
-                                        <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
+                                        <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
                                     </Grid.RowDefinitions>
                                     <Grid.Resources>
                                         <Style TargetType="TextBlock">
@@ -1370,10 +1404,31 @@
                                     <TextBlock Grid.Row="5" Text="Скорость" Foreground="{DynamicResource Text3Brush}" />
                                     <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding D[SumSpeed]}" ToolTip="Средняя за последние 10 секунд" />
                                     <TextBlock Grid.Row="6" Text="Трекеры" Foreground="{DynamicResource Text3Brush}" />
+                                    <TextBlock Grid.Row="7" Grid.ColumnSpan="2" Margin="0,6,0,0">
+                                        <Hyperlink Command="{Binding OpenHistoryCommand}">Трафик за 30 дней по данным Windows…</Hyperlink>
+                                    </TextBlock>
                                     <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding D[SumMarked]}"
                                                ToolTip="По каталогу DuckDuckGo и WindowsSpyBlocker; фильтры «Трекеры» и «Телеметрия» покажут их" />
                                 </Grid>
                             </Border>
+                            <StackPanel Visibility="{Binding D[SumAny], Converter={StaticResource TextVis}}">
+                                <TextBlock Text="ЧТО ЭТО" Style="{StaticResource Caption}" />
+                                <Border Style="{StaticResource Card}" Margin="0,0,0,16">
+                                    <StackPanel>
+                                        <StackPanel Visibility="{Binding D[SumProgramTitle], Converter={StaticResource TextVis}}">
+                                            <TextBlock Text="{Binding D[SumProgramTitle]}" FontWeight="SemiBold" FontSize="12.5" TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding D[SumProgram]}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                            <TextBlock Text="{Binding D[SumProgramBlock]}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0" Style="{StaticResource Muted}" />
+                                        </StackPanel>
+                                        <StackPanel Margin="0,10,0,0" Visibility="{Binding D[SumDomainTitle], Converter={StaticResource TextVis}}">
+                                            <TextBlock Text="{Binding D[SumDomainTitle]}" FontWeight="SemiBold" FontSize="12.5" TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding D[SumDomain]}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                            <TextBlock Text="{Binding D[SumDomainBlock]}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0" Style="{StaticResource Muted}" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+
                             <TextBlock Text="СЕТИ ДЛЯ ПРАВИЛ VPN / ФАЙРВОЛА" Style="{StaticResource Caption}" />
                             <Border Style="{StaticResource Field}" Padding="10,8" Margin="0,0,0,10">
                                 <TextBox Text="{Binding SumNetworksText, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent"

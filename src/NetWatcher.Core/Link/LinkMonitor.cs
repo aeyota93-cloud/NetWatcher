@@ -52,7 +52,23 @@ public sealed record ServerLink(
     long PacketsOut,
     long PacketsIn,
     bool Pingable,
-    string Reason);
+    string Reason,
+    LatencySource LatencyFrom = LatencySource.None);
+
+/// <summary>Where a latency figure comes from.</summary>
+public enum LatencySource
+{
+    None,
+
+    /// <summary>Ping (ICMP echo) to the server every 5 seconds.</summary>
+    Ping,
+
+    /// <summary>
+    /// The round trip time Windows keeps for the program's own TCP connection (extended TCP statistics,
+    /// SmoothedRtt): works for servers that ignore ping, such as game and messenger servers.
+    /// </summary>
+    Connection,
+}
 
 /// <summary>One point of a chart: average latency, loss and whether the link was down.</summary>
 public readonly record struct ChartPoint(DateTimeOffset Time, double? LatencyMs, double LossPercent, bool Down, long Packets = 0);
@@ -94,6 +110,7 @@ public sealed class LinkMonitor(TimeSpan history)
     private readonly Dictionary<UInt128, List<(DateTimeOffset Time, double? Rtt)>> _pings = [];
     private readonly Dictionary<string, string> _notes = [];
     private DateTimeOffset? _since;
+    private readonly Dictionary<string, List<(DateTimeOffset Time, double Rtt)>> _connRtt = [];
 
     private sealed class Server
     {
@@ -138,6 +155,29 @@ public sealed class LinkMonitor(TimeSpan history)
             if (!_pings.TryGetValue(key, out var list)) _pings[key] = list = [];
             list.Add((time, rttMs));
             list.RemoveAll(p => time - p.Time > history);
+        }
+    }
+
+    /// <summary>Round trip time of the program's own TCP connection to a server (key as <see cref="KeyOf"/>).</summary>
+    public void AddConnectionRtt(string serverKey, DateTimeOffset time, double rttMs)
+    {
+        lock (_lock)
+        {
+            if (!_connRtt.TryGetValue(serverKey, out var list)) _connRtt[serverKey] = list = [];
+            list.Add((time, rttMs));
+            list.RemoveAll(p => time - p.Time > history);
+        }
+    }
+
+    /// <summary>TCP servers that carried traffic lately: candidates for reading the connection's own round trip time.</summary>
+    public HashSet<string> ActiveTcpServers(DateTimeOffset now, TimeSpan window)
+    {
+        lock (_lock)
+        {
+            return _servers.Values
+                .Where(s => s.Proto == "TCP" && s.Ticks.Count > 0 && now - s.Ticks[^1].Time <= window)
+                .Select(s => s.Key)
+                .ToHashSet(StringComparer.Ordinal);
         }
     }
 
@@ -201,6 +241,7 @@ public sealed class LinkMonitor(TimeSpan history)
             if (cut < 0) _servers.Remove(key);
             else if (cut > 0) s.Ticks.RemoveRange(0, cut);
         }
+        foreach (var key in _connRtt.Keys.Where(k => !_servers.ContainsKey(k)).ToList()) _connRtt.Remove(key);
     }
 
     // ---------------------------------------------------------------- analysis
@@ -254,6 +295,13 @@ public sealed class LinkMonitor(TimeSpan history)
         var lastAnswer = s.Ticks.LastOrDefault(t => t.In > 0) is { Time: var la } tick && tick.In > 0 ? la : (DateTimeOffset?)null;
         var lastTraffic = s.Ticks.Count > 0 ? s.Ticks[^1].Time : DateTimeOffset.MinValue;
         var (latency, jitter, pingLoss, pingable) = PingStats(s.Ip, now);
+        var source = latency != null ? LatencySource.Ping : LatencySource.None;
+        if (latency == null && ConnectionRtt(s.Key, now) is { } connRtt)
+        {
+            // The connection's own round trip time is smoothed by TCP, so no jitter from it.
+            latency = connRtt;
+            source = LatencySource.Connection;
+        }
         var outage = Outages(s, now).LastOrDefault(o => o.End == null);
         _notes.TryGetValue(s.Key, out var note);
 
@@ -307,7 +355,7 @@ public sealed class LinkMonitor(TimeSpan history)
 
         if (note != null) reason = reason == "" ? note : $"{reason}; {note}";
         return new ServerLink(s.Key, s.GroupKey, s.Ip, s.Port, s.Proto, level, text, latency, jitter, loss, lastAnswer,
-            bOut, bIn, outPk, inPk, pingable, reason);
+            bOut, bIn, outPk, inPk, pingable, reason, source);
     }
 
     /// <summary>
@@ -355,6 +403,14 @@ public sealed class LinkMonitor(TimeSpan history)
     }
 
     /// <summary>Average, jitter and loss of pings over the recent window.</summary>
+    /// <summary>Median of the connection's round trip times over the recent window.</summary>
+    private double? ConnectionRtt(string key, DateTimeOffset now)
+    {
+        if (!_connRtt.TryGetValue(key, out var list)) return null;
+        var recent = list.Where(p => now - p.Time <= RecentWindow).Select(p => p.Rtt).Order().ToList();
+        return recent.Count == 0 ? null : recent[recent.Count / 2];
+    }
+
     private (double? Latency, double? Jitter, double Loss, bool Pingable) PingStats(IPAddress ip, DateTimeOffset now)
     {
         if (!_pings.TryGetValue(IpKey.From(ip), out var list) || list.Count == 0) return (null, null, 0, false);
@@ -394,6 +450,21 @@ public sealed class LinkMonitor(TimeSpan history)
                     pingSum[b] += rtt;
                     anyPingOk = true;
                 }
+            }
+        }
+
+        // Servers without ping: the connection's own round trip time.
+        var connSum = new double[points];
+        var connCount = new int[points];
+        foreach (var s in servers)
+        {
+            if (!_connRtt.TryGetValue(s.Key, out var list)) continue;
+            foreach (var p in list)
+            {
+                if (p.Time < from) continue;
+                var b = Bucket(p.Time);
+                connSum[b] += p.Rtt;
+                connCount[b]++;
             }
         }
 
@@ -452,7 +523,8 @@ public sealed class LinkMonitor(TimeSpan history)
                 if (resends[b] >= 3 && r >= 5) loss = r;
             }
             var down = activeServers[b] > 0 && silentServers[b] == activeServers[b];
-            result.Add(new ChartPoint(from + TimeSpan.FromTicks((long)(step * b)), pingOk[b] > 0 ? pingSum[b] / pingOk[b] : null, loss, down, packets[b]));
+            double? latency = pingOk[b] > 0 ? pingSum[b] / pingOk[b] : connCount[b] > 0 ? connSum[b] / connCount[b] : null;
+            result.Add(new ChartPoint(from + TimeSpan.FromTicks((long)(step * b)), latency, loss, down, packets[b]));
         }
         return result;
     }

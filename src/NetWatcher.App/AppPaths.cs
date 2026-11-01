@@ -12,6 +12,7 @@ internal static class AppPaths
     public static string AsnDatabase => Path.Combine(DataDir, Core.Asn.AsnDatabase.FileName);
     public static string GeoDatabase => Path.Combine(DataDir, Core.Geo.GeoDatabase.FileName);
     public static string Catalog => Path.Combine(DataDir, Core.Catalog.DomainCatalog.FileName);
+    public static string Blocks => Path.Combine(DataDir, "blocks.json");
     public static string PeeringDbCache => Path.Combine(DataDir, "peeringdb.json");
 
     public static HttpClient Http { get; } = CreateHttp();

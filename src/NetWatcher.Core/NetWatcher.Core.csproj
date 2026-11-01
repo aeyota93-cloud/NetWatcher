@@ -12,6 +12,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- What programs, Windows services and domains are, in plain words: see Catalog/Explanations.cs. -->
+    <EmbeddedResource Include="Catalog\explanations.json" LogicalName="explanations.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <InternalsVisibleTo Include="NetWatcher.Core.Tests" />
   </ItemGroup>
 

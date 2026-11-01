@@ -1,0 +1,42 @@
+<Window x:Class="NetWatcher.App.Views.BlocksWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:ClassModifier="internal"
+        Title="Блокировки" Width="640" Height="520" MinHeight="300"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Icon="pack://application:,,,/NetWatcher;component/Assets/NetWatcher.ico"
+        Style="{StaticResource BaseWindow}">
+    <DockPanel Margin="20">
+        <TextBlock DockPanel.Dock="Top" Text="Блокировки NetWatcher" FontSize="16" FontWeight="SemiBold" />
+        <TextBlock DockPanel.Dock="Top" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,4,0,12"
+                   Text="Это правила брандмауэра Windows для исходящих соединений с именами «NetWatcher: …». Их видно и в самом брандмауэре: Win+R → wf.msc → «Правила для исходящего подключения»." />
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
+            <Button DockPanel.Dock="Right" Style="{StaticResource Btn}" Content="Закрыть" IsCancel="True" />
+            <Button x:Name="RemoveAllButton" Style="{StaticResource BtnSmall}" Content="Снять все" Click="OnRemoveAll" HorizontalAlignment="Left" />
+            <TextBlock x:Name="Status" Margin="12,0" VerticalAlignment="Center" TextWrapping="Wrap" Style="{StaticResource Muted}" />
+        </DockPanel>
+        <Grid>
+            <TextBlock x:Name="Empty" Text="Блокировок нет. Заблокировать можно из меню строки: правая кнопка → «Заблокировать…»."
+                       Style="{StaticResource Muted}" TextWrapping="Wrap" VerticalAlignment="Top" />
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ItemsControl x:Name="List">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Style="{StaticResource Card}" Margin="0,0,0,8">
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right" Style="{StaticResource BtnSmall}" Content="Снять" Tag="{Binding Rule}" Click="OnRemove"
+                                            VerticalAlignment="Center" Margin="12,0,0,0" />
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding Detail}" Style="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding Problem}" FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource WarnBrush}" />
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Grid>
+    </DockPanel>
+</Window>
