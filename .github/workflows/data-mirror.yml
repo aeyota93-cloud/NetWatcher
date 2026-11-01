@@ -18,6 +18,8 @@ jobs:
   asn:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - name: Скачать и проверить
         run: |
           curl -fsSL --retry 3 --max-time 180 -o ip2asn-combined.tsv.gz https://iptoasn.com/data/ip2asn-combined.tsv.gz
@@ -32,9 +34,7 @@ jobs:
           tag_name: asn-db
           target_commitish: ${{ github.sha }}
           name: База владельцев IP (служебный)
-          body: |
-            Копия ip2asn-combined.tsv.gz с https://iptoasn.com, обновляется раз в неделю автоматически.
-            NetWatcher скачивает её кнопкой «Обновить базу». Это не версия программы — программа в релизах v*.
+          body_path: docs/releases/asn-db.md
           prerelease: true
           make_latest: false
           files: ip2asn-combined.tsv.gz
@@ -42,6 +42,8 @@ jobs:
   geo:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - name: Скачать и проверить
         run: |
           # DB-IP names the file by month; a new month appears with a delay, so try the previous one too.
@@ -61,10 +63,7 @@ jobs:
           tag_name: geo-db
           target_commitish: ${{ github.sha }}
           name: База стран (служебный)
-          body: |
-            IP Geolocation by DB-IP (https://db-ip.com): «IP to Country Lite», лицензия CC BY 4.0
-            (https://creativecommons.org/licenses/by/4.0/). Копия без изменений, обновляется автоматически.
-            NetWatcher скачивает её кнопкой «Обновить базу» в настройках. Это не версия программы.
+          body_path: docs/releases/geo-db.md
           prerelease: true
           make_latest: false
           files: dbip-country-lite.csv.gz
@@ -86,11 +85,7 @@ jobs:
           tag_name: catalog-db
           target_commitish: ${{ github.sha }}
           name: Каталог доменов (служебный)
-          body: |
-            Какой компании принадлежит домен и не трекер ли это. Собран tools/build-catalog.py из
-            DuckDuckGo Tracker Blocklists (https://github.com/duckduckgo/tracker-blocklists, CC BY-NC-SA 4.0, © Duck Duck Go, Inc.)
-            и WindowsSpyBlocker (https://github.com/crazy-max/WindowsSpyBlocker, MIT, © CrazyMax).
-            Файл каталога распространяется на условиях CC BY-NC-SA 4.0. Это не версия программы.
+          body_path: docs/releases/catalog-db.md
           prerelease: true
           make_latest: false
           files: domain-catalog.tsv.gz

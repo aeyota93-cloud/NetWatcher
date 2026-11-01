@@ -99,7 +99,7 @@ jobs:
           tag_name: ${{ inputs.version || github.ref_name }}
           target_commitish: ${{ github.sha }}
           name: NetWatcher ${{ inputs.version || github.ref_name }}
-          generate_release_notes: true
+          generate_release_notes: false
           body_path: docs/releases/${{ inputs.version || github.ref_name }}.md
           files: |
             artifacts/NetWatcher-win-x64.zip
