@@ -513,6 +513,15 @@ public sealed class NetProbe(HttpClient http) : INetProbe
         ["vpn", "wireguard", "wintun", "tap-windows", "openvpn", "amnezia", "anyconnect", "nordlynx", "outline", "warp",
          "tailscale", "zerotier", "sing-box", "sing-tun", "v2ray", "hiddify", "tun2socks", "clash", "tunnel"];
 
+    public static bool IsTunnelAdapter(string name, string description, NetworkInterfaceType type)
+    {
+        var text = (name + " " + description).ToLowerInvariant();
+        var transition = text.Contains("teredo") || text.Contains("isatap") || text.Contains("6to4");
+        // "tun0", "utun3": the usual names of TUN adapters of proxy clients.
+        var tunName = name.StartsWith("tun", StringComparison.OrdinalIgnoreCase) || name.StartsWith("utun", StringComparison.OrdinalIgnoreCase);
+        return !transition && (type == NetworkInterfaceType.Tunnel || tunName || TunnelMarks.Any(text.Contains));
+    }
+
     public string? TunnelTo(IPAddress ip)
     {
         try
@@ -524,11 +533,7 @@ public sealed class NetProbe(HttpClient http) : INetProbe
             foreach (var n in NetworkInterface.GetAllNetworkInterfaces())
             {
                 if (!n.GetIPProperties().UnicastAddresses.Any(u => IpKey.Normalize(u.Address).Equals(local))) continue;
-                var text = (n.Name + " " + n.Description).ToLowerInvariant();
-                var transition = text.Contains("teredo") || text.Contains("isatap") || text.Contains("6to4");
-                // "tun0", "utun3": the usual names of TUN adapters of proxy clients.
-                var tunName = n.Name.StartsWith("tun", StringComparison.OrdinalIgnoreCase) || n.Name.StartsWith("utun", StringComparison.OrdinalIgnoreCase);
-                return !transition && (n.NetworkInterfaceType == NetworkInterfaceType.Tunnel || tunName || TunnelMarks.Any(text.Contains))
+                return IsTunnelAdapter(n.Name, n.Description, n.NetworkInterfaceType)
                     ? $"трафик к {ip} идёт через адаптер «{n.Name}» ({n.Description})"
                     : null;
             }

@@ -446,6 +446,14 @@ public class DiagnosticsTests
     [InlineData("h3=\"alt.example:443\"", null)]
     [InlineData("clear", null)]
     public void Reads_http3_port_from_alt_svc(string header, int? port) => Assert.Equal(port, NetProbe.Http3PortOf(header));
+
+    [Fact]
+    public async Task A_trace_through_a_tunnel_says_the_path_is_hidden()
+    {
+        var r = await Run(new FakeProbe { Tunnel = "трафик идёт через адаптер «tun0»", Trace = [Hop(1, "104.16.1.1", ms: 116, reached: true)] });
+        Assert.Equal(StepStatus.Skipped, StepOf(r, "trace"));
+        Assert.Contains("через VPN путь до сервера не виден", r.Steps.Single(s => s.Id == "trace").Text);
+    }
 }
 
 public class OwnerNameTests

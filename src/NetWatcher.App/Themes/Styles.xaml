@@ -21,7 +21,28 @@
             </Trigger>
         </Style.Triggers>
     </Style>
-    <Style x:Key="TableRow" TargetType="DataGridRow" BasedOn="{StaticResource RowHighlight}" />
+    <!-- Our own row template: the Fluent one paints hover and selection itself and ignores Background.
+         Grids using it must not set RowBackground: DataGrid pushes it onto every row over these triggers. -->
+    <Style x:Key="TableRow" TargetType="DataGridRow" BasedOn="{StaticResource RowHighlight}">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="DataGridRow">
+                    <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}" SnapsToDevicePixels="True">
+                        <p:SelectiveScrollingGrid>
+                            <p:SelectiveScrollingGrid.RowDefinitions>
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </p:SelectiveScrollingGrid.RowDefinitions>
+                            <p:DataGridCellsPresenter ItemsPanel="{TemplateBinding ItemsPanel}" SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
+                            <p:DataGridDetailsPresenter Grid.Row="1" Visibility="{TemplateBinding DetailsVisibility}"
+                                                        p:SelectiveScrollingGrid.SelectiveScrollingOrientation="Vertical" />
+                        </p:SelectiveScrollingGrid>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
     <Style x:Key="TableCell" TargetType="DataGridCell">
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />

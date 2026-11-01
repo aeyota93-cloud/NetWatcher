@@ -25,7 +25,7 @@
             <TextBlock x:Name="Status" VerticalAlignment="Center" TextWrapping="Wrap" Style="{StaticResource Muted}" />
         </DockPanel>
         <DataGrid x:Name="Grid" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="None"
-                  BorderThickness="0" Background="Transparent" RowBackground="Transparent" AlternatingRowBackground="Transparent"
+                  BorderThickness="0" Background="Transparent"
                   CanUserResizeRows="False" SelectionMode="Extended" SelectionUnit="FullRow" RowStyle="{StaticResource TableRow}" CellStyle="{StaticResource TableCell}">
             <DataGrid.Columns>
                 <DataGridTextColumn Header="Приложение" Binding="{Binding Name}" Width="*" />

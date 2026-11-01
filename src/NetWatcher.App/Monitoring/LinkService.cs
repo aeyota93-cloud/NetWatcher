@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.NetworkInformation;
+using System.Buffers.Binary;
+using System.Runtime.InteropServices;
 using NetWatcher.App.Native;
 using NetWatcher.Core;
 using NetWatcher.Core.Diagnostics;
@@ -107,9 +109,11 @@ internal sealed class LinkService(AppState state) : IDisposable
     private int _internetMisses;
     private IPAddress? _gateway;
     private DateTime _gatewayAt = DateTime.MinValue;
+    private bool[] _internetViaVpn = new bool[InternetTargets.Length];
 
     /// <summary>The router and the internet reference point being pinged now, for the window.</summary>
     public (IPAddress? Gateway, IPAddress Internet) QualityTargets => (_gateway, InternetTargets[_internetTarget]);
+    public bool QualityInternetViaVpn => _internetViaVpn[_internetTarget];
 
     /// <summary>
     /// Every 2 seconds: ping the router (is the home network, often Wi-Fi, fine?) and an internet point (the
@@ -125,7 +129,10 @@ internal sealed class LinkService(AppState state) : IDisposable
                 {
                     if (DateTime.UtcNow - _gatewayAt > TimeSpan.FromMinutes(1))
                     {
-                        _gateway = DefaultGateway();
+                        var gateway = DefaultGateway();
+                        if (!Equals(_gateway, gateway)) state.Quality.ResetGateway();
+                        _gateway = gateway;
+                        _internetViaVpn = InternetTargets.Select(ip => state.Probe.TunnelTo(ip) != null).ToArray();
                         _gatewayAt = DateTime.UtcNow;
                     }
                     var now = DateTimeOffset.Now;
@@ -152,21 +159,74 @@ internal sealed class LinkService(AppState state) : IDisposable
         }
     }
 
-    /// <summary>IPv4 gateway of the first working network adapter that has one.</summary>
+    /// <summary>Home router, preferring the lowest default-route metric on Ethernet/Wi-Fi.</summary>
     private static IPAddress? DefaultGateway()
     {
         try
         {
-            return NetworkInterface.GetAllNetworkInterfaces()
-                .Where(n => n.OperationalStatus == OperationalStatus.Up && n.NetworkInterfaceType != NetworkInterfaceType.Loopback)
-                .SelectMany(n => n.GetIPProperties().GatewayAddresses)
-                .Select(g => g.Address)
-                .FirstOrDefault(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork && !a.Equals(IPAddress.Any));
+            var routes = DefaultRoutes();
+            var adapters = new List<QualityAdapter>();
+            foreach (var n in NetworkInterface.GetAllNetworkInterfaces())
+            {
+                if (n.OperationalStatus != OperationalStatus.Up
+                    || n.NetworkInterfaceType is not (NetworkInterfaceType.Ethernet or NetworkInterfaceType.Wireless80211)
+                    || NetProbe.IsTunnelAdapter(n.Name, n.Description, n.NetworkInterfaceType)) continue;
+                try
+                {
+                    var props = n.GetIPProperties();
+                    var index = props.GetIPv4Properties()?.Index;
+                    // Keep each gateway paired with its route metric, including on adapters with several gateways.
+                    foreach (var g in props.GatewayAddresses)
+                    {
+                        var metric = routes.Where(r => r.Index == index && r.Gateway.Equals(g.Address))
+                            .Select(r => (uint?)r.Metric).Min();
+                        adapters.Add(new QualityAdapter(n.Name, n.Description, n.NetworkInterfaceType,
+                            true, [g.Address], metric));
+                    }
+                }
+                catch (NetworkInformationException)
+                {
+                    // A disappearing adapter must not hide the other candidates.
+                }
+            }
+            return QualityMonitor.SelectGateway(adapters);
         }
         catch (NetworkInformationException)
         {
             return null;
         }
+    }
+
+    [DllImport("iphlpapi.dll")]
+    private static extern uint GetIpForwardTable([Out] byte[]? table, ref int size, [MarshalAs(UnmanagedType.Bool)] bool order);
+
+    private sealed record DefaultRoute(uint Index, IPAddress Gateway, uint Metric);
+
+    private static List<DefaultRoute> DefaultRoutes()
+    {
+        var routes = new List<DefaultRoute>();
+        var size = 0;
+        if (GetIpForwardTable(null, ref size, false) != 122) return routes; // ERROR_INSUFFICIENT_BUFFER
+        // The table may grow between calls if a VPN is connecting.
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            var buffer = new byte[size];
+            var result = GetIpForwardTable(buffer, ref size, false);
+            if (result == 122) continue;
+            if (result != 0) return routes;
+            // MIB_IPFORWARDTABLE: DWORD count, then rows of 14 DWORDs (MIB_IPFORWARDROW).
+            var count = BinaryPrimitives.ReadUInt32LittleEndian(buffer);
+            for (var i = 0; i < count && 4L + (i + 1L) * 56 <= buffer.Length; i++)
+            {
+                var row = buffer.AsSpan(4 + i * 56, 56);
+                uint Field(int offset) => BinaryPrimitives.ReadUInt32LittleEndian(buffer.AsSpan(4 + i * 56 + offset, 4));
+                if (Field(0) != 0 || Field(4) != 0 || Field(20) == 2) continue; // default, not invalid
+                // Metric1 already includes the interface metric on Windows Vista and later.
+                routes.Add(new DefaultRoute(Field(16), new IPAddress(row.Slice(12, 4)), Field(36)));
+            }
+            return routes;
+        }
+        return routes;
     }
 
     private static async Task<double?> PingRtt(IPAddress ip, CancellationToken ct)

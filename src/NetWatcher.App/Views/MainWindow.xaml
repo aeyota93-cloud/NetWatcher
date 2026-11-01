@@ -552,10 +552,9 @@
                         <Grid>
                             <DataGrid x:Name="Grid" PreviewMouseDown="OnTableMouseDown" ItemsSource="{Binding Table}" SelectedItem="{Binding SelectedItem}"
                                       Visibility="{Binding IsTableTab, Converter={StaticResource BoolToVis}}"
-                                      Tag="{Binding}" ContextMenu="{StaticResource RowMenu}"
+                                      Tag="{Binding}" ContextMenu="{StaticResource RowMenu}" ContextMenuOpening="OnTableMenuOpening"
                                       AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Extended" SelectionUnit="FullRow"
                                       HeadersVisibility="Column" GridLinesVisibility="None" BorderThickness="0" Background="Transparent"
-                                      RowBackground="Transparent" AlternatingRowBackground="Transparent"
                                       CanUserSortColumns="{Binding IsAddressesTab}" CanUserResizeRows="False" CanUserReorderColumns="False"
                                       RowStyle="{StaticResource AddressRowStyle}" CellStyle="{StaticResource CellStyle}" ColumnHeaderStyle="{StaticResource HeaderStyle}"
                                       EnableRowVirtualization="True" VirtualizingPanel.VirtualizationMode="Recycling"
@@ -589,6 +588,12 @@
                                                                 Visibility="{Binding IsGroup, Converter={StaticResource BoolToVis}}" ToolTip="Показать адреса" />
                                                     </Grid>
                                                     <Border Width="24" Visibility="{Binding IsChild, Converter={StaticResource BoolToVis}}" />
+                                                    <!-- Row actions next to what they act on, at the right edge of «Куда». -->
+                                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0,0,0" Style="{StaticResource RowActions}">
+                                                        <Button Style="{StaticResource BtnGhost}" Content="&#xE8C8;" ToolTip="Копировать IP"
+                                                                Command="{Binding Data.CopyIpCommand, Source={StaticResource Proxy}}" CommandParameter="{Binding}" />
+                                                        <Button Style="{StaticResource BtnGhost}" Content="&#xE712;" ToolTip="Ещё действия" Click="OnRowMore" />
+                                                    </StackPanel>
                                                     <!-- Domain above, address below: in one line a long domain pushed the address out of the cell. -->
                                                     <StackPanel VerticalAlignment="Center">
                                                         <TextBox Text="{Binding DomainText, Mode=OneWay}" ToolTip="{Binding DomainText}"
@@ -686,23 +691,12 @@
                                         </DataGridTemplateColumn.CellTemplate>
                                     </DataGridTemplateColumn>
                                     <DataGridTextColumn Header="Когда" Binding="{Binding When}" SortMemberPath="LastSeen" Width="92" />
-                                    <DataGridTemplateColumn Width="70" CanUserSort="False">
-                                        <DataGridTemplateColumn.CellTemplate>
-                                            <DataTemplate DataType="{x:Type vm:TableItem}">
-                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Style="{StaticResource RowActions}">
-                                                    <Button Style="{StaticResource BtnGhost}" Content="&#xE8C8;" ToolTip="Копировать IP"
-                                                            Command="{Binding Data.CopyIpCommand, Source={StaticResource Proxy}}" CommandParameter="{Binding}" />
-                                                    <Button Style="{StaticResource BtnGhost}" Content="&#xE712;" ToolTip="Ещё действия" Click="OnRowMore" />
-                                                </StackPanel>
-                                            </DataTemplate>
-                                        </DataGridTemplateColumn.CellTemplate>
-                                    </DataGridTemplateColumn>
                                 </DataGrid.Columns>
                             </DataGrid>
 
                             <DataGrid ItemsSource="{Binding DnsItems}" Visibility="{Binding IsDnsTab, Converter={StaticResource BoolToVis}}"
                                       AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="None"
-                                      BorderThickness="0" Background="Transparent" RowBackground="Transparent" AlternatingRowBackground="Transparent"
+                                      BorderThickness="0" Background="Transparent"
                                       RowStyle="{StaticResource RowStyle}" CellStyle="{StaticResource CellStyle}" ColumnHeaderStyle="{StaticResource HeaderStyle}"
                                       EnableRowVirtualization="True" ClipboardCopyMode="ExcludeHeader">
                                 <DataGrid.Columns>
@@ -898,7 +892,8 @@
                                                 <ListBox x:Name="ServerList" ItemsSource="{Binding LinkServers}" SelectedItem="{Binding SelectedLinkServer}"
                                                          BorderThickness="0" Background="Transparent" Padding="0"
                                                          ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled"
-                                                         PreviewMouseDown="OnServerMouseDown">
+                                                         PreviewMouseDown="OnServerMouseDown"
+                                                         ContextMenuOpening="OnServerMenuOpening" ContextMenuClosing="OnServerMenuClosing">
                                                     <ListBox.ItemContainerStyle>
                                                         <Style TargetType="ListBoxItem" BasedOn="{StaticResource ListRow}">
                                                             <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}" />
@@ -1781,6 +1776,9 @@
                                     <TextBlock DockPanel.Dock="Right" Style="{StaticResource Caption}"><Run Text="проб на узел: " /><Run Text="{Binding Rounds, Mode=OneWay}" /></TextBlock>
                                     <TextBlock Text="ТРАССА — ПУТЬ ПАКЕТОВ ПО УЗЛАМ (КАК MTR)" Style="{StaticResource Caption}" />
                                 </DockPanel>
+                                <TextBlock Style="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,6" FontWeight="SemiBold"
+                                           Visibility="{Binding HasVpn, Converter={StaticResource BoolToVis}}"
+                                           Text="Проверка шла через VPN: трасса показывает туннель, а не путь до сервера через провайдера." />
                                 <TextBlock Style="{StaticResource Faint}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,6"
                                            Text="«*» — узел не отвечает. Потери на промежуточном узле, которые не продолжаются дальше, — это роутер ограничивает ответы, а не проблема. Важны потери, которые тянутся до последнего узла. «(+1)» — на этом шаге отвечают разные роутеры (балансировка)." />
                                 <Border Style="{StaticResource Card}" Padding="0">

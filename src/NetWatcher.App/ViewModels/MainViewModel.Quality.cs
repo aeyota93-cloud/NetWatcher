@@ -65,16 +65,22 @@ internal sealed partial class MainViewModel
         OnPropertyChanged(nameof(QualityOn));
         var now = DateTimeOffset.Now;
         var test = _state.LastLoadTest is { } t && now - t.Time < TimeSpan.FromHours(1) ? t : null;
-        var r = _state.Quality.Report(now, QualityWindow, test?.DownBps, test?.UpBps, test?.IncreaseMs);
+        var trafficAvailable = _state.Collector.KernelCapture;
+        var r = _state.Quality.Report(now, QualityWindow, test?.DownBps, test?.UpBps, test?.IncreaseMs, trafficAvailable);
         var (gateway, internet) = _state.LinkService.QualityTargets;
+        var viaVpn = _state.LinkService.QualityInternetViaVpn;
 
         QualityGatewayLabel = gateway != null ? $"До роутера ({gateway})" : "До роутера";
-        QualityGateway = gateway == null && r.Gateway.Samples == 0 ? "роутер не найден" : PathText(r.Gateway);
-        QualityInternetLabel = $"До интернета ({internet})";
+        QualityGateway = gateway == null ? "роутер не найден" : PathText(r.Gateway);
+        QualityInternetLabel = viaVpn ? $"До интернета через VPN ({internet})" : $"До интернета ({internet})";
         QualityInternet = PathText(r.Internet);
 
         var load = r.Load;
-        if (test?.IncreaseMs is { } testInc)
+        if (!trafficAvailable)
+            QualityLoad = _state.Collector.IsElevated
+                ? "нагрузка не видна: сетевые события ядра недоступны"
+                : "нагрузка не видна без прав администратора";
+        else if (test?.IncreaseMs is { } testInc)
             QualityLoad = $"+{testInc:0} мс — {Aim.IncreaseText(testInc)} (тест в {test.Time.LocalDateTime:HH:mm})";
         else if (load.IncreaseMs is { } inc)
         {
@@ -95,6 +101,7 @@ internal sealed partial class MainViewModel
             + "\nМетодика Cloudflare AIM: задержка, разброс, потери, рост задержки под нагрузкой, скорость")));
 
         QualityHint = Hint(r, test);
+        if (viaVpn) QualityHint = "Задержка до интернета включает VPN." + (QualityHint.Length > 0 ? " " + QualityHint : "");
         QualityTest = test == null ? "" :
             $"Тест в {test.Time.LocalDateTime:HH:mm}: ↓ {Speed(test.DownBps)}, ↑ {Speed(test.UpBps)}; задержка {Ms(test.Idle.LatencyMs)}, "
             + $"при скачивании {Ms(test.DownLoaded.LatencyMs)}, при отправке {Ms(test.UpLoaded.LatencyMs)} · {test.Server}";

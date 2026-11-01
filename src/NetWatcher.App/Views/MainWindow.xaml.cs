@@ -152,11 +152,25 @@ internal partial class MainWindow : Window
         row.IsSelected = true;
     }
 
+    // The server rows are rebuilt every refresh; rebuilding the row under an open menu would close it.
+    private void OnServerMenuOpening(object sender, ContextMenuEventArgs e) => _vm.HoldServerList = true;
+
+    private void OnServerMenuClosing(object sender, ContextMenuEventArgs e) => _vm.HoldServerList = false;
+
     private static TextBox? FindTextBox(DependencyObject source)
     {
         for (DependencyObject? current = source; current != null; current = System.Windows.Media.VisualTreeHelper.GetParent(current))
             if (current is TextBox text) return text;
         return null;
+    }
+
+    // «⋯» moves the shared row menu under itself; a right-click must open it at the mouse again.
+    private void OnTableMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        var menu = Grid.ContextMenu;
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
+        menu.HorizontalOffset = 0;
+        menu.VerticalOffset = 0;
     }
 
     private void OnRowMore(object sender, RoutedEventArgs e)

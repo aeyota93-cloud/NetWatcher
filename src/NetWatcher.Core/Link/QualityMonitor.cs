@@ -1,4 +1,13 @@
+using System.Net;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
+using NetWatcher.Core.Diagnostics;
+
 namespace NetWatcher.Core.Link;
+
+/// <summary>A network snapshot; a missing metric sorts after known default-route metrics.</summary>
+public sealed record QualityAdapter(string Name, string Description, NetworkInterfaceType Type,
+    bool IsUp, IReadOnlyList<IPAddress> Gateways, uint? DefaultRouteMetric);
 
 /// <summary>Latency of a reference point: median, jitter (mean step between neighbours), loss ratio.</summary>
 public sealed record PathStats(double? LatencyMs, double? JitterMs, double Loss, int Samples)
@@ -30,6 +39,15 @@ public sealed record QualityReport(PathStats Gateway, PathStats Internet, LoadSt
 /// </summary>
 public sealed class QualityMonitor(TimeSpan history)
 {
+    /// <summary>Selects a home router without consulting the network or accepting a VPN gateway.</summary>
+    public static IPAddress? SelectGateway(IEnumerable<QualityAdapter> adapters) => adapters
+        .Where(a => a.IsUp && a.Type is NetworkInterfaceType.Ethernet or NetworkInterfaceType.Wireless80211
+            && !NetProbe.IsTunnelAdapter(a.Name, a.Description, a.Type))
+        .OrderBy(a => a.DefaultRouteMetric ?? uint.MaxValue)
+        .SelectMany(a => a.Gateways)
+        .FirstOrDefault(ip => ip.AddressFamily == AddressFamily.InterNetwork
+            && !ip.Equals(IPAddress.Any) && !IPAddress.IsLoopback(ip));
+
     /// <summary>Traffic under these rates is never "load": a few web pages are not a test of the line.</summary>
     public const double MinDownLoadBps = 2e6, MinUpLoadBps = 1e6;
 
@@ -38,6 +56,11 @@ public sealed class QualityMonitor(TimeSpan history)
     private readonly List<(DateTimeOffset Time, double? Rtt)> _internet = [];
     private readonly List<(DateTimeOffset Time, double InBps, double OutBps)> _traffic = [];
     private DateTimeOffset? _lastTraffic;
+
+    public void ResetGateway()
+    {
+        lock (_lock) _gateway.Clear();
+    }
 
     public void AddPing(bool gateway, DateTimeOffset time, double? rttMs)
     {
@@ -64,14 +87,15 @@ public sealed class QualityMonitor(TimeSpan history)
         }
     }
 
-    public QualityReport Report(DateTimeOffset now, TimeSpan window, double? downloadBps = null, double? uploadBps = null, double? testIncreaseMs = null)
+    public QualityReport Report(DateTimeOffset now, TimeSpan window, double? downloadBps = null, double? uploadBps = null, double? testIncreaseMs = null,
+        bool trafficAvailable = true)
     {
         lock (_lock)
         {
             var from = now - window;
             var gateway = Stats(_gateway.Where(p => p.Time >= from).ToList());
             var pings = _internet.Where(p => p.Time >= from).ToList();
-            var traffic = _traffic.Where(t => t.Time >= from).ToList();
+            var traffic = trafficAvailable ? _traffic.Where(t => t.Time >= from).ToList() : [];
             var load = Load(pings, traffic);
 
             // Latency and jitter as AIM wants them: unloaded. Without enough idle samples, all of them.

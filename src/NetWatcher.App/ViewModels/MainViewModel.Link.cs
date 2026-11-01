@@ -30,6 +30,9 @@ internal sealed partial class MainViewModel
 {
     private DispatcherTimer? _linkTimer;
 
+    /// <summary>A context menu is open over the server list: keep its rows until it closes.</summary>
+    public bool HoldServerList { get; set; }
+
     private LinkServerView? _selectedLinkServer;
     public LinkServerView? SelectedLinkServer
     {
@@ -243,7 +246,7 @@ internal sealed partial class MainViewModel
         LinkChart = p.Chart;
 
         var selectedServerKey = SelectedLinkServer?.Key;
-        Replace(LinkServers, p.Servers.Select(s =>
+        if (!HoldServerList) Replace(LinkServers, p.Servers.Select(s =>
         {
             var name = ServerName(s.Ip, p.Process);
             var country = _state.Geo.Lookup(s.Ip) is { Length: > 0 } g ? g : _state.Asn.Lookup(s.Ip)?.Country ?? "";

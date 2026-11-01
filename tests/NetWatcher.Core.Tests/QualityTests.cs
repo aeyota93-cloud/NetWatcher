@@ -84,6 +84,17 @@ public class QualityTests
         var withTest = q.Report(t0.AddSeconds(91), TimeSpan.FromMinutes(10), 95e6, 40e6, 8);
         Assert.Contains(withTest.Scores, x => x.Experience == "streaming");
         Assert.True(Of(withTest.Scores.ToList(), "gaming")!.Class >= AimClass.Good);
+
+        // Stale traffic must not turn unavailable kernel capture into a known load or AIM score.
+        var unavailable = q.Report(t0.AddSeconds(91), TimeSpan.FromMinutes(10), trafficAvailable: false);
+        Assert.Equal(LoadStats.Empty, unavailable.Load);
+        Assert.Empty(unavailable.Scores);
+        Assert.NotNull(unavailable.Internet.LatencyMs);
+
+        // An explicit load test measures the increase without kernel capture.
+        var testedWithoutCapture = q.Report(t0.AddSeconds(91), TimeSpan.FromMinutes(10), 95e6, 40e6, 8, trafficAvailable: false);
+        Assert.Equal(LoadStats.Empty, testedWithoutCapture.Load);
+        Assert.Equal(3, testedWithoutCapture.Scores.Count);
     }
 
     [Fact]

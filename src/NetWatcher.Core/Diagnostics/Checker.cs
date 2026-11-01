@@ -359,6 +359,10 @@ public static class Checker
             ? $"подключение за {report.Tcp!.Ms:0} мс и трасса в один узел до публичного адреса — так отвечает локальный VPN или прокси"
             : null;
 
+        // A tunnel answers the probes itself: one hop is the VPN, not the way to the server.
+        if (report.Tunnel != null && trace.Reached && report.Hops.Count <= 1)
+            Step("trace", "Трасса", StepStatus.Skipped, "через VPN путь до сервера не виден: туннель отвечает за весь путь сразу");
+
         Step("mtu", "Размер пакетов (MTU)", StepStatus.Running, "ищем самый большой проходящий пакет…");
         report.Mtu = await probe.MtuAsync(ip, ct).ConfigureAwait(false);
         var (ms, mt) = Verdicts.DescribeMtu(report.Mtu);
