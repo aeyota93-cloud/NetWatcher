@@ -106,9 +106,8 @@ internal sealed partial class MainViewModel
         ? _state.Settings.NotifyAll
         : _state.Settings.NotifyAll || _state.Settings.NotifyPrograms.Contains(SelectedNav.Key);
 
-    public string NotifyText => NotifyOn
-        ? "Уведомления включены"
-        : SelectedNav is null or { IsAll: true } ? "Уведомлять о пропаже связи у любой программы" : "Уведомлять о пропаже связи";
+    // Short on purpose: the header shares its line with the program's name. The tooltip says the rest.
+    public string NotifyText => NotifyOn ? "Уведомления включены" : "Уведомлять о сбоях";
 
     private void ToggleNotify()
     {
@@ -174,6 +173,7 @@ internal sealed partial class MainViewModel
     private bool ApplyNoCapture()
     {
         if (_state.Collector.KernelCapture) return false;
+        LinkNoData = false; // "the program sent nothing" would contradict "we cannot see what it sends"
         LinkLevel = "Idle";
         LinkTitle = "Монитор связи не работает";
         LinkSubtitle = _state.Collector.IsElevated

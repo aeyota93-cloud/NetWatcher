@@ -161,8 +161,8 @@
                              Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
                              AutomationProperties.Name="Поиск"
                              ToolTip="Ищет по программе, службе, IP, порту, домену, владельцу и стране. Несколько слов — все должны совпасть. 142.250.0.0/15 — адреса внутри подсети." />
-                    <TextBlock Grid.Column="1" Text="Программа, служба, домен, IP или подсеть 10.0.0.0/8" Style="{StaticResource Faint}"
-                               FontSize="14" VerticalAlignment="Center" IsHitTestVisible="False"
+                    <TextBlock Grid.Column="1" Text="Программа, домен, IP или подсеть" Style="{StaticResource Faint}"
+                               FontSize="14" VerticalAlignment="Center" IsHitTestVisible="False" TextTrimming="CharacterEllipsis" Margin="0,0,8,0"
                                Visibility="{Binding HasSearch, Converter={StaticResource NotVis}}" />
                     <Border Grid.Column="2" BorderBrush="{DynamicResource Stroke2Brush}" BorderThickness="1" CornerRadius="4" Padding="5,1"
                             Visibility="{Binding HasSearch, Converter={StaticResource NotVis}}">
@@ -451,7 +451,7 @@
                             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                                 <Button Style="{StaticResource BtnSmall}" Margin="0,0,8,0" Command="{Binding ToggleNotifyCommand}"
                                         Visibility="{Binding IsLinkTab, Converter={StaticResource BoolToVis}}"
-                                        ToolTip="Уведомление Windows, когда сервер программы перестаёт отвечать, и когда связь возвращается">
+                                        ToolTip="Уведомление Windows, когда сервер программы перестаёт отвечать, и когда связь возвращается. В «Все программы» — для любой программы">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="&#xEA8F;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,6,0" />
                                         <TextBlock Text="{Binding NotifyText}" />
@@ -477,13 +477,14 @@
                                 </Button>
                             </StackPanel>
                             <Grid Width="36" Height="36" Margin="0,0,12,0" VerticalAlignment="Center">
-                                <Border CornerRadius="8" Background="{DynamicResource AccentBrush}" Visibility="{Binding ShowProgramColumn, Converter={StaticResource BoolToVis}}">
+                                <!-- The same switch as in the list on the left: the globe for "Все", the avatar for a program. -->
+                                <Border CornerRadius="8" Background="{DynamicResource AccentBrush}" Visibility="{Binding HeaderNav.IsAll, Converter={StaticResource BoolToVis}}">
                                     <TextBlock Text="&#xE774;" Style="{StaticResource Icon}" FontSize="18" Foreground="{DynamicResource OnAccentBrush}" />
                                 </Border>
                                 <ContentPresenter Content="{Binding HeaderNav}" ContentTemplate="{StaticResource Avatar}"
-                                                  Visibility="{Binding ShowProgramColumn, Converter={StaticResource NotVis}}" />
+                                                  Visibility="{Binding HeaderNav.IsAll, Converter={StaticResource NotVis}}" />
                             </Grid>
-                            <StackPanel VerticalAlignment="Center">
+                            <StackPanel VerticalAlignment="Center" ToolTip="{Binding HeaderTitle}">
                                 <TextBlock Text="{Binding HeaderTitle}" FontSize="18" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                                 <TextBlock Text="{Binding HeaderSubtitle}" Style="{StaticResource Faint}" FontSize="12" TextTrimming="CharacterEllipsis" />
                             </StackPanel>
@@ -525,10 +526,10 @@
                                       EnableRowVirtualization="True" VirtualizingPanel.VirtualizationMode="Recycling"
                                       ClipboardCopyMode="None" MouseDoubleClick="OnRowDoubleClick">
                                 <DataGrid.Columns>
-                                    <DataGridTemplateColumn Header="Куда" Width="2.2*" SortMemberPath="DomainText">
+                                    <DataGridTemplateColumn Header="Куда" Width="2.2*" MinWidth="170" SortMemberPath="DomainText">
                                         <DataGridTemplateColumn.CellTemplate>
                                             <DataTemplate DataType="{x:Type vm:TableItem}">
-                                                <StackPanel Orientation="Horizontal">
+                                                <DockPanel>
                                                     <TextBlock Width="18" FontFamily="{StaticResource IconFont}" FontSize="13" VerticalAlignment="Center"
                                                                ToolTip="{Binding HealthReason}">
                                                         <TextBlock.Style>
@@ -553,46 +554,52 @@
                                                                 Visibility="{Binding IsGroup, Converter={StaticResource BoolToVis}}" ToolTip="Показать адреса" />
                                                     </Grid>
                                                     <Border Width="24" Visibility="{Binding IsChild, Converter={StaticResource BoolToVis}}" />
-                                                    <TextBlock Text="{Binding DomainText}" VerticalAlignment="Center" Margin="0,0,8,0" TextTrimming="CharacterEllipsis">
-                                                        <TextBlock.Style>
-                                                            <Style TargetType="TextBlock">
-                                                                <Setter Property="FontWeight" Value="SemiBold" />
-                                                                <Style.Triggers>
-                                                                    <DataTrigger Binding="{Binding HasDomain}" Value="False">
-                                                                        <Setter Property="FontWeight" Value="Normal" />
-                                                                        <Setter Property="Foreground" Value="{DynamicResource Text3Brush}" />
-                                                                    </DataTrigger>
-                                                                </Style.Triggers>
-                                                            </Style>
-                                                        </TextBlock.Style>
-                                                    </TextBlock>
-                                                    <TextBlock Text="{Binding Ip}" VerticalAlignment="Center" FontFamily="{StaticResource MonoFont}" FontSize="12.5">
-                                                        <TextBlock.Style>
-                                                            <Style TargetType="TextBlock">
-                                                                <Setter Property="Foreground" Value="{DynamicResource Text3Brush}" />
-                                                                <Style.Triggers>
-                                                                    <DataTrigger Binding="{Binding IsChild}" Value="True">
-                                                                        <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
-                                                                    </DataTrigger>
-                                                                    <DataTrigger Binding="{Binding IsGroup}" Value="True">
-                                                                        <Setter Property="FontFamily" Value="Segoe UI" />
-                                                                        <Setter Property="FontSize" Value="13" />
-                                                                    </DataTrigger>
-                                                                </Style.Triggers>
-                                                            </Style>
-                                                        </TextBlock.Style>
-                                                    </TextBlock>
-                                                    <Border Style="{StaticResource NewBadge}" Visibility="{Binding IsNew, Converter={StaticResource BoolToVis}}"
-                                                            ToolTip="Программа впервые пошла сюда за последние сутки">
-                                                        <TextBlock Text="НОВОЕ" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource NewBrush}" />
-                                                    </Border>
-                                                </StackPanel>
+                                                    <!-- Domain above, address below: in one line a long domain pushed the address out of the cell. -->
+                                                    <StackPanel VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding DomainText}" ToolTip="{Binding DomainText}" TextTrimming="CharacterEllipsis"
+                                                                   Visibility="{Binding DomainText, Converter={StaticResource TextVis}}">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Setter Property="FontWeight" Value="SemiBold" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding HasDomain}" Value="False">
+                                                                            <Setter Property="FontWeight" Value="Normal" />
+                                                                            <Setter Property="Foreground" Value="{DynamicResource Text3Brush}" />
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                        <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="{Binding Ip}" VerticalAlignment="Center" FontFamily="{StaticResource MonoFont}" FontSize="12.5">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Setter Property="Foreground" Value="{DynamicResource Text3Brush}" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsChild}" Value="True">
+                                                                            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding IsGroup}" Value="True">
+                                                                            <Setter Property="FontFamily" Value="Segoe UI" />
+                                                                            <Setter Property="FontSize" Value="13" />
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                        <Border Style="{StaticResource NewBadge}" Visibility="{Binding IsNew, Converter={StaticResource BoolToVis}}"
+                                                                ToolTip="Программа впервые пошла сюда за последние сутки">
+                                                            <TextBlock Text="НОВОЕ" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource NewBrush}" />
+                                                        </Border>
+                                                        </StackPanel>
+                                                    </StackPanel>
+                                                </DockPanel>
                                             </DataTemplate>
                                         </DataGridTemplateColumn.CellTemplate>
                                     </DataGridTemplateColumn>
-                                    <DataGridTextColumn Header="Программа" Binding="{Binding Program}" Width="1.1*"
+                                    <DataGridTextColumn Header="Программа" Binding="{Binding Program}" Width="1.1*" MinWidth="80"
                                                         Visibility="{Binding Data.ShowProgramColumn, Source={StaticResource Proxy}, Converter={StaticResource BoolToVis}}" />
-                                    <DataGridTemplateColumn Header="Порт" Width="118">
+                                    <DataGridTemplateColumn Header="Порт" Width="100">
                                         <DataGridTemplateColumn.CellTemplate>
                                             <DataTemplate DataType="{x:Type vm:TableItem}">
                                                 <ItemsControl ItemsSource="{Binding Ports}">
@@ -612,7 +619,7 @@
                                             </DataTemplate>
                                         </DataGridTemplateColumn.CellTemplate>
                                     </DataGridTemplateColumn>
-                                    <DataGridTemplateColumn Header="Владелец" Width="1.5*" SortMemberPath="Owner">
+                                    <DataGridTemplateColumn Header="Владелец" Width="1.5*" MinWidth="100" SortMemberPath="Owner">
                                         <DataGridTemplateColumn.CellTemplate>
                                             <DataTemplate DataType="{x:Type vm:TableItem}">
                                                 <StackPanel Orientation="Horizontal" ToolTip="{Binding OwnerRaw}">
@@ -624,7 +631,7 @@
                                             </DataTemplate>
                                         </DataGridTemplateColumn.CellTemplate>
                                     </DataGridTemplateColumn>
-                                    <DataGridTextColumn Header="Сеть" Binding="{Binding Network}" Width="150" FontFamily="{StaticResource MonoFont}" />
+                                    <DataGridTextColumn Header="Сеть" Binding="{Binding Network}" Width="130" FontFamily="{StaticResource MonoFont}" />
                                     <DataGridTextColumn Header="Когда" Binding="{Binding When}" SortMemberPath="LastSeen" Width="92" />
                                     <DataGridTemplateColumn Width="70" CanUserSort="False">
                                         <DataGridTemplateColumn.CellTemplate>
@@ -850,17 +857,18 @@
                                                                         <ColumnDefinition Width="84" />
                                                                         <ColumnDefinition Width="1.3*" />
                                                                     </Grid.ColumnDefinitions>
+                                                                    <!-- Name on top, address and owner below: in one line a long name hid the address. -->
                                                                     <StackPanel Margin="0,0,8,0">
-                                                                        <TextBlock TextTrimming="CharacterEllipsis">
-                                                                            <Run Text="{Binding Title, Mode=OneWay}" FontWeight="SemiBold" /><Run Text="  " /><Run Text="{Binding Address, Mode=OneWay}" FontFamily="{StaticResource MonoFont}" Foreground="{DynamicResource Text3Brush}" />
+                                                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                                                        <TextBlock FontSize="12" TextTrimming="CharacterEllipsis">
+                                                                            <Run Text="{Binding Address, Mode=OneWay}" FontFamily="{StaticResource MonoFont}" Foreground="{DynamicResource Text2Brush}" /><Run Text="  " /><Run Text="{Binding Owner, Mode=OneWay}" Foreground="{DynamicResource Text3Brush}" />
                                                                         </TextBlock>
-                                                                        <TextBlock Text="{Binding Owner}" Style="{StaticResource Muted}" FontSize="12" TextTrimming="CharacterEllipsis" />
                                                                     </StackPanel>
                                                                     <Border Grid.Column="1" Style="{StaticResource Tag}" HorizontalAlignment="Left">
                                                                         <TextBlock Text="{Binding Proto}" FontSize="11" Foreground="{DynamicResource Text2Brush}" />
                                                                     </Border>
-                                                                    <Border Grid.Column="2" Style="{StaticResource StatePill}">
-                                                                        <TextBlock Text="{Binding State}" Style="{StaticResource StateText}" />
+                                                                    <Border Grid.Column="2" Style="{StaticResource StatePill}" ToolTip="{Binding State}">
+                                                                        <TextBlock Text="{Binding State}" Style="{StaticResource StateText}" TextTrimming="CharacterEllipsis" />
                                                                     </Border>
                                                                     <TextBlock Grid.Column="3" Text="{Binding Latency}" VerticalAlignment="Center" />
                                                                     <TextBlock Grid.Column="4" Text="{Binding Jitter}" VerticalAlignment="Center" />
@@ -877,7 +885,7 @@
                                                                         </TextBlock.Style>
                                                                     </TextBlock>
                                                                     <TextBlock Grid.Column="6" Text="{Binding LastAnswer}" VerticalAlignment="Center" />
-                                                                    <TextBlock Grid.Column="7" Text="{Binding Traffic}" FontFamily="{StaticResource MonoFont}" FontSize="12" VerticalAlignment="Center" />
+                                                                    <TextBlock Grid.Column="7" Text="{Binding Traffic}" FontFamily="{StaticResource MonoFont}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                                                                 </Grid>
                                                             </Border>
                                                         </DataTemplate>
