@@ -31,6 +31,13 @@ public static class TextFormat
         return $"{text} {units[u]}";
     }
 
+    /// <summary>"↓ 1,2 МБ ↑ 80 КБ"; empty when nothing went either way.</summary>
+    public static string Traffic(long bytesIn, long bytesOut) =>
+        bytesIn == 0 && bytesOut == 0 ? "" : $"↓ {Bytes(bytesIn)}  ↑ {Bytes(bytesOut)}";
+
+    /// <summary>"1,2 МБ/с" from bytes over a number of seconds.</summary>
+    public static string Rate(long bytes, double seconds) => seconds <= 0 ? "" : Bytes((long)(bytes / seconds)) + "/с";
+
     /// <summary>"сейчас", "5 мин", "14:32", "28.10 14:32".</summary>
     public static string Relative(DateTimeOffset now, DateTimeOffset time, TimeSpan liveWindow)
     {

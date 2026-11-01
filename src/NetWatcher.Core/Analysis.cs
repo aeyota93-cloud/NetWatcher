@@ -27,12 +27,16 @@ public static class Analysis
         IEnumerable<DestinationRow> rows,
         DnsIndex dns,
         AsnDatabase asn,
-        IReadOnlyDictionary<string, string> serviceDisplayNames)
+        IReadOnlyDictionary<string, string> serviceDisplayNames,
+        Geo.GeoDatabase? geo = null,
+        Catalog.DomainCatalog? catalog = null)
     {
         foreach (var row in rows)
         {
             row.Domains = dns.Get(row.RemoteIp, row.Process);
             row.Asn = asn.Lookup(row.RemoteIp);
+            row.ServerCountry = geo?.Lookup(row.RemoteIp) ?? "";
+            row.Catalog = catalog?.Lookup(row.Domains);
             row.ServicesDisplay = ServicesDisplay(row.Services, serviceDisplayNames);
         }
     }
@@ -97,6 +101,20 @@ public static class Analysis
     {
         foreach (var r in rows)
             r.IsNew = since is { } s && firstSeen.TryGetValue(r.Key, out var first) && first >= s;
+    }
+
+    /// <summary>
+    /// Replaces the hourly totals of the log with exact numbers for a short period
+    /// (keys as in <see cref="DestinationRow.Key"/>); rows without traffic get zero.
+    /// </summary>
+    public static void ApplyTraffic(IEnumerable<DestinationRow> rows, IReadOnlyDictionary<string, (long Out, long In)> traffic)
+    {
+        foreach (var r in rows)
+        {
+            var (o, i) = traffic.GetValueOrDefault(r.Key);
+            r.BytesOut = o;
+            r.BytesIn = i;
+        }
     }
 
     /// <summary>Distinct addresses of the rows, sorted, one per line.</summary>

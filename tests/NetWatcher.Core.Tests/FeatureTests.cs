@@ -139,7 +139,7 @@ public class FeatureTests
             var now = DateTimeOffset.UtcNow;
             store.Write([
                 new Observation("a.exe", "", "", "TCP", IPAddress.Parse("1.1.1.1"), 443, now.AddHours(-3)),
-                new Observation("a.exe", "", "", "TCP", IPAddress.Parse("1.1.1.1"), 443, now),
+                new Observation("a.exe", "", "", "TCP", IPAddress.Parse("1.1.1.1"), 443, now, BytesOut: 100, BytesIn: 5000),
                 new Observation("svchost.exe", "BITS", "", "TCP", IPAddress.Parse("2.2.2.2"), 80, now),
             ], []);
 
@@ -149,10 +149,17 @@ public class FeatureTests
             Assert.Equal(now.AddHours(-3).ToUnixTimeMilliseconds(), store.LogStart()!.Value.ToUnixTimeMilliseconds());
 
             var activity = store.Activity(now, 7);
-            Assert.Equal(7, activity["a.exe"].Length);
-            Assert.Equal(1, activity["a.exe"][6]);
-            Assert.Equal(1, activity["a.exe"][3]);
-            Assert.Equal(1, activity["svchost.exe · BITS"][6]);
+            Assert.Equal(7, activity["a.exe"].Destinations.Length);
+            Assert.Equal(1, activity["a.exe"].Destinations[6]);
+            Assert.Equal(1, activity["a.exe"].Destinations[3]);
+            Assert.Equal(5100, activity["a.exe"].Bytes[6]);
+            Assert.Equal(0, activity["a.exe"].Bytes[3]);
+            Assert.Equal(1, activity["svchost.exe · BITS"].Destinations[6]);
+
+            var row = store.Query(now.AddDays(-1)).Single(r => r.Process == "a.exe");
+            Assert.Equal(100, row.BytesOut);
+            Assert.Equal(5000, row.BytesIn);
+            Assert.Equal(5100, row.Bytes);
 
             var idx = new DnsIndex();
             idx.Add(IPAddress.Parse("1.1.1.1"), "one.one", "a.exe", now);

@@ -28,6 +28,32 @@ public class LinkMonitorTests
     }
 
     [Fact]
+    public void Traffic_since_counts_only_later_samples_and_matches_row_keys()
+    {
+        var m = new LinkMonitor(TimeSpan.FromHours(1));
+        Assert.Null(m.CoverageStart(T0));
+        var t = Feed(m, T0, 20, () => Tcp(10, 20)); // samples at 0, 2 … 18 s
+        Assert.Equal(T0, m.CoverageStart(t));
+
+        var all = m.Traffic(T0.AddSeconds(-1));
+        var key = LinkMonitor.KeyOf("Telegram.exe", "TCP", Tg, 443);
+        Assert.Equal((10 * 10 * 500L, 10 * 20 * 500L), all[key]);
+
+        var last = m.Traffic(T0.AddSeconds(14)); // samples at 16 and 18 s
+        Assert.Equal((2 * 10 * 500L, 2 * 20 * 500L), last[key]);
+        Assert.Empty(m.Traffic(t));
+
+        var row = new DestinationRow { Process = "Telegram.exe", Services = "", Proto = "TCP", RemoteIp = Tg, RemotePort = 443 };
+        Assert.Equal(key, row.Key);
+        Analysis.ApplyTraffic([row], last);
+        Assert.Equal(2 * 20 * 500L, row.BytesIn);
+        Assert.Equal(2 * 10 * 500L, row.BytesOut);
+
+        // After an hour only the last hour is covered.
+        Assert.Equal(t.AddHours(2).AddHours(-1), m.CoverageStart(t.AddHours(2)));
+    }
+
+    [Fact]
     public void Game_stops_answering_then_recovers()
     {
         var m = new LinkMonitor(TimeSpan.FromHours(1));

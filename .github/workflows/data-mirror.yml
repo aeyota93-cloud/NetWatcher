@@ -1,0 +1,96 @@
+name: data-mirror
+
+# Once a week puts fresh copies of the reference databases into service releases:
+#   asn-db     — owners of IP ranges, iptoasn.com (public domain data)
+#   geo-db     — countries of IP ranges, DB-IP "IP to Country Lite" (CC BY 4.0, db-ip.com)
+#   catalog-db — domain catalog built by tools/build-catalog.py from DuckDuckGo Tracker Blocklists
+#                (CC BY-NC-SA 4.0) and WindowsSpyBlocker (MIT)
+# NetWatcher downloads from these first: GitHub opens wherever the program itself was downloaded.
+on:
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  asn:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Скачать и проверить
+        run: |
+          curl -fsSL --retry 3 --max-time 180 -o ip2asn-combined.tsv.gz https://iptoasn.com/data/ip2asn-combined.tsv.gz
+          gzip -t ip2asn-combined.tsv.gz
+          lines=$(zcat ip2asn-combined.tsv.gz | wc -l)
+          echo "Строк: $lines"
+          test "$lines" -gt 100000
+
+      - name: Опубликовать в релиз asn-db
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: asn-db
+          target_commitish: ${{ github.sha }}
+          name: База владельцев IP (служебный)
+          body: |
+            Копия ip2asn-combined.tsv.gz с https://iptoasn.com, обновляется раз в неделю автоматически.
+            NetWatcher скачивает её кнопкой «Обновить базу». Это не версия программы — программа в релизах v*.
+          prerelease: true
+          make_latest: false
+          files: ip2asn-combined.tsv.gz
+
+  geo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Скачать и проверить
+        run: |
+          # DB-IP names the file by month; a new month appears with a delay, so try the previous one too.
+          for m in "$(date -u +%Y-%m)" "$(date -u -d "$(date -u +%Y-%m-15) -1 month" +%Y-%m)"; do
+            if curl -fsSL --retry 3 --max-time 180 -o dbip-country-lite.csv.gz "https://download.db-ip.com/free/dbip-country-lite-$m.csv.gz"; then
+              echo "Месяц: $m"; break
+            fi
+          done
+          gzip -t dbip-country-lite.csv.gz
+          lines=$(zcat dbip-country-lite.csv.gz | wc -l)
+          echo "Строк: $lines"
+          test "$lines" -gt 100000
+
+      - name: Опубликовать в релиз geo-db
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: geo-db
+          target_commitish: ${{ github.sha }}
+          name: База стран (служебный)
+          body: |
+            IP Geolocation by DB-IP (https://db-ip.com): «IP to Country Lite», лицензия CC BY 4.0
+            (https://creativecommons.org/licenses/by/4.0/). Копия без изменений, обновляется автоматически.
+            NetWatcher скачивает её кнопкой «Обновить базу» в настройках. Это не версия программы.
+          prerelease: true
+          make_latest: false
+          files: dbip-country-lite.csv.gz
+
+  catalog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Собрать каталог доменов
+        run: |
+          curl -fsSL --retry 3 -o tds.json https://raw.githubusercontent.com/duckduckgo/tracker-blocklists/main/web/v6/extension-tds.json
+          curl -fsSL --retry 3 -o spy.txt https://raw.githubusercontent.com/crazy-max/WindowsSpyBlocker/master/data/hosts/spy.txt
+          python3 tools/build-catalog.py tds.json spy.txt domain-catalog.tsv.gz
+
+      - name: Опубликовать в релиз catalog-db
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: catalog-db
+          target_commitish: ${{ github.sha }}
+          name: Каталог доменов (служебный)
+          body: |
+            Какой компании принадлежит домен и не трекер ли это. Собран tools/build-catalog.py из
+            DuckDuckGo Tracker Blocklists (https://github.com/duckduckgo/tracker-blocklists, CC BY-NC-SA 4.0, © Duck Duck Go, Inc.)
+            и WindowsSpyBlocker (https://github.com/crazy-max/WindowsSpyBlocker, MIT, © CrazyMax).
+            Файл каталога распространяется на условиях CC BY-NC-SA 4.0. Это не версия программы.
+          prerelease: true
+          make_latest: false
+          files: domain-catalog.tsv.gz

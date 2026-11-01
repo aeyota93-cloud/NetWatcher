@@ -29,6 +29,24 @@ public sealed class Settings
     /// <summary>Program list order: by activity (true) or by name.</summary>
     public bool SortByActivity { get; set; } = true;
 
+    /// <summary>Program list order: by data sent and received; wins over <see cref="SortByActivity"/>.</summary>
+    public bool SortByTraffic { get; set; }
+
+    /// <summary>Notify when a program goes online for the first time.</summary>
+    public bool AlertNewProgram { get; set; } = true;
+
+    /// <summary>Notify when a program reaches a server in a new country.</summary>
+    public bool AlertNewCountry { get; set; } = true;
+
+    /// <summary>Notify when a program reaches a new network (AS); noisy, off by default.</summary>
+    public bool AlertNewNetwork { get; set; }
+
+    /// <summary>Browsers visit new countries and networks with every site: only their first start is news.</summary>
+    public bool AlertSkipBrowsers { get; set; } = true;
+
+    /// <summary>When NetWatcher started learning what is normal; alerts start a day later.</summary>
+    public DateTimeOffset? LearningSince { get; set; }
+
     public void Normalize()
     {
         RetentionDays = Math.Clamp(RetentionDays, 1, 365);

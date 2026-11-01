@@ -28,34 +28,50 @@ jobs:
       - name: Тесты
         run: dotnet test tests/NetWatcher.Core.Tests -c Release
 
-      # База владельцев IP встраивается в NetWatcher.exe, чтобы ничего не скачивать при первом запуске.
-      # Сначала оригинал с iptoasn.com, при неудаче — недельная копия из релиза asn-db.
-      # Если не получилось нигде, программа соберётся без встроенной базы.
-      - name: База владельцев IP
+      # Справочные базы встраиваются в NetWatcher.exe, чтобы ничего не скачивать при первом запуске.
+      # Сначала оригинальные источники, при неудаче — недельные копии из служебных релизов.
+      # Если базу не удалось получить, программа соберётся без неё и скачает её сама.
+      - name: Справочные базы
         shell: pwsh
         continue-on-error: true
         run: |
-          $dst = "src/NetWatcher.App/Assets/ip2asn-combined.tsv.gz"
-          $sources = @(
-            "https://iptoasn.com/data/ip2asn-combined.tsv.gz",
-            "https://github.com/${{ github.repository }}/releases/download/asn-db/ip2asn-combined.tsv.gz"
-          )
-          foreach ($url in $sources) {
-            try {
-              Invoke-WebRequest $url -OutFile $dst -UseBasicParsing -TimeoutSec 120
-              $gz = [IO.Compression.GZipStream]::new([IO.File]::OpenRead($dst), [IO.Compression.CompressionMode]::Decompress)
-              $reader = [IO.StreamReader]::new($gz)
-              $lines = 0
-              while ($null -ne $reader.ReadLine()) { $lines++ }
-              $reader.Dispose()
-              if ($lines -gt 100000) { Write-Host "Встроена база из $url, строк: $lines"; exit 0 }
-              Write-Host "Слишком мало строк ($lines) в $url"
-            } catch {
-              Write-Host "Не удалось с $url : $_"
-            }
+          $assets = "src/NetWatcher.App/Assets"
+          $mirror = "https://github.com/${{ github.repository }}/releases/download"
+          function Lines($path) {
+            $gz = [IO.Compression.GZipStream]::new([IO.File]::OpenRead($path), [IO.Compression.CompressionMode]::Decompress)
+            $reader = [IO.StreamReader]::new($gz); $n = 0
+            while ($null -ne $reader.ReadLine()) { $n++ }
+            $reader.Dispose(); return $n
           }
-          Remove-Item $dst -ErrorAction SilentlyContinue
-          exit 1
+          function Fetch($name, $urls, $min) {
+            $dst = "$assets/$name"
+            foreach ($url in $urls) {
+              try {
+                Invoke-WebRequest $url -OutFile $dst -UseBasicParsing -TimeoutSec 180
+                $n = Lines $dst
+                if ($n -ge $min) { Write-Host "$name из $url, строк: $n"; return $true }
+                Write-Host "Слишком мало строк ($n) в $url"
+              } catch { Write-Host "Не удалось с $url : $_" }
+            }
+            Remove-Item $dst -ErrorAction SilentlyContinue
+            Write-Host "::warning::$name не встроена"
+            return $false
+          }
+          $ok = $true
+          $ok = (Fetch "ip2asn-combined.tsv.gz" @("https://iptoasn.com/data/ip2asn-combined.tsv.gz", "$mirror/asn-db/ip2asn-combined.tsv.gz") 100000) -and $ok
+          $now = (Get-Date).ToUniversalTime()
+          $geo = @($now, $now.AddMonths(-1)) | ForEach-Object { "https://download.db-ip.com/free/dbip-country-lite-$($_.ToString('yyyy-MM')).csv.gz" }
+          $ok = (Fetch "dbip-country-lite.csv.gz" (@($geo) + "$mirror/geo-db/dbip-country-lite.csv.gz") 100000) -and $ok
+          try {
+            Invoke-WebRequest "https://raw.githubusercontent.com/duckduckgo/tracker-blocklists/main/web/v6/extension-tds.json" -OutFile tds.json -UseBasicParsing
+            Invoke-WebRequest "https://raw.githubusercontent.com/crazy-max/WindowsSpyBlocker/master/data/hosts/spy.txt" -OutFile spy.txt -UseBasicParsing
+            python tools/build-catalog.py tds.json spy.txt "$assets/domain-catalog.tsv.gz"
+            if ($LASTEXITCODE -ne 0) { throw "build-catalog.py: код $LASTEXITCODE" }
+          } catch {
+            Write-Host "Каталог не собран: $_"
+            $ok = (Fetch "domain-catalog.tsv.gz" @("$mirror/catalog-db/domain-catalog.tsv.gz") 1000) -and $ok
+          }
+          if (-not $ok) { exit 1 }
 
       - name: Сборка NetWatcher.exe
         run: dotnet publish src/NetWatcher.App -c Release -r win-x64 -o artifacts/publish

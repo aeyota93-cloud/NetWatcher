@@ -44,6 +44,9 @@ internal sealed class Collector : IDisposable
         _etw.ProcessStarted += _processes.NoteStarted;
     }
 
+    /// <summary>Program file name of a running process, as the log writes it.</summary>
+    public string ProcessName(int pid) => _processes.Get(pid).Name;
+
     public bool DnsCapture => _etw.DnsRunning;
     public bool IsElevated { get; } = Microsoft.Diagnostics.Tracing.Session.TraceEventSession.IsElevated() == true;
     public bool KernelCapture => _etw.KernelRunning;
@@ -134,6 +137,9 @@ internal sealed class Collector : IDisposable
             Update(c.Pid, IpKey.ToAddress(c.Ip), c.Port, "TCP", o => o with { NoAnswer = o.NoAnswer + n });
         foreach (var (c, n) in retransmits)
             Update(c.Pid, IpKey.ToAddress(c.Ip), c.Port, "TCP", o => o with { Retransmits = o.Retransmits + n });
+        var etwFlows = _etw.TakeFlows();
+        foreach (var (c, f) in etwFlows)
+            Update(c.Pid, IpKey.ToAddress(c.Ip), c.Port, c.Proto, o => o with { BytesOut = o.BytesOut + f.BytesOut, BytesIn = o.BytesIn + f.BytesIn });
 
         // Link monitor: packets each way per program and server, with resends.
         var flows = new Dictionary<(string Group, UInt128 Ip, int Port, string Proto), FlowSample>();
@@ -153,7 +159,7 @@ internal sealed class Collector : IDisposable
                 }
                 : new FlowSample(group, p.Name, services, p.Path, ip, c.Port, c.Proto, outPk, inPk, outB, inB, retrans, noAnswer);
         }
-        foreach (var (c, f) in _etw.TakeFlows()) AddFlow(c, f.PacketsOut, f.PacketsIn, f.BytesOut, f.BytesIn, 0, 0);
+        foreach (var (c, f) in etwFlows) AddFlow(c, f.PacketsOut, f.PacketsIn, f.BytesOut, f.BytesIn, 0, 0);
         foreach (var (c, n) in retransmits) AddFlow(c, 0, 0, 0, 0, n, 0);
         foreach (var (c, n) in reconnects) AddFlow(c, 0, 0, 0, 0, 0, n);
         _link.Add(now, flows.Values);

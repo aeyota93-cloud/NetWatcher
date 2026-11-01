@@ -17,6 +17,12 @@ public enum QuickFilter
 
     /// <summary>Destinations that do not answer, connect with retries or lose packets.</summary>
     Problems = 128,
+
+    /// <summary>Domains DuckDuckGo blocks as trackers or marks as malware.</summary>
+    Trackers = 256,
+
+    /// <summary>Windows telemetry hosts (WindowsSpyBlocker).</summary>
+    Telemetry = 512,
 }
 
 public static class QuickFilters
@@ -53,6 +59,17 @@ public static class QuickFilters
         if (f.HasFlag(QuickFilter.HideMicrosoft) && IsMicrosoft(r)) return false;
         if (f.HasFlag(QuickFilter.Ipv4) && r.RemoteIp.AddressFamily != AddressFamily.InterNetwork) return false;
         if (f.HasFlag(QuickFilter.Problems) && !r.Health.IsProblem) return false;
+
+        // Trackers and telemetry together mean "either".
+        var trackers = f.HasFlag(QuickFilter.Trackers);
+        var telemetry = f.HasFlag(QuickFilter.Telemetry);
+        if (trackers || telemetry)
+        {
+            var tag = r.Catalog?.Tag ?? Catalog.DomainTag.None;
+            var isTracker = tag is Catalog.DomainTag.Tracker or Catalog.DomainTag.Malware;
+            var isTelemetry = tag == Catalog.DomainTag.Telemetry;
+            if (!(trackers && isTracker || telemetry && isTelemetry)) return false;
+        }
         return true;
     }
 

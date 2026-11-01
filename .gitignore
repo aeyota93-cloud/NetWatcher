@@ -4,3 +4,5 @@ artifacts/
 *.user
 .vs/
 src/NetWatcher.App/Assets/ip2asn-combined.tsv.gz
+src/NetWatcher.App/Assets/dbip-country-lite.csv.gz
+src/NetWatcher.App/Assets/domain-catalog.tsv.gz

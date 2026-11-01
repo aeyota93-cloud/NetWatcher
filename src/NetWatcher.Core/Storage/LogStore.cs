@@ -60,8 +60,12 @@ public sealed class LogStore : IDisposable
               PRIMARY KEY(domain, process, status)
             ) WITHOUT ROWID;
             CREATE INDEX IF NOT EXISTS dns_fail_last ON dns_fail(last_seen);
+            CREATE TABLE IF NOT EXISTS known(
+              key        TEXT    NOT NULL PRIMARY KEY,
+              first_seen INTEGER NOT NULL
+            ) WITHOUT ROWID;
             """);
-        // Columns added in 0.2: connection health.
+        // Columns added later: connection health (0.2), traffic (0.5).
         var columns = new HashSet<string>();
         using (var info = _db.CreateCommand())
         {
@@ -69,7 +73,7 @@ public sealed class LogStore : IDisposable
             using var r = info.ExecuteReader();
             while (r.Read()) columns.Add(r.GetString(1));
         }
-        foreach (var c in new[] { "est", "noanswer", "retrans" })
+        foreach (var c in new[] { "est", "noanswer", "retrans", "bytes_out", "bytes_in" })
             if (!columns.Contains(c)) Exec($"ALTER TABLE seen ADD COLUMN {c} INTEGER NOT NULL DEFAULT 0;");
     }
 
@@ -84,8 +88,8 @@ public sealed class LogStore : IDisposable
             {
                 cmd.Transaction = tx;
                 cmd.CommandText = """
-                    INSERT INTO seen(bucket, process, services, proto, remote_ip, remote_port, path, first_seen, last_seen, hits, est, noanswer, retrans)
-                    VALUES($b, $p, $s, $pr, $ip, $port, $path, $t, $t, 1, $est, $na, $rt)
+                    INSERT INTO seen(bucket, process, services, proto, remote_ip, remote_port, path, first_seen, last_seen, hits, est, noanswer, retrans, bytes_out, bytes_in)
+                    VALUES($b, $p, $s, $pr, $ip, $port, $path, $t, $t, 1, $est, $na, $rt, $bo, $bi)
                     ON CONFLICT(bucket, process, services, proto, remote_ip, remote_port) DO UPDATE SET
                       last_seen = max(last_seen, excluded.last_seen),
                       first_seen = min(first_seen, excluded.first_seen),
@@ -93,6 +97,8 @@ public sealed class LogStore : IDisposable
                       est = est + excluded.est,
                       noanswer = noanswer + excluded.noanswer,
                       retrans = retrans + excluded.retrans,
+                      bytes_out = bytes_out + excluded.bytes_out,
+                      bytes_in = bytes_in + excluded.bytes_in,
                       path = CASE WHEN excluded.path <> '' THEN excluded.path ELSE path END;
                     """;
                 var b = cmd.Parameters.Add("$b", SqliteType.Integer);
@@ -106,8 +112,12 @@ public sealed class LogStore : IDisposable
                 var est = cmd.Parameters.Add("$est", SqliteType.Integer);
                 var na = cmd.Parameters.Add("$na", SqliteType.Integer);
                 var rt = cmd.Parameters.Add("$rt", SqliteType.Integer);
+                var bo = cmd.Parameters.Add("$bo", SqliteType.Integer);
+                var bi = cmd.Parameters.Add("$bi", SqliteType.Integer);
                 foreach (var o in seen)
                 {
+                    bo.Value = o.BytesOut;
+                    bi.Value = o.BytesIn;
                     est.Value = o.Established ? 1 : 0;
                     na.Value = o.NoAnswer;
                     rt.Value = o.Retransmits;
@@ -204,7 +214,8 @@ public sealed class LogStore : IDisposable
             using var cmd = _db.CreateCommand();
             cmd.CommandText = """
                 SELECT process, services, proto, remote_ip, remote_port, max(path),
-                       min(first_seen), max(last_seen), sum(hits), sum(est), sum(noanswer), sum(retrans)
+                       min(first_seen), max(last_seen), sum(hits), sum(est), sum(noanswer), sum(retrans),
+                       sum(bytes_out), sum(bytes_in)
                 FROM seen
                 WHERE last_seen >= $from
                 GROUP BY process, services, proto, remote_ip, remote_port
@@ -228,6 +239,8 @@ public sealed class LogStore : IDisposable
                     Established = r.GetInt64(9),
                     NoAnswer = r.GetInt64(10),
                     Retransmits = r.GetInt64(11),
+                    BytesOut = r.GetInt64(12),
+                    BytesIn = r.GetInt64(13),
                 });
             }
         }
@@ -266,20 +279,23 @@ public sealed class LogStore : IDisposable
         }
     }
 
+    /// <summary>Activity of a group per hour, oldest hour first.</summary>
+    public sealed record HourActivity(int[] Destinations, long[] Bytes);
+
     /// <summary>
     /// Activity per group for the last <paramref name="hours"/> hours: how many destinations
-    /// were active in each hour, oldest hour first.
+    /// were active in each hour and how much data went each hour.
     /// </summary>
-    public Dictionary<string, int[]> Activity(DateTimeOffset now, int hours)
+    public Dictionary<string, HourActivity> Activity(DateTimeOffset now, int hours)
     {
-        var result = new Dictionary<string, int[]>();
+        var result = new Dictionary<string, HourActivity>();
         var last = now.ToUnixTimeMilliseconds() / 3_600_000;
         var first = last - hours + 1;
         lock (_lock)
         {
             using var cmd = _db.CreateCommand();
             cmd.CommandText = """
-                SELECT process, services, bucket, count(*) FROM seen
+                SELECT process, services, bucket, count(*), sum(bytes_out + bytes_in) FROM seen
                 WHERE bucket >= $b GROUP BY process, services, bucket
                 """;
             cmd.Parameters.AddWithValue("$b", first);
@@ -287,12 +303,48 @@ public sealed class LogStore : IDisposable
             while (r.Read())
             {
                 var group = r.GetString(1) == "" ? r.GetString(0) : $"{r.GetString(0)} · {r.GetString(1)}";
-                if (!result.TryGetValue(group, out var bars)) result[group] = bars = new int[hours];
+                if (!result.TryGetValue(group, out var a)) result[group] = a = new HourActivity(new int[hours], new long[hours]);
                 var i = (int)(r.GetInt64(2) - first);
-                if (i >= 0 && i < hours) bars[i] = r.GetInt32(3);
+                if (i < 0 || i >= hours) continue;
+                a.Destinations[i] = r.GetInt32(3);
+                a.Bytes[i] = r.GetInt64(4);
             }
         }
         return result;
+    }
+
+    /// <summary>What programs have ever done ("p|program", "c|program|DE"…), for first-time alerts.</summary>
+    public List<string> LoadKnown()
+    {
+        var list = new List<string>();
+        lock (_lock)
+        {
+            using var cmd = _db.CreateCommand();
+            cmd.CommandText = "SELECT key FROM known";
+            using var r = cmd.ExecuteReader();
+            while (r.Read()) list.Add(r.GetString(0));
+        }
+        return list;
+    }
+
+    public void AddKnown(IReadOnlyCollection<string> keys, DateTimeOffset time)
+    {
+        if (keys.Count == 0) return;
+        lock (_lock)
+        {
+            using var tx = _db.BeginTransaction();
+            using var cmd = _db.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = "INSERT OR IGNORE INTO known(key, first_seen) VALUES($k, $t)";
+            var k = cmd.Parameters.Add("$k", SqliteType.Text);
+            cmd.Parameters.AddWithValue("$t", time.ToUnixTimeMilliseconds());
+            foreach (var key in keys)
+            {
+                k.Value = key;
+                cmd.ExecuteNonQuery();
+            }
+            tx.Commit();
+        }
     }
 
     /// <summary>Fills an index with every stored DNS answer, so domains survive a restart.</summary>
@@ -329,7 +381,7 @@ public sealed class LogStore : IDisposable
     {
         lock (_lock)
         {
-            Exec("DELETE FROM seen; DELETE FROM dns; DELETE FROM dns_fail;");
+            Exec("DELETE FROM seen; DELETE FROM dns; DELETE FROM dns_fail; DELETE FROM known;");
             Exec("VACUUM;");
         }
     }

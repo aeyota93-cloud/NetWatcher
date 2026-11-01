@@ -203,7 +203,8 @@ internal sealed partial class MainViewModel
         Replace(LinkServers, p.Servers.Select(s =>
         {
             var name = ServerName(s.Ip, p.Process);
-            var owner = _state.Asn.Lookup(s.Ip) is { } a ? a.OwnerText + (a.Country != "" ? " · " + a.Country : "") : "";
+            var country = _state.Geo.Lookup(s.Ip) is { Length: > 0 } g ? g : _state.Asn.Lookup(s.Ip)?.Country ?? "";
+            var owner = _state.Asn.Lookup(s.Ip) is { } a ? a.OwnerText + (country != "" ? " · " + country : "") : country;
             var addr = s.Ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6 ? $"[{s.Ip}]:{s.Port}" : $"{s.Ip}:{s.Port}";
             return new LinkServerView(
                 name != "" ? name : "сервер",

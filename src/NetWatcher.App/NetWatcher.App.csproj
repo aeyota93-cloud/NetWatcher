@@ -35,9 +35,13 @@
   <ItemGroup>
     <!-- Window and taskbar icon; Assets/make-icon.js redraws it (node + playwright, then Pillow). -->
     <Resource Include="Assets\NetWatcher.ico" />
-    <!-- The owner database, downloaded by the build (CI) and built into NetWatcher.exe. -->
+    <!-- Reference databases, downloaded by the build (CI) and built into NetWatcher.exe. -->
     <EmbeddedResource Include="Assets\ip2asn-combined.tsv.gz" LogicalName="ip2asn-combined.tsv.gz"
                       Condition="Exists('Assets\ip2asn-combined.tsv.gz')" />
+    <EmbeddedResource Include="Assets\dbip-country-lite.csv.gz" LogicalName="dbip-country-lite.csv.gz"
+                      Condition="Exists('Assets\dbip-country-lite.csv.gz')" />
+    <EmbeddedResource Include="Assets\domain-catalog.tsv.gz" LogicalName="domain-catalog.tsv.gz"
+                      Condition="Exists('Assets\domain-catalog.tsv.gz')" />
     <None Remove="Assets\make-icon.js" />
   </ItemGroup>
 

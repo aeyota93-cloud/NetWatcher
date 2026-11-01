@@ -15,7 +15,9 @@ public sealed record Observation(
     DateTimeOffset Time,
     bool Established = false,
     int NoAnswer = 0,
-    int Retransmits = 0);
+    int Retransmits = 0,
+    long BytesOut = 0,
+    long BytesIn = 0);
 
 /// <summary>A DNS question that failed: no such domain, no answer, server error, or a blocking answer.</summary>
 public sealed record DnsFailure(string Process, string Domain, int Status, DateTimeOffset Time);
@@ -48,6 +50,14 @@ public sealed class DestinationRow
     /// <summary>Packets the system had to send again: a sign of loss.</summary>
     public long Retransmits { get; init; }
 
+    /// <summary>
+    /// Data sent and received over the period (payload, without packet headers). Set after reading:
+    /// short periods take exact numbers from the in-memory link monitor, long ones the hourly log.
+    /// </summary>
+    public long BytesOut { get; set; }
+    public long BytesIn { get; set; }
+    public long Bytes => BytesOut + BytesIn;
+
     public Health Health => Health.Of(this);
 
     // Filled after reading from the log.
@@ -65,11 +75,21 @@ public sealed class DestinationRow
     /// <summary>The program first went to this address recently (see <see cref="Analysis.NewSince"/>).</summary>
     public bool IsNew { get; set; }
 
+    /// <summary>Company and purpose of the domain from the catalog (DuckDuckGo, WindowsSpyBlocker).</summary>
+    public Catalog.DomainInfo? Catalog { get; set; }
+
     public string PrimaryDomain => Domains.Count > 0 ? Domains[0] : "";
     public string RemoteIpText => RemoteIp.ToString();
     public string DomainsText => string.Join(", ", Domains);
     public string OwnerText => Asn?.OwnerText ?? "";
-    public string CountryText => Asn?.Country ?? "";
+    /// <summary>Where the server is (DB-IP); "" when the country database is missing.</summary>
+    public string ServerCountry { get; set; } = "";
+
+    /// <summary>Country of the server, or where its network is registered when the location is unknown.</summary>
+    public string CountryText => ServerCountry != "" ? ServerCountry : Asn?.Country ?? "";
+
+    /// <summary>Where the owner registered the network (iptoasn); often differs from the server's country.</summary>
+    public string RegisteredCountry => Asn?.Country ?? "";
 
     public string NetworkText(AddressFormat format)
     {
@@ -105,7 +125,8 @@ public sealed class DestinationRow
     private bool Has(string w) =>
         Contains(Process, w) || Contains(Services, w) || Contains(ServicesDisplay, w) || Contains(Path, w)
         || Contains(RemoteIpText, w) || RemotePort.ToString() == w || Contains(Proto, w)
-        || Domains.Any(d => Contains(d, w)) || Contains(OwnerText, w) || Contains(Asn?.Owner ?? "", w) || Contains(CountryText, w);
+        || Domains.Any(d => Contains(d, w)) || Contains(OwnerText, w) || Contains(Asn?.Owner ?? "", w) || Contains(CountryText, w)
+        || (Catalog is { } c && (Contains(c.Company, w) || Contains(c.TagText, w)));
 
     private static bool Contains(string text, string word) =>
         text.Contains(word, StringComparison.OrdinalIgnoreCase);

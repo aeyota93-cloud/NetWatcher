@@ -40,6 +40,8 @@ internal partial class MainWindow : Window
             _tray.Attach();
             state.LinkService.TitleOf = key => Dispatcher.Invoke(() => _vm.TitleFor(key));
             state.LinkService.Notify = (title, text, warning) => Dispatcher.BeginInvoke(() => _tray.Show(title, text, warning));
+            state.Alerts.TitleOf = key => Dispatcher.Invoke(() => _vm.TitleFor(key));
+            state.Alerts.Notify = (title, text, warning) => Dispatcher.BeginInvoke(() => _tray.Show(title, text, warning));
         };
         Closed += (_, _) => _tray?.Dispose();
         PreviewKeyDown += OnKey;

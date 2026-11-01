@@ -51,6 +51,10 @@
                       CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
             <MenuItem Header="Открыть папку программы" Command="{Binding OpenFolderCommand}"
                       CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+            <Separator />
+            <MenuItem Header="Разорвать соединение…" Command="{Binding CloseConnectionCommand}"
+                      ToolTip="Закрыть открытые TCP-соединения программы с этим адресом: она увидит обрыв и подключится заново"
+                      CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
         </ContextMenu>
 
         <!-- Rows: no grid lines, a soft hover, the accent-tinted selection. -->
@@ -250,24 +254,25 @@
         </Grid>
 
         <!-- ============ Quick filters ============ -->
-        <DockPanel Grid.Row="1" Margin="16,0,16,10">
+        <DockPanel Grid.Row="1" Margin="16,0,16,6">
             <TextBlock DockPanel.Dock="Right" Text="{Binding FoundText}" Style="{StaticResource Faint}" FontSize="12" VerticalAlignment="Center" />
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="&#xE71C;" Style="{StaticResource Icon}" Foreground="{DynamicResource Text2Brush}" FontSize="12" Margin="0,0,6,0" />
-                <TextBlock Text="Быстрые фильтры" Style="{StaticResource Muted}" FontSize="12" VerticalAlignment="Center" Margin="0,0,10,0" />
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Left" Text="&#xE71C;" Style="{StaticResource Icon}" Foreground="{DynamicResource Text2Brush}" FontSize="12" Margin="0,0,6,0" VerticalAlignment="Top" Padding="0,6,0,0" />
+                <TextBlock DockPanel.Dock="Left" Text="Быстрые фильтры" Style="{StaticResource Muted}" FontSize="12" VerticalAlignment="Top" Margin="0,5,10,0" />
+                <!-- Wraps to a second line in a narrow window instead of cutting chips off. -->
                 <ItemsControl ItemsSource="{Binding Chips}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
-                            <StackPanel Orientation="Horizontal" />
+                            <WrapPanel Orientation="Horizontal" />
                         </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="{x:Type vm:FilterChip}">
-                            <ToggleButton Style="{StaticResource Chip}" Content="{Binding Title}" IsChecked="{Binding IsOn}" ToolTip="{Binding Hint}" />
+                            <ToggleButton Style="{StaticResource Chip}" Margin="0,0,8,4" Content="{Binding Title}" IsChecked="{Binding IsOn}" ToolTip="{Binding Hint}" />
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
-            </StackPanel>
+            </DockPanel>
         </DockPanel>
 
         <!-- ============ Banner: owner database missing ============ -->
@@ -303,6 +308,7 @@
                         <ComboBox DockPanel.Dock="Right" SelectedIndex="{Binding NavSortIndex}" FontSize="12" MinWidth="130" ToolTip="Порядок списка">
                             <ComboBoxItem Content="По активности" />
                             <ComboBoxItem Content="По имени" />
+                            <ComboBoxItem Content="По трафику" />
                         </ComboBox>
                         <TextBlock Text="Программы" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
                     </DockPanel>
@@ -395,7 +401,7 @@
                                                     <Run Text="&#xE7BA;" FontFamily="{StaticResource IconFont}" FontSize="10" /><Run Text=" " /><Run Text="{Binding Problems, Mode=OneWay}" />
                                                 </TextBlock>
                                             </Border>
-                                            <TextBlock Text="{Binding Count}" Style="{StaticResource Muted}" FontSize="12"
+                                            <TextBlock Text="{Binding Count}" Style="{StaticResource Muted}" FontSize="12" ToolTip="{Binding CountTip}"
                                                        Visibility="{Binding HasLink, Converter={StaticResource NotVis}}" />
                                             <StackPanel Orientation="Horizontal" Visibility="{Binding HasLink, Converter={StaticResource BoolToVis}}"
                                                         ToolTip="Состояние связи за последние 2 минуты (вкладка «Связь»)">
@@ -566,6 +572,10 @@
                                                             </Style>
                                                         </TextBlock.Style>
                                                     </TextBlock>
+                                                    <Border Style="{StaticResource DomainMark}" ToolTip="{Binding MarkTip}"
+                                                            Visibility="{Binding HasMark, Converter={StaticResource BoolToVis}}">
+                                                        <TextBlock Text="{Binding Mark}" FontSize="10.5" FontWeight="SemiBold" />
+                                                    </Border>
                                                     <TextBlock Text="{Binding Ip}" VerticalAlignment="Center" FontFamily="{StaticResource MonoFont}" FontSize="12.5">
                                                         <TextBlock.Style>
                                                             <Style TargetType="TextBlock">
@@ -616,7 +626,8 @@
                                         <DataGridTemplateColumn.CellTemplate>
                                             <DataTemplate DataType="{x:Type vm:TableItem}">
                                                 <StackPanel Orientation="Horizontal" ToolTip="{Binding OwnerRaw}">
-                                                    <Border Style="{StaticResource Tag}" Margin="0,0,6,0" Visibility="{Binding HasCountry, Converter={StaticResource BoolToVis}}">
+                                                    <Border Style="{StaticResource Tag}" Margin="0,0,6,0" Visibility="{Binding HasCountry, Converter={StaticResource BoolToVis}}"
+                                                            ToolTip="{Binding CountryTip}">
                                                         <TextBlock Text="{Binding Country}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource Text2Brush}" />
                                                     </Border>
                                                     <TextBlock Text="{Binding Owner}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
@@ -625,6 +636,14 @@
                                         </DataGridTemplateColumn.CellTemplate>
                                     </DataGridTemplateColumn>
                                     <DataGridTextColumn Header="Сеть" Binding="{Binding Network}" Width="150" FontFamily="{StaticResource MonoFont}" />
+                                    <DataGridTemplateColumn Header="Объём" Width="82" SortMemberPath="Bytes">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate DataType="{x:Type vm:TableItem}">
+                                                <TextBlock Text="{Binding BytesText}" ToolTip="{Binding BytesTip}" VerticalAlignment="Center"
+                                                           HorizontalAlignment="Right" Margin="0,0,10,0" Foreground="{DynamicResource Text2Brush}" />
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
                                     <DataGridTextColumn Header="Когда" Binding="{Binding When}" SortMemberPath="LastSeen" Width="92" />
                                     <DataGridTemplateColumn Width="70" CanUserSort="False">
                                         <DataGridTemplateColumn.CellTemplate>
@@ -1209,7 +1228,7 @@
                                         <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
                                     <Grid.RowDefinitions>
-                                        <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
+                                        <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
                                     </Grid.RowDefinitions>
                                     <Grid.Resources>
                                         <Style TargetType="TextBlock">
@@ -1228,6 +1247,12 @@
                                     <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding D[First]}" />
                                     <TextBlock Grid.Row="4" Text="Последний раз" Foreground="{DynamicResource Text3Brush}" />
                                     <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding D[Last]}" />
+                                    <TextBlock Grid.Row="7" Text="Компания" Foreground="{DynamicResource Text3Brush}"
+                                               ToolTip="Кому принадлежит домен (не сеть, в которой стоит сервер)" />
+                                    <TextBlock Grid.Row="7" Grid.Column="1" Text="{Binding D[Company]}" ToolTip="{Binding D[CompanyTip]}" />
+                                    <TextBlock Grid.Row="6" Text="Трафик" Foreground="{DynamicResource Text3Brush}" />
+                                    <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding D[Traffic]}"
+                                               ToolTip="Полезные данные без заголовков пакетов. Для периодов дольше часа — с точностью до часа" />
                                     <TextBlock Grid.Row="5" Text="Состояние" Foreground="{DynamicResource Text3Brush}" />
                                     <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding D[Health]}">
                                         <TextBlock.Style>
@@ -1322,7 +1347,7 @@
                                         <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
                                     <Grid.RowDefinitions>
-                                        <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
+                                        <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
                                     </Grid.RowDefinitions>
                                     <Grid.Resources>
                                         <Style TargetType="TextBlock">
@@ -1339,6 +1364,14 @@
                                     <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding D[SumCountries]}" />
                                     <TextBlock Grid.Row="3" Text="Без домена" Foreground="{DynamicResource Text3Brush}" />
                                     <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding D[SumNoDomain]}" />
+                                    <TextBlock Grid.Row="4" Text="Трафик" Foreground="{DynamicResource Text3Brush}" />
+                                    <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding D[SumTraffic]}"
+                                               ToolTip="За выбранный период: получено ↓ и отправлено ↑. Полезные данные без заголовков пакетов" />
+                                    <TextBlock Grid.Row="5" Text="Скорость" Foreground="{DynamicResource Text3Brush}" />
+                                    <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding D[SumSpeed]}" ToolTip="Средняя за последние 10 секунд" />
+                                    <TextBlock Grid.Row="6" Text="Трекеры" Foreground="{DynamicResource Text3Brush}" />
+                                    <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding D[SumMarked]}"
+                                               ToolTip="По каталогу DuckDuckGo и WindowsSpyBlocker; фильтры «Трекеры» и «Телеметрия» покажут их" />
                                 </Grid>
                             </Border>
                             <TextBlock Text="СЕТИ ДЛЯ ПРАВИЛ VPN / ФАЙРВОЛА" Style="{StaticResource Caption}" />
@@ -1408,7 +1441,7 @@
             </Border.Effect>
             <StackPanel Orientation="Horizontal">
                 <TextBlock Text="&#xE73E;" Style="{StaticResource Icon}" Foreground="{DynamicResource ToastTextBrush}" Margin="0,0,10,0" />
-                <TextBlock Text="Скопировано:" Foreground="{DynamicResource ToastTextBrush}" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding ToastTitle}" Foreground="{DynamicResource ToastTextBrush}" VerticalAlignment="Center" />
                 <TextBlock Text="{Binding ToastValue}" Foreground="{DynamicResource ToastAccentBrush}" FontWeight="SemiBold" Margin="6,0,0,0" VerticalAlignment="Center" />
                 <Button Content="Отменить" Margin="14,0,0,0" Command="{Binding UndoCopyCommand}" Cursor="Hand"
                         Visibility="{Binding CanUndo, Converter={StaticResource BoolToVis}}">

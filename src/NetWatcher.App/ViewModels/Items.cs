@@ -1,6 +1,7 @@
 using System.Windows.Media;
 using NetWatcher.App.Native;
 using NetWatcher.Core;
+using NetWatcher.Core.Geo;
 
 namespace NetWatcher.App.ViewModels;
 
@@ -75,6 +76,12 @@ public sealed class NavItem : ObservableObject
     public string Letter => AppInfo.LetterFor(Title);
     public DateTimeOffset LastSeen { get; set; }
     public int Addresses { get; set; }
+    public long BytesIn { get; set; }
+    public long BytesOut { get; set; }
+    public long Bytes => BytesIn + BytesOut;
+
+    private string _countTip = "";
+    public string CountTip { get => _countTip; set => Set(ref _countTip, value); }
 
     public string Title
     {
@@ -160,6 +167,9 @@ public sealed class TableItem : ObservableObject
     private bool _isNew;
     private DateTime _lastSeen;
     private long _hits;
+    private long _bytes;
+    private string _bytesText = "";
+    private string _bytesTip = "";
     private HealthLevel _health;
     private string _healthReason = "";
 
@@ -183,10 +193,30 @@ public sealed class TableItem : ObservableObject
     public string Owner { get => _owner; private set => Set(ref _owner, value); }
     public string Country { get => _country; private set => Set(ref _country, value); }
     public bool HasCountry => _country != "";
+
+    private string _mark = "";
+    private string _markKind = "";
+    private string _markTip = "";
+
+    /// <summary>"трекер", "телеметрия", "опасный" from the domain catalog; "" when there is no mark.</summary>
+    public string Mark { get => _mark; private set { if (Set(ref _mark, value)) OnPropertyChanged(nameof(HasMark)); } }
+    public bool HasMark => _mark != "";
+
+    /// <summary>"Tracker", "Telemetry", "Malware" — drives the colour of the mark.</summary>
+    public string MarkKind { get => _markKind; private set => Set(ref _markKind, value); }
+    public string MarkTip { get => _markTip; private set => Set(ref _markTip, value); }
+
+    private string _countryTip = "";
+    public string CountryTip { get => _countryTip; private set => Set(ref _countryTip, value); }
     public string Network { get => _network; private set => Set(ref _network, value); }
     public string When { get => _when; private set => Set(ref _when, value); }
     public DateTime LastSeen { get => _lastSeen; private set => Set(ref _lastSeen, value); }
     public long Hits { get => _hits; private set => Set(ref _hits, value); }
+
+    /// <summary>Data both ways over the period; the column sorts by it.</summary>
+    public long Bytes { get => _bytes; private set => Set(ref _bytes, value); }
+    public string BytesText { get => _bytesText; private set => Set(ref _bytesText, value); }
+    public string BytesTip { get => _bytesTip; private set => Set(ref _bytesTip, value); }
     public bool IsNew { get => _isNew; private set => Set(ref _isNew, value); }
     public bool IsExpanded { get => _isExpanded; set => Set(ref _isExpanded, value); }
 
@@ -223,16 +253,26 @@ public sealed class TableItem : ObservableObject
         Program = programs.Count == 1 ? programs[0] : TextFormat.Plural(programs.Count, "программа", "программы", "программ");
         Ports = rows.Select(r => $"{r.RemotePort} {r.Proto}").Distinct().Take(3).ToList();
         Owner = first.Asn?.OwnerText ?? "";
-        if (Country != (first.Asn?.Country ?? ""))
+        if (Country != first.CountryText)
         {
-            Country = first.Asn?.Country ?? "";
+            Country = first.CountryText;
             OnPropertyChanged(nameof(HasCountry));
         }
+        CountryTip = Countries.Tip(first.ServerCountry, first.RegisteredCountry);
+        // Child rows sit under the group, which already shows the mark.
+        var info = IsChild ? null : rows.Select(r => r.Catalog).Where(c => c != null).MaxBy(c => c!.Tag);
+        Mark = info?.TagText ?? "";
+        MarkKind = info?.Tag.ToString() ?? "";
+        MarkTip = info?.Explanation ?? "";
         var nets = rows.Select(network).Where(n => n != "").Distinct().ToList();
         Network = nets.Count <= 1 ? nets.FirstOrDefault() ?? "" : TextFormat.Plural(nets.Count, "сеть", "сети", "сетей");
         LastSeen = last.LocalDateTime;
         When = TextFormat.Relative(now, last, liveWindow);
         Hits = rows.Sum(r => r.Hits);
+        long bIn = rows.Sum(r => r.BytesIn), bOut = rows.Sum(r => r.BytesOut);
+        Bytes = bIn + bOut;
+        BytesText = Bytes > 0 ? TextFormat.Bytes(Bytes) : "";
+        BytesTip = Bytes > 0 ? $"Получено {TextFormat.Bytes(bIn)}, отправлено {TextFormat.Bytes(bOut)}" : "Данных не замечено (или только служебные пакеты)";
         IsNew = rows.Any(r => r.IsNew);
         var health = Core.Health.Worst(rows.Select(r => r.Health));
         Health = health.Level;
@@ -245,7 +285,7 @@ public sealed class TableItem : ObservableObject
     public IEnumerable<string> Lines() => Rows.Select(r => string.Join('\t',
         r.Process, r.ServicesDisplay, r.RemoteIpText, r.RemotePort, r.Proto, r.DomainsText, r.OwnerText,
         r.NetworkText(Core.Net.AddressFormat.Cidr), r.CountryText, r.FirstSeen.LocalDateTime.ToString("g"),
-        r.LastSeen.LocalDateTime.ToString("g"), r.Hits));
+        r.LastSeen.LocalDateTime.ToString("g"), r.Hits, r.BytesIn, r.BytesOut));
 }
 
 /// <summary>A line of the DNS journal: the program asked for a name and got these addresses.</summary>

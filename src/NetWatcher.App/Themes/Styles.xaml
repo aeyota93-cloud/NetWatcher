@@ -293,6 +293,26 @@
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
+    <!-- Mark next to a domain from the catalog: трекер / телеметрия / опасный. -->
+    <Style x:Key="DomainMark" TargetType="Border">
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="6,0" />
+        <Setter Property="Margin" Value="0,0,8,0" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Background" Value="{DynamicResource WarnSoftBrush}" />
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource WarnBrush}" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding MarkKind}" Value="Telemetry">
+                <Setter Property="Background" Value="{DynamicResource HoverBrush}" />
+                <Setter Property="TextElement.Foreground" Value="{DynamicResource Text2Brush}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding MarkKind}" Value="Malware">
+                <Setter Property="Background" Value="{DynamicResource DangerSoftBrush}" />
+                <Setter Property="TextElement.Foreground" Value="{DynamicResource DangerBrush}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
     <!-- Plain text box that sits inside our own frames (search). -->
     <Style x:Key="BareTextBox" TargetType="TextBox">
         <Setter Property="Background" Value="Transparent" />

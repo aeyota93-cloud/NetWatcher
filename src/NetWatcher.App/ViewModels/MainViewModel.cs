@@ -38,7 +38,7 @@ internal sealed partial class MainViewModel : ObservableObject
     private DateTime _slowAt = DateTime.MinValue;
     private Dictionary<string, DateTimeOffset> _firstSeen = [];
     private Dictionary<string, DateTimeOffset> _groupFirstSeen = [];
-    private Dictionary<string, int[]> _activity = [];
+    private Dictionary<string, Core.Storage.LogStore.HourActivity> _activity = [];
     private List<Core.Storage.LogStore.DnsFailureRow> _dnsFailures = [];
 
     public MainViewModel(AppState state)
@@ -66,6 +66,8 @@ internal sealed partial class MainViewModel : ObservableObject
             new("Без домена", QuickFilter.NoDomain, "Программа обращается напрямую по IP — стоит присмотреться"),
             new("Проблемные", QuickFilter.Problems, "Адреса, которые не отвечают, подключаются с повторами или теряют пакеты; в журнале DNS — ошибки"),
             new("Только новые", QuickFilter.OnlyNew, "Адреса, на которые программа впервые пошла за последние сутки"),
+            new("Трекеры", QuickFilter.Trackers, "Домены рекламы и аналитики, которые DuckDuckGo блокирует как трекеры, и отмеченные им как вредоносные"),
+            new("Телеметрия", QuickFilter.Telemetry, "Адреса телеметрии и рекламы Windows из списка WindowsSpyBlocker"),
             new("Скрыть Microsoft", QuickFilter.HideMicrosoft, "Убрать обращения к сетям и доменам Microsoft"),
             new("Только IPv4", QuickFilter.Ipv4, "Скрыть адреса IPv6"),
         ];
@@ -113,6 +115,7 @@ internal sealed partial class MainViewModel : ObservableObject
         WhoElseCommand = new RelayCommand(() => SearchFor(SelectedItem?.Rows.FirstOrDefault()?.RemoteIpText));
         RdapCommand = new RelayCommand(p => _ = RdapAsync(Rows(p).FirstOrDefault() ?? SelectedItem?.Rows.FirstOrDefault()));
         OpenFolderCommand = new RelayCommand(p => OpenFolder(Rows(p).FirstOrDefault()?.Path));
+        CloseConnectionCommand = new RelayCommand(p => CloseConnections(Rows(p) is { Count: > 0 } r ? r : SelectedItem?.Rows.ToList() ?? []));
         UndoCopyCommand = new RelayCommand(UndoCopy);
         OpenExportCommand = new RelayCommand(() => Export.Open(ExportContext));
         OpenVpnExportCommand = new RelayCommand(() => Export.Open(ExportContext, ExportWhat.Subnets));
@@ -278,10 +281,11 @@ internal sealed partial class MainViewModel : ObservableObject
 
     public int NavSortIndex
     {
-        get => _state.Settings.SortByActivity ? 0 : 1;
+        get => _state.Settings.SortByTraffic ? 2 : _state.Settings.SortByActivity ? 0 : 1;
         set
         {
             _state.Settings.SortByActivity = value == 0;
+            _state.Settings.SortByTraffic = value == 2;
             _state.SaveSettings();
             OnPropertyChanged();
             ApplyNav();
@@ -307,14 +311,28 @@ internal sealed partial class MainViewModel : ObservableObject
             item.Title = TitleOf(first, path, names);
             item.Subtitle = first.Services != "" ? $"{first.Process} · {first.Services.Replace(",", ", ")}" : first.Process;
             item.Addresses = g.Select(r => r.RemoteIp).Distinct().Count();
-            item.Count = $"{item.Addresses} адр.";
+            item.BytesIn = g.Sum(r => r.BytesIn);
+            item.BytesOut = g.Sum(r => r.BytesOut);
+            item.Count = item.Bytes > 0 ? TextFormat.Bytes(item.Bytes) : $"{item.Addresses} адр.";
+            item.CountTip = (item.Bytes > 0 ? $"Трафик {_period.Title.ToLowerInvariant()}: {TextFormat.Traffic(item.BytesIn, item.BytesOut)}\n" : "")
+                + TextFormat.Plural(item.Addresses, "адрес", "адреса", "адресов");
             item.LastSeen = g.Max(r => r.LastSeen);
             item.IsNew = newSince is { } s && _groupFirstSeen.TryGetValue(g.Key, out var f) && f >= s;
             item.Problems = g.Count(r => r.Health.IsProblem);
             // Each program on its own scale, so a quiet one still shows its rhythm; empty hours draw nothing.
-            var hours = _activity.GetValueOrDefault(g.Key) ?? new int[7];
-            var own = Math.Max(1, hours.Max());
-            item.Bars = hours.Select(v => v == 0 ? 0.0 : 3 + 11 * v / (double)own).ToList();
+            // Traffic when the log has it (log scale: hours differ a thousandfold), else the number of destinations.
+            var act = _activity.GetValueOrDefault(g.Key);
+            if (act != null && act.Bytes.Any(b => b > 0))
+            {
+                var own = Math.Log10(1 + act.Bytes.Max());
+                item.Bars = act.Bytes.Select(v => v == 0 ? 0.0 : 3 + 11 * Math.Log10(1 + v) / own).ToList();
+            }
+            else
+            {
+                var hours = act?.Destinations ?? new int[7];
+                var own = Math.Max(1, hours.Max());
+                item.Bars = hours.Select(v => v == 0 ? 0.0 : 3 + 11 * v / (double)own).ToList();
+            }
             _groupTitles[g.Key] = item.Title;
             items.Add(item);
         }
@@ -323,13 +341,14 @@ internal sealed partial class MainViewModel : ObservableObject
         if (SelectedNav is { IsAll: false } sel && items.All(i => i.Key != sel.Key))
         {
             sel.Count = "0 адр.";
+            sel.BytesIn = sel.BytesOut = 0;
             sel.Bars = [];
             items.Add(sel);
         }
 
         var sorted = items.OrderBy(i => i.Section == AppsSection ? 0 : 1);
-        var list = (_state.Settings.SortByActivity
-                ? sorted.ThenByDescending(i => i.LastSeen).ThenByDescending(i => i.Addresses)
+        var list = (_state.Settings.SortByTraffic ? sorted.ThenByDescending(i => i.Bytes).ThenByDescending(i => i.LastSeen)
+                : _state.Settings.SortByActivity ? sorted.ThenByDescending(i => i.LastSeen).ThenByDescending(i => i.Addresses)
                 : sorted.ThenBy(i => i.Title, StringComparer.CurrentCultureIgnoreCase))
             .ToList();
 
@@ -337,7 +356,12 @@ internal sealed partial class MainViewModel : ObservableObject
         all.Subtitle = FiltersActive
             ? TextFormat.Plural(list.Count, "совпадение", "совпадения", "совпадений")
             : TextFormat.Plural(list.Count, "программа и служба", "программы и службы", "программ и служб");
-        all.Count = $"{_rows.Select(r => r.RemoteIp).Distinct().Count()} адр.";
+        all.BytesIn = _rows.Sum(r => r.BytesIn);
+        all.BytesOut = _rows.Sum(r => r.BytesOut);
+        var allAddresses = _rows.Select(r => r.RemoteIp).Distinct().Count();
+        all.Count = all.Bytes > 0 ? TextFormat.Bytes(all.Bytes) : $"{allAddresses} адр.";
+        all.CountTip = (all.Bytes > 0 ? $"Трафик {_period.Title.ToLowerInvariant()}: {TextFormat.Traffic(all.BytesIn, all.BytesOut)}\n" : "")
+            + TextFormat.Plural(allAddresses, "адрес", "адреса", "адресов");
 
         Sync(Nav, list, 1);
     }
@@ -549,6 +573,8 @@ internal sealed partial class MainViewModel : ObservableObject
             var words = DestinationRow.SplitQuery(SearchText);
             var filters = Filters;
             var asn = _state.Asn;
+            var geo = _state.Geo;
+            var catalog = _state.Catalog;
             var names = _state.Collector.Services.DisplayNames;
             var live = LiveWindow;
             var slow = DateTime.UtcNow - _slowAt > TimeSpan.FromSeconds(30);
@@ -569,8 +595,11 @@ internal sealed partial class MainViewModel : ObservableObject
                     : period.Span is { } span ? now - span
                     : DateTimeOffset.FromUnixTimeMilliseconds(0);
                 var list = _state.Store.Query(from);
+                // Up to an hour back the link monitor holds every sample: exact numbers instead of hourly sums.
+                if ((period.Live || period.Span <= TimeSpan.FromHours(1)) && _state.Link.CoverageStart(now) is { } cover && cover <= from)
+                    Analysis.ApplyTraffic(list, _state.Link.Traffic(from));
                 _dnsFailures = _state.Store.DnsFailures(period.Live ? now.AddMinutes(-15) : from);
-                Analysis.Enrich(list, _state.Dns, asn, names);
+                Analysis.Enrich(list, _state.Dns, asn, names, geo, catalog);
                 Analysis.MarkNew(list, _firstSeen, Analysis.NewSince(now, _logStart));
                 var totalIps = list.Select(r => r.RemoteIp).Distinct().Count();
                 var found = words.Count == 0 ? list : list.Where(r => r.Matches(words)).ToList();
@@ -673,6 +702,24 @@ internal sealed partial class MainViewModel : ObservableObject
             _details["SumNoDomain"] = ips.Count == 0 ? "—" : noDomain == 0 ? "нет"
                 : $"{noDomain} из {ips.Count}" + (noDomain * 2 > ips.Count ? " — программа часто ходит напрямую по IP" : "");
             SumNetworksText = owners.Text;
+            var marked = rows.Where(r => r.Catalog is { Tag: not Core.Catalog.DomainTag.None }).ToList();
+            var trackerDomains = marked.Where(r => r.Catalog!.Tag != Core.Catalog.DomainTag.Telemetry).Select(r => r.PrimaryDomain).Distinct().Count();
+            var telemetryDomains = marked.Where(r => r.Catalog!.Tag == Core.Catalog.DomainTag.Telemetry).Select(r => r.PrimaryDomain).Distinct().Count();
+            _details["SumMarked"] = trackerDomains + telemetryDomains == 0 ? "не замечены"
+                : string.Join(", ", new[]
+                {
+                    trackerDomains > 0 ? TextFormat.Plural(trackerDomains, "домен трекеров", "домена трекеров", "доменов трекеров") : "",
+                    telemetryDomains > 0 ? TextFormat.Plural(telemetryDomains, "домен телеметрии", "домена телеметрии", "доменов телеметрии") : "",
+                }.Where(x => x != ""));
+            long bIn = rows.Sum(r => r.BytesIn), bOut = rows.Sum(r => r.BytesOut);
+            _details["SumTraffic"] = bIn + bOut > 0 ? TextFormat.Traffic(bIn, bOut) : "—";
+            // Speed over the last 10 seconds from the link monitor, whatever period is chosen.
+            var key = SelectedNav is null or { IsAll: true } ? null : SelectedNav.Key + "|";
+            var recent = _state.Link.Traffic(DateTimeOffset.Now.AddSeconds(-10))
+                .Where(kv => key == null || kv.Key.StartsWith(key, StringComparison.Ordinal))
+                .Select(kv => kv.Value).ToList();
+            long rIn = recent.Sum(x => x.In), rOut = recent.Sum(x => x.Out);
+            _details["SumSpeed"] = rIn + rOut > 0 ? $"↓ {TextFormat.Rate(rIn, 10)}  ↑ {TextFormat.Rate(rOut, 10)}" : "тишина";
         }
         else
         {
@@ -691,6 +738,10 @@ internal sealed partial class MainViewModel : ObservableObject
             _details["Domains"] = domains.Count > 0 ? string.Join(", ", domains) : "неизвестен — программа обратилась по IP без запроса DNS";
             _details["Network"] = string.Join(Environment.NewLine, rows.Select(r => r.NetworkText(Format)).Where(n => n != "").Distinct());
             _details["NetworkLabel"] = rows.Select(r => r.NetworkText(Format)).Where(n => n != "").Distinct().Count() > 1 ? "Сети владельцев" : "Сеть владельца";
+            var info = rows.Select(r => r.Catalog).Where(c => c != null).MaxBy(c => c!.Tag);
+            _details["Company"] = info == null ? "неизвестна"
+                : (info.Company != "" ? info.Company : "—") + (info.TagText != "" ? " · " + info.TagText : "");
+            _details["CompanyTip"] = info?.Explanation ?? "Домена нет в каталоге DuckDuckGo и WindowsSpyBlocker";
             _details["Owner"] = first.Asn?.OwnerText is { Length: > 0 } o ? o : "неизвестен";
             _details["OwnerRaw"] = first.Asn != null ? "В реестре: " + first.Asn.Owner : "";
             var health = Health.Worst(rows.Select(r => r.Health));
@@ -713,7 +764,9 @@ internal sealed partial class MainViewModel : ObservableObject
                 _details["Pdb"] = cachedNet.ToText();
                 HasPdb = true;
             }
-            _details["Country"] = CountryName(first.CountryText);
+            _details["Country"] = Core.Geo.Countries.Describe(first.ServerCountry, first.RegisteredCountry);
+            long sIn = rows.Sum(r => r.BytesIn), sOut = rows.Sum(r => r.BytesOut);
+            _details["Traffic"] = sIn + sOut > 0 ? $"{TextFormat.Traffic(sIn, sOut)} ({_period.Title.ToLowerInvariant()})" : "не замечен";
             _details["Protocol"] = string.Join(", ", rows.Select(r => TextFormat.Port(r.Proto, r.RemotePort)).Distinct().Take(4));
             _details["First"] = When(rows.Min(r => r.FirstSeen));
             var lastSeen = rows.Max(r => r.LastSeen);
@@ -739,19 +792,6 @@ internal sealed partial class MainViewModel : ObservableObject
         return local.Date == today ? $"сегодня, {local:HH:mm}"
             : local.Date == today.AddDays(-1) ? $"вчера, {local:HH:mm}"
             : local.ToString("dd.MM.yyyy HH:mm");
-    }
-
-    private static string CountryName(string code)
-    {
-        if (code == "") return "—";
-        try
-        {
-            return $"{new RegionInfo(code).DisplayName} ({code})";
-        }
-        catch (ArgumentException)
-        {
-            return code;
-        }
     }
 
     private async Task RdapAsync(DestinationRow? row)
@@ -808,8 +848,12 @@ internal sealed partial class MainViewModel : ObservableObject
         ShowToast(value, true);
     }
 
-    private void ShowToast(string value, bool undo)
+    private string _toastTitle = "Скопировано:";
+    public string ToastTitle { get => _toastTitle; private set => Set(ref _toastTitle, value); }
+
+    private void ShowToast(string value, bool undo, string title = "Скопировано:")
     {
+        ToastTitle = title;
         ToastValue = value;
         CanUndo = undo && _clipboardBefore != null;
         ToastVisible = true;
@@ -836,6 +880,51 @@ internal sealed partial class MainViewModel : ObservableObject
         if (string.IsNullOrWhiteSpace(text)) return;
         SelectedNav = Nav[0];
         SearchText = text;
+    }
+
+    /// <summary>
+    /// Breaks the open TCP connections of the chosen rows, like TCPView's "Close Connection": the program
+    /// sees the connection drop and usually connects again — handy after switching VPN or when it hangs.
+    /// </summary>
+    private void CloseConnections(List<DestinationRow> rows)
+    {
+        if (rows.Count == 0) return;
+        var owner = Application.Current.MainWindow;
+        var plan = TcpCloser.Choose(TcpTable.ReadV4(), _state.Collector.ProcessName, rows);
+        if (plan.Close.Count == 0)
+        {
+            var why = plan.Ipv6Skipped > 0 && plan.Ipv6Skipped + plan.UdpSkipped == rows.Count
+                ? "Это соединения по IPv6: Windows позволяет разрывать только соединения IPv4."
+                : plan.UdpSkipped == rows.Count
+                    ? "У UDP нет соединения, разрывать нечего: программа просто отправляет пакеты."
+                    : "Открытых соединений с этими адресами сейчас нет — программа уже закрыла их.";
+            MessageBox.Show(owner, why, "Разорвать соединение", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        var programs = plan.Close.Select(r => _state.Collector.ProcessName(r.Pid)).Distinct().ToList();
+        var question = $"Разорвать {TextFormat.Plural(plan.Close.Count, "соединение", "соединения", "соединений")} "
+            + $"({string.Join(", ", programs)})?\n\nПрограмма увидит обрыв и, скорее всего, подключится заново."
+            + (plan.Ipv6Skipped > 0 ? $"\n\nСоединения IPv6 ({plan.Ipv6Skipped}) Windows разорвать не даёт — они останутся." : "");
+        if (MessageBox.Show(owner, question, "Разорвать соединение", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+
+        int done = 0, denied = 0, failed = 0;
+        foreach (var row in plan.Close)
+        {
+            switch (TcpTable.Close(row))
+            {
+                case 0: done++; break;
+                case 5: denied++; break;
+                default: failed++; break;
+            }
+        }
+        if (denied > 0)
+            MessageBox.Show(owner, "Windows не дала разорвать соединение: нужны права администратора. Запустите NetWatcher от имени администратора.",
+                "Разорвать соединение", MessageBoxButton.OK, MessageBoxImage.Warning);
+        else if (done > 0)
+            ShowToast(TextFormat.Plural(done, "соединение", "соединения", "соединений") + (failed > 0 ? $", не вышло: {failed}" : ""), false, "Разорвано:");
+        else
+            MessageBox.Show(owner, "Не удалось: соединения уже закрылись или Windows отказала.", "Разорвать соединение", MessageBoxButton.OK, MessageBoxImage.Information);
+        _ = RefreshAsync();
     }
 
     private static void OpenFolder(string? path)
@@ -967,6 +1056,7 @@ internal sealed partial class MainViewModel : ObservableObject
     public RelayCommand WhoElseCommand { get; }
     public RelayCommand RdapCommand { get; }
     public RelayCommand OpenFolderCommand { get; }
+    public RelayCommand CloseConnectionCommand { get; }
     public RelayCommand UndoCopyCommand { get; }
     public RelayCommand OpenExportCommand { get; }
     public RelayCommand OpenVpnExportCommand { get; }

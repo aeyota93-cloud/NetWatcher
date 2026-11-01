@@ -93,6 +93,7 @@ public sealed class LinkMonitor(TimeSpan history)
     private readonly Dictionary<string, Server> _servers = [];
     private readonly Dictionary<UInt128, List<(DateTimeOffset Time, double? Rtt)>> _pings = [];
     private readonly Dictionary<string, string> _notes = [];
+    private DateTimeOffset? _since;
 
     private sealed class Server
     {
@@ -112,6 +113,7 @@ public sealed class LinkMonitor(TimeSpan history)
     {
         lock (_lock)
         {
+            _since ??= time;
             foreach (var s in samples)
             {
                 var key = KeyOf(s.GroupKey, s.Proto, s.Ip, s.Port);
@@ -137,6 +139,35 @@ public sealed class LinkMonitor(TimeSpan history)
             list.Add((time, rttMs));
             list.RemoveAll(p => time - p.Time > history);
         }
+    }
+
+    /// <summary>From when the monitor holds every sample: start of the program, at most <c>history</c> ago.</summary>
+    public DateTimeOffset? CoverageStart(DateTimeOffset now)
+    {
+        lock (_lock) return _since is { } s ? (s > now - history ? s : now - history) : null;
+    }
+
+    /// <summary>
+    /// Data sent and received per program–server key (the same key as <see cref="DestinationRow.Key"/>)
+    /// in samples taken after <paramref name="since"/>.
+    /// </summary>
+    public Dictionary<string, (long Out, long In)> Traffic(DateTimeOffset since)
+    {
+        var result = new Dictionary<string, (long Out, long In)>();
+        lock (_lock)
+        {
+            foreach (var s in _servers.Values)
+            {
+                long o = 0, i = 0;
+                for (var k = s.Ticks.Count - 1; k >= 0 && s.Ticks[k].Time > since; k--)
+                {
+                    o += s.Ticks[k].BytesOut;
+                    i += s.Ticks[k].BytesIn;
+                }
+                if (o > 0 || i > 0) result[s.Key] = (o, i);
+            }
+        }
+        return result;
     }
 
     /// <summary>An explanation found later, e.g. where the route breaks.</summary>
