@@ -116,7 +116,8 @@ internal sealed class LinkService(AppState state) : IDisposable
             }
             else if (p.Level != LinkLevel.Fail && alert.Down)
             {
-                if (wanted)
+                // Idle means the program stopped trying, not that the server answered again.
+                if (wanted && p.Level != LinkLevel.Idle)
                     Notify?.Invoke($"{title}: связь восстановилась", $"Простой {(int)(now - alert.Since).TotalSeconds} с.", false);
                 _alerts[p.GroupKey] = alert with { Down = false };
             }

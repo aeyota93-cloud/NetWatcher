@@ -66,6 +66,7 @@ internal partial class SettingsWindow : Window
         if (MessageBox.Show(this, "Удалить всю историю соединений и DNS? Это нельзя отменить.", "Очистить историю",
                 MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
         _state.Store.Clear();
+        _state.Dns.Clear();
         ShowDbInfo();
     }
 

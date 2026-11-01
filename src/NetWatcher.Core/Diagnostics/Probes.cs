@@ -458,7 +458,9 @@ public sealed class NetProbe(HttpClient http) : INetProbe
 
         if (await Send(lo).ConfigureAwait(false) != IPStatus.Success)
             return new MtuProbe(null, false, v6, "адрес не отвечает на ping — размер пакетов проверить нельзя");
-        if (await Send(hi).ConfigureAwait(false) == IPStatus.Success) return new MtuProbe(hi, false, v6);
+        var full = await Send(hi).ConfigureAwait(false);
+        if (full == IPStatus.Success) return new MtuProbe(hi, false, v6);
+        tooBig = full == IPStatus.PacketTooBig;
 
         while (hi - lo > 1)
         {

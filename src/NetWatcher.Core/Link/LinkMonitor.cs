@@ -288,6 +288,7 @@ public sealed class LinkMonitor(TimeSpan history)
     {
         var result = new List<Outage>();
         DateTimeOffset? lastIn = null;
+        DateTimeOffset? lastTick = null;
         DateTimeOffset? silenceStart = null;
         var retransInSilence = 0;
         var answeredBefore = false;
@@ -300,6 +301,15 @@ public sealed class LinkMonitor(TimeSpan history)
 
         foreach (var t in s.Ticks)
         {
+            // A pause in the traffic: the program stopped trying, so an open silence ends here.
+            if (lastTick is { } prev && t.Time - prev > IdleAfter && silenceStart != null)
+            {
+                Close(prev);
+                silenceStart = null;
+                retransInSilence = 0;
+            }
+            lastTick = t.Time;
+
             if (t.In > 0)
             {
                 Close(t.Time);
@@ -311,7 +321,9 @@ public sealed class LinkMonitor(TimeSpan history)
             }
             if (t.Out > 0 || t.Retrans > 0 || t.NoAnswer > 0)
             {
-                silenceStart ??= lastIn ?? t.Time;
+                // Silence runs from the last answer only while the exchange is continuous; after
+                // an idle pause it starts with the first packet that went unanswered.
+                silenceStart ??= lastIn is { } li && t.Time - li <= IdleAfter ? li : t.Time;
                 retransInSilence += t.Retrans + t.NoAnswer;
             }
         }

@@ -78,6 +78,12 @@ public sealed class DnsIndex
         }
     }
 
+    /// <summary>Forgets everything, e.g. when the user clears the history.</summary>
+    public void Clear()
+    {
+        lock (_lock) _byIp.Clear();
+    }
+
     public int Count
     {
         get

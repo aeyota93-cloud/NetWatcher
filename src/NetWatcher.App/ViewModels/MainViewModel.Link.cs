@@ -161,6 +161,25 @@ internal sealed partial class MainViewModel
         LinkHasProgram = program != null;
         LinkNoData = program == null;
         if (program != null) ApplyProgram(program, programs, now);
+        else if (!ApplyNoCapture())
+        {
+            // Not the previous program's summary: there is simply nothing to judge.
+            LinkLevel = "Idle";
+            LinkTitle = "Нет данных о связи";
+            LinkSubtitle = "Связь проверяется, только пока программа что-то отправляет";
+        }
+    }
+
+    /// <summary>Without the kernel's network events there is nothing to judge: say so instead of "all fine".</summary>
+    private bool ApplyNoCapture()
+    {
+        if (_state.Collector.KernelCapture) return false;
+        LinkLevel = "Idle";
+        LinkTitle = "Монитор связи не работает";
+        LinkSubtitle = _state.Collector.IsElevated
+            ? "Windows не отдаёт сетевые события: " + (_state.Collector.CaptureError ?? "причина неизвестна")
+            : "Нужны права администратора: без них Windows не сообщает, какие пакеты отправляют и получают программы";
+        return true;
     }
 
     private string ServerName(IPAddress ip, string process) =>
@@ -255,9 +274,9 @@ internal sealed partial class MainViewModel
         var fails = programs.Count(p => p.Level == Core.Link.LinkLevel.Fail);
         var warns = programs.Count(p => p.Level == Core.Link.LinkLevel.Warn);
         var ok = programs.Where(p => p.Level == Core.Link.LinkLevel.Ok).Select(p => TitleFor(p.GroupKey)).ToList();
-        LinkLevel = fails > 0 ? "Fail" : warns > 0 ? "Warn" : programs.Count > 0 ? "Ok" : "Idle";
+        LinkLevel = fails > 0 ? "Fail" : warns > 0 ? "Warn" : ok.Count > 0 ? "Ok" : "Idle";
         LinkTitle = fails == 0 && warns == 0
-            ? "Связь в порядке у всех программ"
+            ? ok.Count > 0 ? "Связь в порядке у всех программ" : "Сейчас программы не обмениваются данными"
             : string.Join(", ", new[]
             {
                 fails > 0 ? TextFormat.Plural(fails, "программа без связи", "программы без связи", "программ без связи") : "",
@@ -266,6 +285,7 @@ internal sealed partial class MainViewModel
         LinkSubtitle = ok.Count > 0
             ? $"Интернет в целом работает: отвечают {string.Join(", ", ok.Take(3))}{(ok.Count > 3 ? " и другие" : "")}"
             : fails > 0 ? "Ни одна программа не получает ответов — похоже, проблема с интернетом или сетью" : "";
+        ApplyNoCapture();
 
         LinkCardView Card(ProgramLink p)
         {
