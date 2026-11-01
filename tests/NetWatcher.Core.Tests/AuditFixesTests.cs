@@ -88,10 +88,11 @@ public class AuditFixesTests
         public Task<WhoamiProbe> WhoamiAsync(IPAddress server, bool tcp, CancellationToken ct) => Task.FromResult(Whoami);
         public Task<TcpProbe> ConnectAsync(IPAddress ip, int port, CancellationToken ct) => Task.FromResult(new TcpProbe(TcpOutcome.Ok, 40));
         public Task<TlsProbe> TlsAsync(IPAddress ip, int port, string name, CancellationToken ct) => Task.FromResult(Tls(ip, name));
-        public Task<bool?> AdvertisesHttp3Async(string host, int port, CancellationToken ct) => Task.FromResult<bool?>(false);
+        public Task<int?> Http3PortAsync(string host, int port, CancellationToken ct) => Task.FromResult<int?>(0);
         public Task<QuicProbe> QuicAsync(IPAddress ip, int port, string name, CancellationToken ct) => Task.FromResult(new QuicProbe(QuicOutcome.Ok, 1));
         public Task<PingProbe> PingAsync(IPAddress ip, int count, CancellationToken ct) => Task.FromResult(new PingProbe(10, 10, 30));
         public Task<MtuProbe> MtuAsync(IPAddress ip, CancellationToken ct) => Task.FromResult(new MtuProbe(1472, false, false));
+        public string? TunnelTo(IPAddress ip) => null;
         public Task<IReadOnlyList<HopProbe>> TraceAsync(IPAddress ip, int max, int rounds, Action<IReadOnlyList<HopProbe>>? progress, CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<HopProbe>>([new HopProbe(1, [IPAddress.Parse("104.16.1.1")], 10, 10, 30, 30, 30, true)]);
     }

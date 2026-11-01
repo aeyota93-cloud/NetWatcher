@@ -88,6 +88,20 @@ internal sealed class DiagnosticsViewModel : ObservableObject
     private string _verdictText = "";
     public string VerdictText { get => _verdictText; private set => Set(ref _verdictText, value); }
 
+    private string _vpnNote = "";
+
+    /// <summary>Why the check counts as going through a VPN; empty when it does not.</summary>
+    public string VpnNote
+    {
+        get => _vpnNote;
+        private set
+        {
+            if (Set(ref _vpnNote, value)) OnPropertyChanged(nameof(HasVpn));
+        }
+    }
+
+    public bool HasVpn => VpnNote != "";
+
     public ObservableCollection<StepView> Steps { get; } = [];
     public ObservableCollection<HopView> Hops { get; } = [];
     public bool HasHops => Hops.Count > 0;
@@ -128,12 +142,13 @@ internal sealed class DiagnosticsViewModel : ObservableObject
         var target = CheckTarget.Parse(Target);
         if (target == null)
         {
-            Error = "Введите сайт или адрес: example.com, 1.2.3.4 или example.com:8443";
+            Error = "Введите сайт или адрес: example.com, 1.2.3.4, example.com:8443 или udp://1.2.3.4:27015";
             return;
         }
 
         Error = "";
         HasVerdict = false;
+        VpnNote = "";
         Hops.Clear();
         OnPropertyChanged(nameof(HasHops));
         Steps.Clear();
@@ -174,6 +189,9 @@ internal sealed class DiagnosticsViewModel : ObservableObject
                 VerdictText = v.Text;
                 HasVerdict = true;
             }
+            VpnNote = _report.Tunnel is { } tunnel
+                ? $"Проверка идёт через VPN: {tunnel}. Задержка, трасса и доступность описывают VPN, а не путь через вашего провайдера."
+                : "";
         }
         catch (OperationCanceledException)
         {

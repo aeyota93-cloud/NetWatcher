@@ -1514,6 +1514,15 @@
                                             </Style>
                                         </TextBlock.Style>
                                     </TextBlock>
+                                    <!-- The check went through a VPN: the measurements describe the tunnel. -->
+                                    <Border DockPanel.Dock="Right" VerticalAlignment="Top" Margin="10,1,0,0" Padding="7,2" CornerRadius="5"
+                                            Background="{DynamicResource AccentSoftBrush}" ToolTip="{Binding VpnNote}" ToolTipService.InitialShowDelay="200"
+                                            Visibility="{Binding HasVpn, Converter={StaticResource BoolToVis}}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="&#xE705;" FontFamily="{StaticResource IconFont}" FontSize="13" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
+                                            <TextBlock Text="VPN" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" Margin="5,0,0,0" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Border>
                                     <StackPanel>
                                         <TextBlock Text="{Binding VerdictTitle}" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" />
                                         <TextBlock Text="{Binding VerdictText}" TextWrapping="Wrap" Margin="0,4,0,0" />

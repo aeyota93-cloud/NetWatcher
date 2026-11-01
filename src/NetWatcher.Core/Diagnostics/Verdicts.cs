@@ -38,6 +38,10 @@ public sealed record SniResult(string Code, string Text)
                 new("interference.invalid_certificate", "с именем сайта пришёл недействительный сертификат — ответ подменён по дороге"),
             TlsOutcome.Ok =>
                 new("success.got_server_hello", $"нейтральный сервер {helper} с именем сайта отвечает нормально — фильтра по имени нет"),
+            // Many helpers (example.org sits behind Cloudflare) refuse a name they do not serve with a TLS
+            // alert. The alert comes from the server after it read the ClientHello: the name got through.
+            TlsOutcome.Alert =>
+                new("success.got_server_hello", $"нейтральный сервер {helper} получил имя сайта и сам ответил отказом TLS — фильтра по имени нет"),
             TlsOutcome.Reset =>
                 new("interference.reset", $"с именем сайта соединение сбрасывается, с контрольным {helper} — проходит"),
             TlsOutcome.Closed =>
@@ -292,6 +296,19 @@ public static class Verdicts
                     "Ни системный, ни независимый DNS не ответили. Похоже, нет подключения к интернету или DNS полностью недоступен." + vpn);
         }
 
+        // A UDP service: only the path to the server can be checked, not the service itself.
+        if (r.Target.Udp && r.Address != null)
+        {
+            const string service = " Работает ли сама служба, так не проверить: она отвечает только своей программе — смотрите вкладку «Связь».";
+            if (r.Ping is { Received: > 0 } up)
+                return up.LossPercent >= TraceAnalysis.LossThreshold
+                    ? new(VerdictLevel.Warn, "Сервер доступен, но теряет пакеты", $"Задержка {up.AvgMs:0} мс, потери {up.LossPercent:0}%." + service + vpn)
+                    : new(VerdictLevel.Ok, "Сервер доступен по сети", $"Задержка {up.AvgMs:0} мс, потерь нет." + service);
+            return new(VerdictLevel.Warn, "Сервер не отвечает на проверочные пакеты",
+                "Многие игровые и голосовые серверы не отвечают на ping, так что это не доказывает, что сервер недоступен." +
+                (r.Hops.Count > 0 ? $" Трасса: {trace.Text}." : "") + service);
+        }
+
         // Connection
         if (r.Tcp is { } tcp && r.Address is { } ip)
         {
@@ -366,6 +383,10 @@ public static class Verdicts
         if (r.Tcp is { Outcome: TcpOutcome.Ok, Ms: > 300 } slowTcp) problems.Add($"подключение долгое: {slowTcp.Ms:0} мс");
         if (r.SystemDns is { Ok: true, Ms: > 500 } slowDns) problems.Add($"DNS отвечает медленно: {slowDns.Ms:0} мс");
         if (r.InterceptionWarning is { } dnsWarning) problems.Add(dnsWarning);
+        if (r.DnsMismatch)
+            problems.Add("системный и независимый DNS дают адреса разных сетей, а сертификат сайта, который снял бы подозрение, не проверялся — это может быть CDN или подмена");
+        if (r.FailedAddress is { } firstAddress)
+            problems.Add($"адрес {firstAddress.Ip} ({(firstAddress.Ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6 ? "IPv6" : "IPv4")}) не подключается, сайт работает через {r.Address}");
 
         var timings = string.Join(", ", new[]
         {

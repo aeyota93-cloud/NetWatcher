@@ -117,12 +117,17 @@ public interface INetProbe
     Task<TcpProbe> ConnectAsync(IPAddress ip, int port, CancellationToken ct);
     Task<TlsProbe> TlsAsync(IPAddress ip, int port, string serverName, CancellationToken ct);
 
-    /// <summary>Whether the site advertises HTTP/3 in its Alt-Svc header; null when unknown.</summary>
-    Task<bool?> AdvertisesHttp3Async(string host, int port, CancellationToken ct);
+    /// <summary>
+    /// The UDP port the site advertises for HTTP/3 in its Alt-Svc header; 0 when it does not, null when unknown.
+    /// </summary>
+    Task<int?> Http3PortAsync(string host, int port, CancellationToken ct);
 
     Task<QuicProbe> QuicAsync(IPAddress ip, int port, string serverName, CancellationToken ct);
     Task<PingProbe> PingAsync(IPAddress ip, int count, CancellationToken ct);
     Task<MtuProbe> MtuAsync(IPAddress ip, CancellationToken ct);
+
+    /// <summary>The VPN adapter that traffic to <paramref name="ip"/> would take, described; null for an ordinary network.</summary>
+    string? TunnelTo(IPAddress ip);
 
     /// <summary>MTR-style: <paramref name="rounds"/> probes per hop, reporting the table after every round.</summary>
     Task<IReadOnlyList<HopProbe>> TraceAsync(IPAddress ip, int maxHops, int rounds, Action<IReadOnlyList<HopProbe>>? progress, CancellationToken ct);
@@ -153,8 +158,9 @@ public sealed class NetProbe(HttpClient http) : INetProbe
 
     public async Task<DnsProbe> ResolveIndependentAsync(string host, CancellationToken ct)
     {
-        // Two public resolvers with the same JSON API; the second one if the first is unreachable.
-        string[] servers = ["https://cloudflare-dns.com/dns-query", "https://dns.google/resolve"];
+        // Two public resolvers with the same JSON API, by address first: their names would go through the
+        // system DNS, and a broken system DNS must not take the independent one down with it.
+        string[] servers = ["https://1.1.1.1/dns-query", "https://8.8.8.8/resolve", "https://cloudflare-dns.com/dns-query", "https://dns.google/resolve"];
         var sw = Stopwatch.StartNew();
         string? lastError = null;
         foreach (var server in servers)
@@ -356,20 +362,46 @@ public sealed class NetProbe(HttpClient http) : INetProbe
         }
     }
 
-    public async Task<bool?> AdvertisesHttp3Async(string host, int port, CancellationToken ct)
+    // Alt-Svc belongs to the origin that sent it, so redirects must not be followed here.
+    private static readonly HttpClient NoRedirects = new(new SocketsHttpHandler { AllowAutoRedirect = false }) { Timeout = TimeSpan.FromSeconds(10) };
+
+    public async Task<int?> Http3PortAsync(string host, int port, CancellationToken ct)
     {
         try
         {
             using var req = new HttpRequestMessage(HttpMethod.Get, $"https://{host}:{port}/") { Version = HttpVersion.Version11 };
+            req.Headers.UserAgent.ParseAdd("NetWatcher");
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             cts.CancelAfter(TimeSpan.FromSeconds(8));
-            using var resp = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);
-            return resp.Headers.TryGetValues("Alt-Svc", out var values) && values.Any(v => v.Contains("h3", StringComparison.OrdinalIgnoreCase));
+            using var resp = await NoRedirects.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);
+            return resp.Headers.TryGetValues("Alt-Svc", out var values) ? Http3PortOf(string.Join(",", values)) ?? 0 : 0;
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// Reads the HTTP/3 port from an Alt-Svc header such as <c>h3=":443"; ma=86400, h3-29=":8443"</c>.
+    /// Only alternatives on the same host are taken: another host would need its own address.
+    /// </summary>
+    public static int? Http3PortOf(string altSvc)
+    {
+        foreach (var entry in altSvc.Split(','))
+        {
+            var value = entry.Split(';')[0].Trim();
+            var eq = value.IndexOf('=');
+            if (eq < 0) continue;
+            var protocol = value[..eq].Trim();
+            if (!(protocol == "h3" || protocol.StartsWith("h3-", StringComparison.Ordinal))) continue;
+            var authority = value[(eq + 1)..].Trim().Trim('"');
+            var colon = authority.LastIndexOf(':');
+            if (colon < 0) continue;
+            if (authority[..colon] != "") continue;
+            if (int.TryParse(authority[(colon + 1)..], out var p) && p is > 0 and < 65536) return p;
+        }
+        return null;
     }
 
     public async Task<QuicProbe> QuicAsync(IPAddress ip, int port, string serverName, CancellationToken ct)
@@ -476,14 +508,55 @@ public sealed class NetProbe(HttpClient http) : INetProbe
         return new MtuProbe(lo, tooBig, v6);
     }
 
+    // Words in the names of VPN adapters; PPP is left out on purpose — many providers connect over PPPoE.
+    private static readonly string[] TunnelMarks =
+        ["vpn", "wireguard", "wintun", "tap-windows", "openvpn", "amnezia", "anyconnect", "nordlynx", "outline", "warp",
+         "tailscale", "zerotier", "sing-box", "sing-tun", "v2ray", "hiddify", "tun2socks", "clash", "tunnel"];
+
+    public string? TunnelTo(IPAddress ip)
+    {
+        try
+        {
+            // Connecting a UDP socket sends nothing: Windows only picks the route and the local address.
+            using var s = new Socket(ip.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
+            s.Connect(new IPEndPoint(ip, 443));
+            var local = IpKey.Normalize(((IPEndPoint)s.LocalEndPoint!).Address);
+            foreach (var n in NetworkInterface.GetAllNetworkInterfaces())
+            {
+                if (!n.GetIPProperties().UnicastAddresses.Any(u => IpKey.Normalize(u.Address).Equals(local))) continue;
+                var text = (n.Name + " " + n.Description).ToLowerInvariant();
+                var transition = text.Contains("teredo") || text.Contains("isatap") || text.Contains("6to4");
+                // "tun0", "utun3": the usual names of TUN adapters of proxy clients.
+                var tunName = n.Name.StartsWith("tun", StringComparison.OrdinalIgnoreCase) || n.Name.StartsWith("utun", StringComparison.OrdinalIgnoreCase);
+                return !transition && (n.NetworkInterfaceType == NetworkInterfaceType.Tunnel || tunName || TunnelMarks.Any(text.Contains))
+                    ? $"трафик к {ip} идёт через адаптер «{n.Name}» ({n.Description})"
+                    : null;
+            }
+        }
+        catch (Exception e) when (e is SocketException or NetworkInformationException)
+        {
+            // Unknown: say nothing rather than guess.
+        }
+        return null;
+    }
+
     public async Task<IReadOnlyList<HopProbe>> TraceAsync(IPAddress ip, int maxHops, int rounds, Action<IReadOnlyList<HopProbe>>? progress, CancellationToken ct)
     {
         var stats = Enumerable.Range(1, maxHops).Select(_ => new HopStats()).ToArray();
+        var last = maxHops;
         for (var round = 0; round < rounds; round++)
         {
             var started = Stopwatch.StartNew();
             // One probe per hop per round, all hops at once; rounds about a second apart, as MTR does.
-            await Task.WhenAll(Enumerable.Range(1, maxHops).Select(ttl => Probe(ip, ttl, stats[ttl - 1], ct))).ConfigureAwait(false);
+            // Once the destination is found, longer TTLs only pile extra pings on it (and on its ICMP limit).
+            await Task.WhenAll(Enumerable.Range(1, last).Select(ttl => Probe(ip, ttl, stats[ttl - 1], ct))).ConfigureAwait(false);
+            for (var i = 0; i < last; i++)
+                lock (stats[i].Lock)
+                    if (stats[i].Reached)
+                    {
+                        last = i + 1;
+                        break;
+                    }
             progress?.Invoke(Snapshot(stats));
             var wait = TimeSpan.FromSeconds(1) - started.Elapsed;
             if (wait > TimeSpan.Zero && round < rounds - 1) await Task.Delay(wait, ct).ConfigureAwait(false);

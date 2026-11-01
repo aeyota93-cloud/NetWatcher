@@ -42,12 +42,15 @@ public class DiagnosticsTests
             Task.FromResult(host == Checker.ControlSni ? Helper : host == "whoami.akamai.net" ? new DnsProbe([Ip("95.2.2.2")], false, null, 5) : Sys);
         public Task<DnsProbe> ResolveIndependentAsync(string host, CancellationToken ct) => Task.FromResult(Ind);
         public Task<WhoamiProbe> WhoamiAsync(IPAddress server, bool tcp, CancellationToken ct) => Task.FromResult(tcp ? Tcp : Udp);
-        public Task<TcpProbe> ConnectAsync(IPAddress ip, int port, CancellationToken ct) => Task.FromResult(Connect);
+        public Func<IPAddress, TcpProbe>? ConnectTo;
+        public Task<TcpProbe> ConnectAsync(IPAddress ip, int port, CancellationToken ct) => Task.FromResult(ConnectTo?.Invoke(ip) ?? Connect);
         public Task<TlsProbe> TlsAsync(IPAddress ip, int port, string name, CancellationToken ct) => Task.FromResult(Tls(ip, name));
-        public Task<bool?> AdvertisesHttp3Async(string host, int port, CancellationToken ct) => Task.FromResult(H3);
+        public Task<int?> Http3PortAsync(string host, int port, CancellationToken ct) => Task.FromResult(H3 switch { true => (int?)443, false => 0, null => null });
         public Task<QuicProbe> QuicAsync(IPAddress ip, int port, string name, CancellationToken ct) => Task.FromResult(Quic);
         public Task<PingProbe> PingAsync(IPAddress ip, int count, CancellationToken ct) => Task.FromResult(Ping);
         public Task<MtuProbe> MtuAsync(IPAddress ip, CancellationToken ct) => Task.FromResult(Mtu);
+        public string? Tunnel;
+        public string? TunnelTo(IPAddress ip) => Tunnel;
         public Task<IReadOnlyList<HopProbe>> TraceAsync(IPAddress ip, int max, int rounds, Action<IReadOnlyList<HopProbe>>? progress, CancellationToken ct)
         {
             progress?.Invoke(Trace);
@@ -170,7 +173,9 @@ public class DiagnosticsTests
         Assert.Equal("interference.unknown_authority", SniResult.Classify(new(TlsOutcome.Ok, 10, CertStatus.UnknownAuthority), ok).Code);
         Assert.Equal("interference.invalid_certificate", SniResult.Classify(new(TlsOutcome.Ok, 10, CertStatus.Invalid), ok).Code);
         Assert.Equal("success.got_server_hello", SniResult.Classify(new(TlsOutcome.Ok, 10, CertStatus.NameMismatch), ok).Code);
-        Assert.Equal("anomaly.unexpected_failure", SniResult.Classify(new(TlsOutcome.Alert, 10), ok).Code);
+        // example.org behind Cloudflare: a foreign name gets an alert from the server itself.
+        Assert.Equal("success.got_server_hello", SniResult.Classify(new(TlsOutcome.Alert, 10), ok).Code);
+        Assert.Equal("anomaly.unexpected_failure", SniResult.Classify(new(TlsOutcome.Error, 10, Error: "x"), ok).Code);
         Assert.Equal("anomaly.test_helper_unreachable", SniResult.Classify(new(TlsOutcome.Reset, 10), new(TlsOutcome.Timeout, 10)).Code);
     }
 
@@ -337,6 +342,87 @@ public class DiagnosticsTests
         Assert.Equal(CertStatus.NameMismatch, NetProbe.Classify(System.Net.Security.SslPolicyErrors.RemoteCertificateNameMismatch, null));
         Assert.Equal(CertStatus.Invalid, NetProbe.Classify(System.Net.Security.SslPolicyErrors.RemoteCertificateChainErrors, null));
     }
+
+    // ------------------------------------------------------------ v0.4.1 audit, stage 2
+
+    [Fact]
+    public async Task Helper_that_refuses_a_foreign_name_means_no_sni_filter()
+    {
+        // example.org behind Cloudflare answers an unknown name with a TLS alert.
+        var r = await Run(new FakeProbe { Tls = SiteCut(TlsOutcome.Reset, TlsOutcome.Alert) });
+        Assert.Equal("success.got_server_hello", r.Sni!.Code);
+        Assert.Equal(StepStatus.Ok, StepOf(r, "sni"));
+        Assert.Equal("Защищённое соединение с сайтом не устанавливается", r.Verdict!.Title);
+    }
+
+    [Fact]
+    public async Task Broken_ipv6_falls_back_to_ipv4()
+    {
+        var p = new FakeProbe
+        {
+            Sys = new([Ip("2606:4700::1"), Ip("104.16.1.1")], false, null, 12),
+            ConnectTo = ip => ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6 ? new(TcpOutcome.Unreachable, 1) : new(TcpOutcome.Ok, 40),
+        };
+        var r = await Run(p);
+        Assert.Equal(Ip("104.16.1.1"), r.Address);
+        Assert.Equal(StepStatus.Warn, StepOf(r, "tcp"));
+        Assert.Equal(VerdictLevel.Warn, r.Verdict!.Level);
+        Assert.Contains("2606:4700::1 (IPv6) не подключается", r.Verdict.Text);
+    }
+
+    [Fact]
+    public async Task Server_silent_to_icmp_is_fine_when_it_connects()
+    {
+        var p = new FakeProbe { Ping = new(10, 0, 0), Trace = [Hop(1, "192.168.1.1"), Hop(2, "95.1.1.1"), Hop(3, null), Hop(4, null)] };
+        var r = await Run(p);
+        Assert.Equal(StepStatus.Ok, StepOf(r, "trace"));
+        Assert.Contains("не отвечает на трассировку — это нормально", r.Steps.Single(s => s.Id == "trace").Text);
+        Assert.Equal(VerdictLevel.Ok, r.Verdict!.Level);
+    }
+
+    [Fact]
+    public async Task Vpn_is_noticed_by_adapter_and_by_timing()
+    {
+        var byAdapter = await Run(new FakeProbe { Tunnel = "трафик идёт через адаптер «AmneziaVPN»" });
+        Assert.NotNull(byAdapter.Tunnel);
+        Assert.Contains("Проверка шла через VPN", byAdapter.ToText());
+
+        var byTiming = await Run(new FakeProbe { Connect = new(TcpOutcome.Ok, 2), Trace = [Hop(1, "104.16.1.1", ms: 30, reached: true)] });
+        Assert.Contains("локальный VPN или прокси", byTiming.Tunnel);
+
+        var plain = await Run(new FakeProbe());
+        Assert.Null(plain.Tunnel);
+    }
+
+    [Fact]
+    public async Task Udp_service_is_not_judged_by_tcp()
+    {
+        var p = new FakeProbe { Connect = new(TcpOutcome.Refused, 5) };
+        var r = await Run(p, "udp://104.16.1.1:27015");
+        Assert.True(r.Target.Udp);
+        Assert.Null(r.Tcp);
+        Assert.Equal(StepStatus.Skipped, StepOf(r, "tcp"));
+        Assert.Equal("Сервер доступен по сети", r.Verdict!.Title);
+        Assert.Equal("udp://104.16.1.1:27015", r.Target.Display);
+        Assert.Null(CheckTarget.Parse("udp://104.16.1.1")); // a UDP service needs its port
+    }
+
+    [Fact]
+    public async Task Dns_mismatch_without_a_certificate_stays_in_the_verdict()
+    {
+        var r = await Run(new FakeProbe { Ind = new([Ip("151.101.1.1")], false, null, 20) }, "example.net:80");
+        Assert.True(r.DnsMismatch);
+        Assert.Equal(VerdictLevel.Warn, r.Verdict!.Level);
+        Assert.Contains("адреса разных сетей", r.Verdict.Text);
+    }
+
+    [Theory]
+    [InlineData("h3=\":443\"; ma=86400", 443)]
+    [InlineData("h3-29=\":8443\"; ma=86400, h2=\":443\"", 8443)]
+    [InlineData("h2=\":443\"", null)]
+    [InlineData("h3=\"alt.example:443\"", null)]
+    [InlineData("clear", null)]
+    public void Reads_http3_port_from_alt_svc(string header, int? port) => Assert.Equal(port, NetProbe.Http3PortOf(header));
 }
 
 public class OwnerNameTests

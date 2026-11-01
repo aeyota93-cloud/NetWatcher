@@ -997,6 +997,8 @@ internal sealed partial class MainViewModel : ObservableObject
         var r = item?.Rows.FirstOrDefault();
         if (r == null) return null;
         var host = r.PrimaryDomain != "" ? r.PrimaryDomain : r.RemoteIp.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6 ? $"[{r.RemoteIpText}]" : r.RemoteIpText;
+        // A UDP row is checked as a UDP service: a TCP connection to its port would say nothing about it.
+        if (r.Proto == "UDP") return $"udp://{host}:{r.RemotePort}";
         return r.RemotePort == 443 ? host : $"{host}:{r.RemotePort}";
     }
 
