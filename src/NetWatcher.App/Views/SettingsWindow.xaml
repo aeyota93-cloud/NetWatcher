@@ -30,10 +30,23 @@
                    Text="Уведомление Windows, когда программа делает что-то впервые. Первые сутки после установки NetWatcher только запоминает, что для этого компьютера обычно. Несколько событий подряд складываются в одно уведомление, не чаще раза в 30 секунд." />
         <Border Style="{StaticResource Card}">
             <StackPanel>
-                <CheckBox x:Name="AlertProgram" Content="Программа впервые вышла в интернет" Margin="0,0,0,6" />
+                <CheckBox x:Name="AlertProgram" Content="Программа впервые замечена в сети" Margin="0,0,0,6" />
                 <CheckBox x:Name="AlertCountry" Content="Программа обратилась к серверу в новой для неё стране" Margin="0,0,0,6" />
                 <CheckBox x:Name="AlertNetwork" Content="Программа обратилась в новую для неё сеть (AS) — бывает часто" Margin="0,0,0,6" />
-                <CheckBox x:Name="AlertSkipBrowsers" Content="Для браузеров — только первый выход в сеть (каждый сайт — новая страна и сеть)" />
+                <CheckBox x:Name="AlertSkipBrowsers" Content="Для браузеров — только первое появление в сети (браузеры часто обращаются к новым сетям)" />
+            </StackPanel>
+        </Border>
+
+        <TextBlock Text="Обновления" FontSize="15" FontWeight="SemiBold" Margin="0,22,0,8" />
+        <Border Style="{StaticResource Card}">
+            <StackPanel>
+                <CheckBox x:Name="CheckUpdates" Content="Проверять новую версию при запуске и раз в сутки" />
+                <TextBlock Style="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="24,4,0,8"
+                           Text="Устанавливается только по вашей кнопке. Журнал, настройки и блокировки сохраняются." />
+                <StackPanel Orientation="Horizontal">
+                    <Button x:Name="CheckNow" Style="{StaticResource BtnSmall}" Content="Проверить сейчас" Click="OnCheckUpdates" />
+                    <TextBlock x:Name="UpdateCheckText" Style="{StaticResource Muted}" FontSize="12" VerticalAlignment="Center" Margin="10,0,0,0" TextWrapping="Wrap" />
+                </StackPanel>
             </StackPanel>
         </Border>
 
@@ -60,7 +73,7 @@
                     <TextBox x:Name="Poll" DockPanel.Dock="Right" Width="80" Padding="6,4" />
                     <StackPanel VerticalAlignment="Center">
                         <TextBlock Text="Как часто опрашивать соединения, секунд" />
-                        <TextBlock Text="От 1 до 60. Короткие соединения ловятся и между опросами" Style="{StaticResource Muted}" FontSize="12" />
+                        <TextBlock Text="От 1 до 60. С правами администратора короткие соединения видны и между опросами" Style="{StaticResource Muted}" FontSize="12" />
                     </StackPanel>
                 </DockPanel>
                 <CheckBox x:Name="HideLoopback" Content="Скрывать обращения к самому компьютеру (127.0.0.1, ::1)" />
@@ -84,7 +97,7 @@
 
         <TextBlock Text="База стран" FontSize="15" FontWeight="SemiBold" Margin="0,22,0,4" />
         <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap"
-                   Text="Где физически стоит сервер — по таблице DB-IP «IP to Country Lite», около 4 МБ, обновляется раз в месяц. Без неё страна показывается по месту регистрации сети: у Cloudflare, Google или Amazon это почти всегда США, хотя сервер может быть во Франкфурте. Копия встроена в программу." />
+                   Text="Страна сервера по IP (возможны ошибки) — по таблице DB-IP «IP to Country Lite», около 4 МБ, обновляется раз в месяц. Без неё страна показывается по месту регистрации сети: у Cloudflare, Google или Amazon это почти всегда США, хотя сервер может быть во Франкфурте. Копия встроена в программу." />
         <TextBlock Style="{StaticResource Faint}" Margin="0,4,0,0">
             <Hyperlink NavigateUri="https://db-ip.com" RequestNavigate="OnLink">IP Geolocation by DB-IP</Hyperlink><Run Text=" · лицензия CC BY 4.0" />
         </TextBlock>

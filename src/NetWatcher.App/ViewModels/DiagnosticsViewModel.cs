@@ -154,7 +154,7 @@ internal sealed class DiagnosticsViewModel : ObservableObject
         Steps.Clear();
         foreach (var (id, title) in new[]
                  {
-                     ("dns", "DNS"), ("dnsint", "Перехват DNS"), ("tcp", "Подключение"), ("tls", "Защищённое соединение"),
+                     ("dns", "DNS"), ("dnsint", "Проверка подмены DNS"), ("tcp", "Подключение"), ("tls", "Защищённое соединение"),
                      ("quic", "HTTP/3 (QUIC, UDP 443)"), ("ping", "Задержка"), ("trace", "Трасса"), ("mtu", "Размер пакетов (MTU)"),
                  })
             Steps.Add(new StepView(id, title));

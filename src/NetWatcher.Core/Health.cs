@@ -48,7 +48,7 @@ public static class DnsStatus
     public static string Describe(int status) => status switch
     {
         BlockedAnswer => "ответ-заглушка 0.0.0.0 — похоже на блокировку через DNS",
-        9003 => "домен не существует",
+        9003 => "DNS не нашёл домен",
         9501 => "у домена нет записей этого типа",
         1460 => "DNS-сервер не ответил",
         9002 => "ошибка DNS-сервера",

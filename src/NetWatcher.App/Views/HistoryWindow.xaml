@@ -26,7 +26,7 @@
         </DockPanel>
         <DataGrid x:Name="Grid" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="None"
                   BorderThickness="0" Background="Transparent" RowBackground="Transparent" AlternatingRowBackground="Transparent"
-                  CanUserResizeRows="False" SelectionMode="Extended">
+                  CanUserResizeRows="False" SelectionMode="Extended" SelectionUnit="FullRow" RowStyle="{StaticResource TableRow}" CellStyle="{StaticResource TableCell}">
             <DataGrid.Columns>
                 <DataGridTextColumn Header="Приложение" Binding="{Binding Name}" Width="*" />
                 <DataGridTextColumn Header="Получено" Binding="{Binding ReceivedText}" SortMemberPath="Received" Width="100" />

@@ -10,7 +10,12 @@ namespace NetWatcher.App.ViewModels;
 /// <summary>A server line of the "Связь" tab.</summary>
 public sealed record LinkServerView(
     string Title, string Address, string Owner, string Proto, string Level, string State,
-    string Latency, string Jitter, string Loss, string LastAnswer, string Traffic, string Reason, bool HasLoss);
+    string Latency, string Jitter, string Loss, string LastAnswer, string Traffic, string Reason, bool HasLoss)
+{
+    public required DestinationRow Row { get; init; }
+    public string Name { get; init; } = "";
+    public string Key => Row.Key;
+}
 
 /// <summary>A line of the events list: outage start or recovery.</summary>
 public sealed record LinkEventView(string Time, string Level, string Text);
@@ -24,6 +29,13 @@ public sealed record LinkCardView(
 internal sealed partial class MainViewModel
 {
     private DispatcherTimer? _linkTimer;
+
+    private LinkServerView? _selectedLinkServer;
+    public LinkServerView? SelectedLinkServer
+    {
+        get => _selectedLinkServer;
+        set => Set(ref _selectedLinkServer, value);
+    }
 
     private void StartLink()
     {
@@ -39,6 +51,7 @@ internal sealed partial class MainViewModel
         });
         ToggleNotifyCommand = new RelayCommand(ToggleNotify);
         InitQuality();
+        InitUpdates();
         OnPropertyChanged(nameof(SelectProgramCommand));
         OnPropertyChanged(nameof(ToggleNotifyCommand));
     }
@@ -105,7 +118,7 @@ internal sealed partial class MainViewModel
 
     public bool NotifyOn => SelectedNav is null or { IsAll: true }
         ? _state.Settings.NotifyAll
-        : _state.Settings.NotifyAll || _state.Settings.NotifyPrograms.Contains(SelectedNav.Key);
+        : _state.Settings.NotifyFor(SelectedNav.Key);
 
     // Short on purpose: the header shares its line with the program's name. The tooltip says the rest.
     public string NotifyText => NotifyOn ? "Уведомления включены" : "Уведомлять о сбоях";
@@ -114,7 +127,9 @@ internal sealed partial class MainViewModel
     {
         var s = _state.Settings;
         if (SelectedNav is null or { IsAll: true }) s.NotifyAll = !s.NotifyAll;
-        else if (!s.NotifyPrograms.Remove(SelectedNav.Key)) s.NotifyPrograms.Add(SelectedNav.Key);
+        // With "all programs" on, a program is switched off by an exception, not by its own list.
+        else if (s.NotifyAll && !s.NotifyExcept.Remove(SelectedNav.Key)) s.NotifyExcept.Add(SelectedNav.Key);
+        else if (!s.NotifyAll && !s.NotifyPrograms.Remove(SelectedNav.Key)) s.NotifyPrograms.Add(SelectedNav.Key);
         _state.SaveSettings();
         OnPropertyChanged(nameof(NotifyOn));
         OnPropertyChanged(nameof(NotifyText));
@@ -137,13 +152,19 @@ internal sealed partial class MainViewModel
         {
             if (recent.TryGetValue(n.Key, out var p) && p.Level != Core.Link.LinkLevel.Idle)
             {
+                // A problem is an icon in the narrow list; its words go to the tooltip.
+                var ok = p.Level == Core.Link.LinkLevel.Ok;
                 n.LinkLevel = p.Level.ToString();
-                n.LinkText = p.Level == Core.Link.LinkLevel.Ok ? (p.LatencyMs is { } ms ? $"{ms:0} мс" : "работает") : p.StateText;
+                n.LinkText = ok && p.LatencyMs is { } ms ? $"{ms:0} мс" : "";
+                n.LinkTip = ok
+                    ? "Сбоев не видно" + (p.LatencyMs is { } tip ? $", задержка {tip:0} мс" : "")
+                    : char.ToUpper(p.StateText[0]) + p.StateText[1..];
             }
             else
             {
                 n.LinkLevel = "";
                 n.LinkText = "";
+                n.LinkTip = "";
             }
         }
 
@@ -204,7 +225,7 @@ internal sealed partial class MainViewModel
                 LinkSubtitle = worst?.Reason ?? "";
                 break;
             case Core.Link.LinkLevel.Ok:
-                LinkTitle = "Связь в порядке";
+                LinkTitle = "Сбоев не видно";
                 LinkSubtitle = TextFormat.Plural(activeServers, "сервер отвечает", "сервера отвечают", "серверов отвечают")
                                + (lastOutage != null
                                    ? $" · последний сбой в {lastOutage.Start.LocalDateTime:HH:mm:ss}, длился {(int)lastOutage.Duration(now).TotalSeconds} с"
@@ -221,6 +242,7 @@ internal sealed partial class MainViewModel
         LinkOutages = p.Outages.ToString();
         LinkChart = p.Chart;
 
+        var selectedServerKey = SelectedLinkServer?.Key;
         Replace(LinkServers, p.Servers.Select(s =>
         {
             var name = ServerName(s.Ip, p.Process);
@@ -242,8 +264,18 @@ internal sealed partial class MainViewModel
                 s.Reason != "" ? s.Reason
                     : s.LatencyFrom == Core.Link.LatencySource.Connection ? "Сервер не отвечает на пинг; задержка — по самому TCP-соединению программы (её измеряет Windows)"
                     : s.Pingable || s.Proto == "TCP" ? "" : "Сервер не отвечает на пинг, а у UDP нет подтверждений — задержку измерить нельзя, это не ошибка",
-                (s.LossPercent ?? 0) >= 1);
+                (s.LossPercent ?? 0) >= 1)
+            {
+                Name = name,
+                Row = _rows.FirstOrDefault(r => r.GroupKey == p.GroupKey && r.RemoteIp.Equals(s.Ip) && r.RemotePort == s.Port && r.Proto == s.Proto) ?? new DestinationRow
+                {
+                    Process = p.Process, Services = p.Services, Path = p.Path,
+                    Proto = s.Proto, RemoteIp = s.Ip, RemotePort = s.Port,
+                    Domains = name != "" ? [name] : [], Asn = _state.Asn.Lookup(s.Ip),
+                },
+            };
         }));
+        SelectedLinkServer = LinkServers.FirstOrDefault(s => s.Key == selectedServerKey);
 
         // Why: the reasons of problem servers, and whether other programs are fine.
         var reasons = p.Servers
@@ -254,7 +286,7 @@ internal sealed partial class MainViewModel
         {
             var others = all.Where(o => o.GroupKey != p.GroupKey && o.Level == Core.Link.LinkLevel.Ok).Select(o => TitleFor(o.GroupKey)).Take(3).ToList();
             reasons.Add(others.Count > 0
-                ? $"Другие программы получают ответы ({string.Join(", ", others)}) — интернет в целом есть"
+                ? $"Другие программы получают ответы ({string.Join(", ", others)})"
                 : "Другие программы сейчас тоже не получают ответов — возможно, проблема с интернетом");
         }
         Replace(LinkReasons, reasons);
@@ -281,14 +313,14 @@ internal sealed partial class MainViewModel
         var ok = programs.Where(p => p.Level == Core.Link.LinkLevel.Ok).Select(p => TitleFor(p.GroupKey)).ToList();
         LinkLevel = fails > 0 ? "Fail" : warns > 0 ? "Warn" : ok.Count > 0 ? "Ok" : "Idle";
         LinkTitle = fails == 0 && warns == 0
-            ? ok.Count > 0 ? "Связь в порядке у всех программ" : "Сейчас программы не обмениваются данными"
+            ? ok.Count > 0 ? "У активных программ сбоев не видно" : "Сейчас программы не обмениваются данными"
             : string.Join(", ", new[]
             {
                 fails > 0 ? TextFormat.Plural(fails, "программа без связи", "программы без связи", "программ без связи") : "",
                 warns > 0 ? TextFormat.Plural(warns, "программа с потерями", "программы с потерями", "программ с потерями") : "",
             }.Where(x => x != ""));
         LinkSubtitle = ok.Count > 0
-            ? $"Интернет в целом работает: отвечают {string.Join(", ", ok.Take(3))}{(ok.Count > 3 ? " и другие" : "")}"
+            ? $"Получают ответы: {string.Join(", ", ok.Take(3))}{(ok.Count > 3 ? " и другие" : "")}"
             : fails > 0 ? "Ни одна программа не получает ответов — похоже, проблема с интернетом или сетью" : "";
         ApplyNoCapture();
 

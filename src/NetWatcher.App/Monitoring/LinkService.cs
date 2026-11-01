@@ -231,7 +231,7 @@ internal sealed class LinkService(AppState state) : IDisposable
                 _ = Task.Run(() => TraceAsync(s.Key, s.Ip));
             }
 
-            var wanted = state.Settings.NotifyAll || state.Settings.NotifyPrograms.Contains(p.GroupKey);
+            var wanted = state.Settings.NotifyFor(p.GroupKey);
             _alerts.TryGetValue(p.GroupKey, out var alert);
             var title = TitleOf?.Invoke(p.GroupKey) ?? p.Process;
             if (p.Level == LinkLevel.Fail && !alert.Down)
@@ -241,7 +241,7 @@ internal sealed class LinkService(AppState state) : IDisposable
                 {
                     var reason = p.Servers.FirstOrDefault(s => s.Level == LinkLevel.Fail)?.Reason ?? "";
                     Notify?.Invoke($"{title}: пропала связь с сервером",
-                        $"{Capital(p.StateText)}. {reason}" + (anyOk ? " Интернет в целом работает." : ""), true);
+                        $"{Capital(p.StateText)}. {reason}" + (anyOk ? " Другие программы получают ответы." : ""), true);
                     alert = alert with { NotifiedAt = DateTime.UtcNow };
                 }
                 _alerts[p.GroupKey] = alert with { Down = true, Since = since };

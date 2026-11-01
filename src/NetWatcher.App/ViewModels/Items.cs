@@ -122,8 +122,13 @@ public sealed class NavItem : ObservableObject
         }
     }
 
-    /// <summary>"45 мс", "потери 6%", "нет ответа 12 с".</summary>
+    /// <summary>"45 мс" when the link is fine; empty when a problem is shown as an icon.</summary>
     public string LinkText { get => _linkText; set => Set(ref _linkText, value); }
+
+    private string _linkTip = "";
+
+    /// <summary>The whole state for the tooltip: "Не отвечает 1 из 21 сервера".</summary>
+    public string LinkTip { get => _linkTip; set => Set(ref _linkTip, value); }
 
     public bool HasLink => _linkLevel is "Ok" or "Warn" or "Fail";
 

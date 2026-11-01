@@ -20,8 +20,23 @@ public sealed class Settings
     /// <summary>"System", "Light" or "Dark".</summary>
     public string Theme { get; set; } = "System";
 
+    /// <summary>Width of the programs list, as the user dragged it.</summary>
+    public double NavWidth { get; set; } = 280;
+
+    /// <summary>Height of the details panel under the table, as the user dragged it.</summary>
+    public double DetailsHeight { get; set; } = 240;
+
+    /// <summary>Look for a new version at start and once a day; installing always waits for the user.</summary>
+    public bool CheckUpdates { get; set; } = true;
+
     /// <summary>Windows notification when any program loses its link.</summary>
     public bool NotifyAll { get; set; }
+
+    /// <summary>Programs left out while <see cref="NotifyAll"/> is on.</summary>
+    public List<string> NotifyExcept { get; set; } = [];
+
+    /// <summary>Whether to notify about this program losing its link.</summary>
+    public bool NotifyFor(string groupKey) => NotifyAll ? !NotifyExcept.Contains(groupKey) : NotifyPrograms.Contains(groupKey);
 
     /// <summary>Programs (group keys) to notify about when their link is lost.</summary>
     public List<string> NotifyPrograms { get; set; } = [];

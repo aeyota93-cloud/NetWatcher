@@ -70,6 +70,8 @@ public class LinkMonitorTests
         t = Feed(m, t.AddSeconds(2), 10, () => Udp(128, 128));
         p = Assert.Single(m.Snapshot(t, TimeSpan.FromMinutes(15)));
         Assert.Equal(LinkLevel.Ok, p.Level);
+        Assert.Equal("сбоев не видно", p.StateText);
+        Assert.Equal("сбоев не видно", p.Servers[0].StateText);
         var outage = Assert.Single(p.OutageList);
         Assert.NotNull(outage.End);
         Assert.InRange(outage.Duration(t).TotalSeconds, 14, 18);
@@ -229,7 +231,7 @@ public class LinkMonitorTests
         var m = new LinkMonitor(TimeSpan.FromHours(1));
         var t = Feed(m, T0, 20, () => Udp(64, 64));
         t = Feed(m, t.AddSeconds(2), 10, () => Udp(64, 0));
-        m.SetNote(LinkMonitor.KeyOf("cs2.exe", "UDP", Game, 27015), "трасса обрывается после узла 7");
-        Assert.Contains("трасса обрывается", Assert.Single(m.Snapshot(t, TimeSpan.FromMinutes(15))).Servers[0].Reason);
+        m.SetNote(LinkMonitor.KeyOf("cs2.exe", "UDP", Game, 27015), "после узла 7 ответы не получены; это не доказывает обрыв");
+        Assert.Contains("после узла 7 ответы не получены; это не доказывает обрыв", Assert.Single(m.Snapshot(t, TimeSpan.FromMinutes(15))).Servers[0].Reason);
     }
 }

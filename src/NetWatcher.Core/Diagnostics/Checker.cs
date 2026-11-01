@@ -200,7 +200,7 @@ public static class Checker
             .ToList();
 
         // 1. DNS and DNS interception, side by side.
-        Step("dnsint", "Перехват DNS", StepStatus.Running, "спрашиваем 8.8.8.8 напрямую…");
+        Step("dnsint", "Проверка подмены DNS", StepStatus.Running, "спрашиваем 8.8.8.8 напрямую…");
         var interceptTask = Task.WhenAll(
             probe.WhoamiAsync(GoogleDns, false, ct),
             probe.WhoamiAsync(GoogleDns, true, ct));
@@ -232,7 +232,7 @@ public static class Checker
         report.WhoamiTcp = whoami[1];
         report.SystemResolver = await resolverTask.ConfigureAwait(false);
         var (ist, itx) = Verdicts.DescribeInterception(report.WhoamiUdp, report.WhoamiTcp, report.SystemResolver, asn);
-        Step("dnsint", "Перехват DNS", ist, itx);
+        Step("dnsint", "Проверка подмены DNS", ist, itx);
         report.InterceptionWarning = Verdicts.InterceptionSummary(report.WhoamiUdp, report.WhoamiTcp, asn);
 
         if (report.Address is not { } ip)
@@ -249,7 +249,7 @@ public static class Checker
         {
             // A UDP service answers only its own protocol: a TCP connection or a TLS handshake says nothing about it.
             Step("tcp", "Подключение", StepStatus.Skipped, "это UDP-служба: подключение по TCP ничего о ней не скажет");
-            Step("tls", "Защищённое соединение", StepStatus.Skipped, "у UDP-службы нет TLS-рукопожатия");
+            Step("tls", "Защищённое соединение", StepStatus.Skipped, "TLS в этой проверке не используется");
             Step("quic", "HTTP/3 (QUIC, UDP 443)", StepStatus.Skipped, "не относится к этой службе");
         }
         else
@@ -293,7 +293,7 @@ public static class Checker
                 {
                     report.DnsMismatch = false;
                     Step("dns", "DNS", StepStatus.Ok,
-                        $"{sys.Addresses[0]} за {sys.Ms:0} мс; независимый DNS дал адрес другой сети, но сертификат сайта действителен — это CDN, а не подмена");
+                        $"{sys.Addresses[0]} за {sys.Ms:0} мс; DNS дали разные сети, но сертификат сайта действителен. Различие адресов само по себе не доказывает подмену");
                 }
 
                 // 3a. When the handshake fails: is it the name? OONI ts-024 — the same neutral server,

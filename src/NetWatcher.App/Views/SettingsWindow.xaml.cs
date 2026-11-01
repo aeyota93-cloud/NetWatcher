@@ -8,11 +8,14 @@ namespace NetWatcher.App.Views;
 internal partial class SettingsWindow : Window
 {
     private readonly AppState _state;
+    private readonly Func<Task<string>>? _checkUpdates;
 
-    public SettingsWindow(AppState state)
+    public SettingsWindow(AppState state, Func<Task<string>>? checkUpdates = null)
     {
         InitializeComponent();
         _state = state;
+        _checkUpdates = checkUpdates;
+        CheckUpdates.IsChecked = state.Settings.CheckUpdates;
         Retention.Text = state.Settings.RetentionDays.ToString();
         Poll.Text = state.Settings.PollSeconds.ToString();
         HideLoopback.IsChecked = state.Settings.HideLoopback;
@@ -61,6 +64,7 @@ internal partial class SettingsWindow : Window
         s.HideLoopback = HideLoopback.IsChecked == true;
         s.AlertNewProgram = AlertProgram.IsChecked == true;
         s.QualityPings = QualityPings.IsChecked == true;
+        s.CheckUpdates = CheckUpdates.IsChecked == true;
         s.AlertNewCountry = AlertCountry.IsChecked == true;
         s.AlertNewNetwork = AlertNetwork.IsChecked == true;
         s.AlertSkipBrowsers = AlertSkipBrowsers.IsChecked == true;
@@ -192,5 +196,14 @@ internal partial class SettingsWindow : Window
         {
             AsnButton.IsEnabled = true;
         }
+    }
+
+    private async void OnCheckUpdates(object sender, RoutedEventArgs e)
+    {
+        if (_checkUpdates == null) return;
+        CheckNow.IsEnabled = false;
+        UpdateCheckText.Text = "Проверка…";
+        UpdateCheckText.Text = await _checkUpdates();
+        CheckNow.IsEnabled = true;
     }
 }

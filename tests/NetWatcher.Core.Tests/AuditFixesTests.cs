@@ -115,7 +115,7 @@ public class AuditFixesTests
         };
         var r = await Run(p);
         Assert.Equal(VerdictLevel.Fail, r.Verdict!.Level);
-        Assert.Equal("Блокировка по имени сайта (DPI)", r.Verdict.Title);
+        Assert.Equal("Похоже на блокировку по имени сайта", r.Verdict.Title);
         Assert.Equal(StepStatus.Fail, r.Steps.Single(s => s.Id == "tls").Status);
     }
 

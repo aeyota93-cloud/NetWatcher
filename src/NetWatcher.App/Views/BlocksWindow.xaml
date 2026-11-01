@@ -19,10 +19,10 @@
             <TextBlock x:Name="Empty" Text="Блокировок нет. Заблокировать можно из меню строки: правая кнопка → «Заблокировать…»."
                        Style="{StaticResource Muted}" TextWrapping="Wrap" VerticalAlignment="Top" />
             <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <ItemsControl x:Name="List">
-                    <ItemsControl.ItemTemplate>
+                <ListBox x:Name="List" ItemContainerStyle="{StaticResource ListRow}" Background="Transparent" BorderThickness="0" Padding="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemTemplate>
                         <DataTemplate>
-                            <Border Style="{StaticResource Card}" Margin="0,0,0,8">
+                            <Border Style="{StaticResource Card}" Background="Transparent" Margin="0,0,0,8">
                                 <DockPanel>
                                     <Button DockPanel.Dock="Right" Style="{StaticResource BtnSmall}" Content="Снять" Tag="{Binding Rule}" Click="OnRemove"
                                             VerticalAlignment="Center" Margin="12,0,0,0" />
@@ -34,8 +34,8 @@
                                 </DockPanel>
                             </Border>
                         </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                    </ListBox.ItemTemplate>
+                </ListBox>
             </ScrollViewer>
         </Grid>
     </DockPanel>

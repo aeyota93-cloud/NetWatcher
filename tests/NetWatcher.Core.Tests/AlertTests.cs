@@ -88,7 +88,13 @@ public class AlertTests
         var one = new Novelty(NoveltyKind.Country, "steam.exe", "steam.exe", "NL", "Нидерланды (NL)", "cdn.steam.com", IPAddress.Parse("2.2.2.2"));
         var (title, text) = NoveltyDetector.Compose([one], Title);
         Assert.Equal("Steam: новая страна — Нидерланды (NL)", title);
+        Assert.StartsWith("Впервые замечено обращение к серверу в этой стране:", text);
         Assert.Contains("cdn.steam.com (2.2.2.2)", text);
+
+        var program = one with { Kind = NoveltyKind.Program };
+        Assert.Equal("Впервые замечена в сети: steam.exe → cdn.steam.com (2.2.2.2)", NoveltyDetector.Compose([program], Title).Text);
+        var network = one with { Kind = NoveltyKind.Network };
+        Assert.StartsWith("Впервые замечено обращение в эту сеть:", NoveltyDetector.Compose([network], Title).Text);
 
         var many = new List<Novelty>
         {
@@ -100,7 +106,7 @@ public class AlertTests
         (title, text) = NoveltyDetector.Compose(many, Title);
         Assert.Equal("Новое в сети: 4 события", title);
         Assert.Contains("Steam: новые страны NL, DE; 1 новая сеть", text);
-        Assert.Contains("cs2.exe: впервые в сети", text);
+        Assert.Contains("cs2.exe: впервые замечена в сети", text);
     }
 
     [Fact]

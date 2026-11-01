@@ -108,9 +108,9 @@ public sealed class NoveltyDetector
             var name = titleOf(n.GroupKey);
             return n.Kind switch
             {
-                NoveltyKind.Program => ($"Новая программа в сети: {name}", $"{n.Process} впервые вышла в интернет: {Where(n)}"),
-                NoveltyKind.Country => ($"{name}: новая страна — {n.ValueText}", $"Впервые обращается к серверу в этой стране: {Where(n)}"),
-                _ => ($"{name}: новая сеть — {n.ValueText}", $"Впервые обращается в эту сеть: {Where(n)}"),
+                NoveltyKind.Program => ($"Новая программа в сети: {name}", $"Впервые замечена в сети: {n.Process} → {Where(n)}"),
+                NoveltyKind.Country => ($"{name}: новая страна — {n.ValueText}", $"Впервые замечено обращение к серверу в этой стране: {Where(n)}"),
+                _ => ($"{name}: новая сеть — {n.ValueText}", $"Впервые замечено обращение в эту сеть: {Where(n)}"),
             };
         }
 
@@ -119,7 +119,7 @@ public sealed class NoveltyDetector
             .Select(g =>
             {
                 var parts = new List<string>();
-                if (g.Any(n => n.Kind == NoveltyKind.Program)) parts.Add("впервые в сети");
+                if (g.Any(n => n.Kind == NoveltyKind.Program)) parts.Add("впервые замечена в сети");
                 var countries = g.Where(n => n.Kind == NoveltyKind.Country).Select(n => n.Value).Distinct().ToList();
                 if (countries.Count > 0) parts.Add((countries.Count == 1 ? "новая страна " : "новые страны ") + string.Join(", ", countries));
                 var nets = g.Count(n => n.Kind == NoveltyKind.Network);

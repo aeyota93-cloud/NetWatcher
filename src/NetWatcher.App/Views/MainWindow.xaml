@@ -47,8 +47,6 @@
             <Separator />
             <MenuItem Header="Проверить соединение…" InputGestureText="Ctrl+D" Command="{Binding OpenCheckCommand}"
                       CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-            <MenuItem Header="Подробно о сети (RDAP)" Command="{Binding RdapCommand}"
-                      CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
             <MenuItem Header="Открыть папку программы" Command="{Binding OpenFolderCommand}"
                       CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
             <Separator />
@@ -57,28 +55,38 @@
             <MenuItem Header="Снять блокировку…" Command="{Binding UnblockCommand}"
                       CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
             <MenuItem Header="Разорвать соединение…" Command="{Binding CloseConnectionCommand}"
-                      ToolTip="Закрыть открытые TCP-соединения программы с этим адресом: она увидит обрыв и подключится заново"
+                      ToolTip="Закрыть открытые TCP-соединения программы с этим адресом: программа может подключиться снова"
                       CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
         </ContextMenu>
 
+        <ContextMenu x:Key="ServerMenu" DataContext="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource Self}}">
+            <MenuItem Header="Копировать адрес" Command="{Binding CopyValueCommand}"
+                      CommandParameter="{Binding PlacementTarget.DataContext.Address, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+            <MenuItem Header="Копировать имя сервера" Command="{Binding CopyValueCommand}"
+                      CommandParameter="{Binding PlacementTarget.DataContext.Name, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      Visibility="{Binding PlacementTarget.DataContext.Name, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource TextVis}}" />
+            <Separator />
+            <MenuItem Header="Проверить соединение" Command="{Binding OpenCheckCommand}" CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+            <MenuItem Header="Найти всё с этим IP" Command="{Binding SearchIpCommand}" CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+            <MenuItem Header="Подробно о сети (RDAP)" Command="{Binding RdapCommand}" CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+            <MenuItem Header="Заблокировать…" Command="{Binding BlockCommand}" CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+            <MenuItem Header="Снять блокировку…" Command="{Binding UnblockCommand}" CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+            <MenuItem Header="Разорвать соединение…" Command="{Binding CloseConnectionCommand}" CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+        </ContextMenu>
         <!-- Rows: no grid lines, a soft hover, the accent-tinted selection. -->
-        <Style x:Key="RowStyle" TargetType="DataGridRow">
+        <Style x:Key="RowStyle" TargetType="DataGridRow" BasedOn="{StaticResource TableRow}">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderBrush" Value="{DynamicResource StrokeBrush}" />
             <Setter Property="BorderThickness" Value="0,0,0,1" />
             <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
             <Setter Property="MinHeight" Value="40" />
+        </Style>
+        <Style x:Key="AddressRowStyle" TargetType="DataGridRow" BasedOn="{StaticResource RowStyle}">
             <Style.Triggers>
                 <DataTrigger Binding="{Binding IsChild}" Value="True">
                     <Setter Property="MinHeight" Value="34" />
                     <Setter Property="Foreground" Value="{DynamicResource Text2Brush}" />
                 </DataTrigger>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{DynamicResource HoverBrush}" />
-                </Trigger>
-                <Trigger Property="IsSelected" Value="True">
-                    <Setter Property="Background" Value="{DynamicResource SelBrush}" />
-                </Trigger>
             </Style.Triggers>
         </Style>
         <Style x:Key="CellStyle" TargetType="DataGridCell">
@@ -176,7 +184,7 @@
                             Visibility="{Binding HasSearch, Converter={StaticResource NotVis}}">
                         <TextBlock Text="Ctrl+F" FontSize="11" Style="{StaticResource Faint}" />
                     </Border>
-                    <Button Grid.Column="2" Style="{StaticResource BtnGhost}" Content="&#xE711;" ToolTip="Очистить (Esc)"
+                    <Button Grid.Column="2" Style="{StaticResource BtnGhost}" Content="&#xE711;" ToolTip="Очистить поиск"
                             Command="{Binding ClearSearchCommand}" Visibility="{Binding HasSearch, Converter={StaticResource BoolToVis}}" />
                 </Grid>
             </Border>
@@ -199,11 +207,24 @@
             <Border Grid.Column="2" Height="36" Width="150" Margin="10,0,0,0" Padding="12,0" CornerRadius="6" ToolTip="{Binding LiveText}"
                     Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource Stroke2Brush}" BorderThickness="1">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <!-- A slowly breathing dot says "recording" without a ticking number. -->
                     <Ellipse Width="8" Height="8" Margin="0,0,8,0">
                         <Ellipse.Style>
                             <Style TargetType="Ellipse">
                                 <Setter Property="Fill" Value="{DynamicResource OkBrush}" />
                                 <Style.Triggers>
+                                    <DataTrigger Binding="{Binding LiveOk}" Value="True">
+                                        <DataTrigger.EnterActions>
+                                            <BeginStoryboard x:Name="Breathe">
+                                                <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                                                    <DoubleAnimation Storyboard.TargetProperty="Opacity" From="1" To="0.35" Duration="0:0:1.2" />
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </DataTrigger.EnterActions>
+                                        <DataTrigger.ExitActions>
+                                            <StopStoryboard BeginStoryboardName="Breathe" />
+                                        </DataTrigger.ExitActions>
+                                    </DataTrigger>
                                     <DataTrigger Binding="{Binding LiveOk}" Value="False">
                                         <Setter Property="Fill" Value="{DynamicResource WarnBrush}" />
                                     </DataTrigger>
@@ -239,27 +260,6 @@
                         <TextBlock Text="Экспорт списка" />
                     </StackPanel>
                 </Button>
-                <Button x:Name="ThemeButton" Style="{StaticResource Btn}" Height="36" Padding="10,0" Margin="8,0,0,0" Click="OnThemeMenu"
-                        ToolTip="{Binding ThemeTitle}" AutomationProperties.Name="Тема оформления">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="{Binding ThemeGlyph}" Style="{StaticResource Icon}" FontSize="15" Foreground="{DynamicResource Text2Brush}" />
-                        <TextBlock Text="&#xE70D;" Style="{StaticResource Icon}" FontSize="9" Margin="6,2,0,0" Foreground="{DynamicResource Text3Brush}" />
-                    </StackPanel>
-                    <Button.ContextMenu>
-                        <ContextMenu>
-                            <MenuItem Header="Как в Windows" IsCheckable="False" IsChecked="{Binding IsThemeSystem, Mode=OneWay}"
-                                      Command="{Binding SetThemeCommand}" CommandParameter="System">
-                                <MenuItem.Icon><TextBlock Text="&#xE7F4;" FontFamily="{StaticResource IconFont}" /></MenuItem.Icon>
-                            </MenuItem>
-                            <MenuItem Header="Светлая" IsChecked="{Binding IsThemeLight, Mode=OneWay}" Command="{Binding SetThemeCommand}" CommandParameter="Light">
-                                <MenuItem.Icon><TextBlock Text="&#xE706;" FontFamily="{StaticResource IconFont}" /></MenuItem.Icon>
-                            </MenuItem>
-                            <MenuItem Header="Тёмная" IsChecked="{Binding IsThemeDark, Mode=OneWay}" Command="{Binding SetThemeCommand}" CommandParameter="Dark">
-                                <MenuItem.Icon><TextBlock Text="&#xE708;" FontFamily="{StaticResource IconFont}" /></MenuItem.Icon>
-                            </MenuItem>
-                        </ContextMenu>
-                    </Button.ContextMenu>
-                </Button>
                 <Button Style="{StaticResource BtnIcon}" Margin="8,0,0,0" Content="&#xE713;" Click="OnSettings" ToolTip="Настройки" />
             </StackPanel>
         </Grid>
@@ -286,8 +286,25 @@
             </DockPanel>
         </DockPanel>
 
-        <!-- ============ Banner: owner database missing ============ -->
-        <Border Grid.Row="2" Margin="16,0,16,10" Padding="14,8" CornerRadius="6" Background="{DynamicResource WarnSoftBrush}"
+        <!-- ============ Banners: a new version, the owner database missing ============ -->
+        <StackPanel Grid.Row="2">
+        <Border Margin="16,0,16,10" Padding="14,8" CornerRadius="6" Background="{DynamicResource AccentSoftBrush}"
+                BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1"
+                Visibility="{Binding UpdateAvailable, Converter={StaticResource BoolToVis}}">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <TextBlock Text="{Binding UpdateMessage}" Style="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                    <Button Style="{StaticResource BtnPrimarySmall}" Content="Установить" Command="{Binding InstallUpdateCommand}" />
+                    <Button Style="{StaticResource BtnSmall}" Content="Позже" Margin="8,0,0,0" Command="{Binding DismissUpdateCommand}" />
+                </StackPanel>
+                <TextBlock Text="&#xE896;" Style="{StaticResource Icon}" Foreground="{DynamicResource AccentBrush}" Margin="0,0,12,0" />
+                <TextBlock VerticalAlignment="Center" TextWrapping="Wrap">
+                    <Run Text="{Binding UpdateText, Mode=OneWay}" FontWeight="SemiBold" />
+                    <Run Text="Программа скачает её, проверит и перезапустится. Журнал, настройки и блокировки сохранятся." />
+                </TextBlock>
+            </DockPanel>
+        </Border>
+        <Border Margin="16,0,16,10" Padding="14,8" CornerRadius="6" Background="{DynamicResource WarnSoftBrush}"
                 BorderBrush="{DynamicResource WarnStrokeBrush}" BorderThickness="1"
                 Visibility="{Binding AsnBannerVisible, Converter={StaticResource BoolToVis}}">
             <DockPanel>
@@ -303,14 +320,14 @@
                 </TextBlock>
             </DockPanel>
         </Border>
+        </StackPanel>
 
         <!-- ============ Body ============ -->
         <Border Grid.Row="3" Background="{DynamicResource LayerBrush}" BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="0,1,0,0">
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="280" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="340" />
+                    <ColumnDefinition x:Name="NavColumn" Width="280" MinWidth="200" MaxWidth="520" />
+                    <ColumnDefinition Width="*" MinWidth="500" />
                 </Grid.ColumnDefinitions>
 
                 <!-- Programs -->
@@ -346,13 +363,13 @@
                             </GroupStyle>
                         </ListBox.GroupStyle>
                         <ListBox.ItemContainerStyle>
-                            <Style TargetType="ListBoxItem">
+                            <Style TargetType="ListBoxItem" BasedOn="{StaticResource ListRow}">
                                 <Setter Property="FocusVisualStyle" Value="{x:Null}" />
                                 <Setter Property="ToolTip" Value="{Binding Path}" />
                                 <Setter Property="Template">
                                     <Setter.Value>
                                         <ControlTemplate TargetType="ListBoxItem">
-                                            <Border x:Name="b" Margin="6,1" Padding="8,6" CornerRadius="6" Background="Transparent">
+                                            <Border x:Name="b" Margin="6,1" Padding="8,6" CornerRadius="6" Background="{TemplateBinding Background}">
                                                 <Grid>
                                                     <Border x:Name="bar" Width="3" CornerRadius="1.5" Margin="-8,4,0,4" HorizontalAlignment="Left"
                                                             Background="{DynamicResource AccentBrush}" Visibility="Hidden" />
@@ -360,11 +377,8 @@
                                                 </Grid>
                                             </Border>
                                             <ControlTemplate.Triggers>
-                                                <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter TargetName="b" Property="Background" Value="{DynamicResource HoverBrush}" />
-                                                </Trigger>
                                                 <Trigger Property="IsSelected" Value="True">
-                                                    <Setter TargetName="b" Property="Background" Value="{DynamicResource SelBrush}" />
+
                                                     <Setter TargetName="bar" Property="Visibility" Value="Visible" />
                                                 </Trigger>
                                             </ControlTemplate.Triggers>
@@ -397,7 +411,7 @@
                                             </Grid.ColumnDefinitions>
                                             <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Title}" />
                                             <Border Grid.Column="1" Style="{StaticResource NewBadge}" Visibility="{Binding IsNew, Converter={StaticResource BoolToVis}}"
-                                                    ToolTip="Впервые вышла в сеть за последние сутки">
+                                                    ToolTip="Впервые замечена в журнале за последние сутки">
                                                 <TextBlock Text="НОВОЕ" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource NewBrush}" />
                                             </Border>
                                         </Grid>
@@ -414,25 +428,35 @@
                                             </Border>
                                             <TextBlock Text="{Binding Count}" Style="{StaticResource Muted}" FontSize="12" ToolTip="{Binding CountTip}"
                                                        Visibility="{Binding HasLink, Converter={StaticResource NotVis}}" />
+                                            <!-- Fine: a green dot and the latency. A problem: one icon, the words in the tooltip. -->
                                             <StackPanel Orientation="Horizontal" Visibility="{Binding HasLink, Converter={StaticResource BoolToVis}}"
-                                                        ToolTip="Состояние связи за последние 2 минуты (вкладка «Связь»)">
-                                                <Ellipse Width="8" Height="8" Margin="0,0,5,0" VerticalAlignment="Center">
+                                                        ToolTip="{Binding LinkTip}">
+                                                <Ellipse Width="8" Height="8" Margin="0,0,5,0" VerticalAlignment="Center" Fill="{DynamicResource OkBrush}">
                                                     <Ellipse.Style>
                                                         <Style TargetType="Ellipse">
-                                                            <Setter Property="Fill" Value="{DynamicResource OkBrush}" />
+                                                            <Setter Property="Visibility" Value="Collapsed" />
                                                             <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding LinkLevel}" Value="Warn"><Setter Property="Fill" Value="{DynamicResource WarnBrush}" /></DataTrigger>
-                                                                <DataTrigger Binding="{Binding LinkLevel}" Value="Fail"><Setter Property="Fill" Value="{DynamicResource DangerBrush}" /></DataTrigger>
+                                                                <DataTrigger Binding="{Binding LinkLevel}" Value="Ok"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
                                                             </Style.Triggers>
                                                         </Style>
                                                     </Ellipse.Style>
                                                 </Ellipse>
-                                                <TextBlock Text="{Binding LinkText}" FontSize="12">
+                                                <TextBlock Text="{Binding LinkText}" FontSize="12" Style="{StaticResource Muted}" VerticalAlignment="Center" />
+                                                <TextBlock FontFamily="{StaticResource IconFont}" FontSize="14" VerticalAlignment="Center">
                                                     <TextBlock.Style>
-                                                        <Style TargetType="TextBlock" BasedOn="{StaticResource Muted}">
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
                                                             <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding LinkLevel}" Value="Warn"><Setter Property="Foreground" Value="{DynamicResource WarnBrush}" /><Setter Property="FontWeight" Value="SemiBold" /></DataTrigger>
-                                                                <DataTrigger Binding="{Binding LinkLevel}" Value="Fail"><Setter Property="Foreground" Value="{DynamicResource DangerBrush}" /><Setter Property="FontWeight" Value="SemiBold" /></DataTrigger>
+                                                                <DataTrigger Binding="{Binding LinkLevel}" Value="Warn">
+                                                                    <Setter Property="Visibility" Value="Visible" />
+                                                                    <Setter Property="Text" Value="&#xE7BA;" />
+                                                                    <Setter Property="Foreground" Value="{DynamicResource WarnBrush}" />
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding LinkLevel}" Value="Fail">
+                                                                    <Setter Property="Visibility" Value="Visible" />
+                                                                    <Setter Property="Text" Value="&#xEA39;" />
+                                                                    <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+                                                                </DataTrigger>
                                                             </Style.Triggers>
                                                         </Style>
                                                     </TextBlock.Style>
@@ -461,35 +485,29 @@
                     </ListBox>
                 </DockPanel>
 
+                <!-- Splitter between the programs list and the rest; its position is kept in the settings. -->
+                <GridSplitter Grid.Column="0" Width="5" HorizontalAlignment="Right" VerticalAlignment="Stretch" Background="Transparent"
+                              ResizeBehavior="CurrentAndNext" Cursor="SizeWE" DragCompleted="OnPanelsResized" ToolTip="Потяните, чтобы изменить ширину" />
+
+                <!-- Table above, details below; the details height is kept in the settings too. -->
+                <Grid Grid.Column="1">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*" MinHeight="220" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition x:Name="DetailsRow" Height="240" MinHeight="110" />
+                    </Grid.RowDefinitions>
+
                 <!-- Main: header, tabs, table -->
-                <Border Grid.Column="1" BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="1,0,1,0">
+                <Border Grid.Row="0" BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="1,0,0,1">
                     <DockPanel>
                         <DockPanel DockPanel.Dock="Top" Margin="16,12,16,0">
                             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                                <Button Style="{StaticResource BtnSmall}" Margin="0,0,8,0" Command="{Binding ToggleNotifyCommand}"
+                                <Button Style="{StaticResource BtnSmall}" Command="{Binding ToggleNotifyCommand}"
                                         Visibility="{Binding IsLinkTab, Converter={StaticResource BoolToVis}}"
                                         ToolTip="Уведомление Windows, когда сервер программы перестаёт отвечать, и когда связь возвращается. В «Все программы» — для любой программы">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="&#xEA8F;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,6,0" />
                                         <TextBlock Text="{Binding NotifyText}" />
-                                    </StackPanel>
-                                </Button>
-                                <Button Style="{StaticResource BtnSmall}" Command="{Binding CopyAllIpsCommand}" ToolTip="Все IP-адреса из списка ниже">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="&#xE8C8;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,6,0" />
-                                        <TextBlock Text="Все IP" />
-                                    </StackPanel>
-                                </Button>
-                                <Button Style="{StaticResource BtnSmall}" Margin="8,0,0,0" Command="{Binding CopyAllDomainsCommand}">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="&#xE8C8;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,6,0" />
-                                        <TextBlock Text="Все домены" />
-                                    </StackPanel>
-                                </Button>
-                                <Button Style="{StaticResource BtnPrimarySmall}" Margin="8,0,0,0" Command="{Binding OpenVpnExportCommand}">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="&#xE898;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,6,0" />
-                                        <TextBlock Text="Подсети для VPN…" />
                                     </StackPanel>
                                 </Button>
                             </StackPanel>
@@ -532,14 +550,14 @@
                         </Border>
 
                         <Grid>
-                            <DataGrid x:Name="Grid" ItemsSource="{Binding Table}" SelectedItem="{Binding SelectedItem}"
+                            <DataGrid x:Name="Grid" PreviewMouseDown="OnTableMouseDown" ItemsSource="{Binding Table}" SelectedItem="{Binding SelectedItem}"
                                       Visibility="{Binding IsTableTab, Converter={StaticResource BoolToVis}}"
                                       Tag="{Binding}" ContextMenu="{StaticResource RowMenu}"
                                       AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Extended" SelectionUnit="FullRow"
                                       HeadersVisibility="Column" GridLinesVisibility="None" BorderThickness="0" Background="Transparent"
                                       RowBackground="Transparent" AlternatingRowBackground="Transparent"
                                       CanUserSortColumns="{Binding IsAddressesTab}" CanUserResizeRows="False" CanUserReorderColumns="False"
-                                      RowStyle="{StaticResource RowStyle}" CellStyle="{StaticResource CellStyle}" ColumnHeaderStyle="{StaticResource HeaderStyle}"
+                                      RowStyle="{StaticResource AddressRowStyle}" CellStyle="{StaticResource CellStyle}" ColumnHeaderStyle="{StaticResource HeaderStyle}"
                                       EnableRowVirtualization="True" VirtualizingPanel.VirtualizationMode="Recycling"
                                       ClipboardCopyMode="None" MouseDoubleClick="OnRowDoubleClick">
                                 <DataGrid.Columns>
@@ -573,10 +591,10 @@
                                                     <Border Width="24" Visibility="{Binding IsChild, Converter={StaticResource BoolToVis}}" />
                                                     <!-- Domain above, address below: in one line a long domain pushed the address out of the cell. -->
                                                     <StackPanel VerticalAlignment="Center">
-                                                        <TextBlock Text="{Binding DomainText}" ToolTip="{Binding DomainText}" TextTrimming="CharacterEllipsis"
-                                                                   Visibility="{Binding DomainText, Converter={StaticResource TextVis}}">
-                                                            <TextBlock.Style>
-                                                                <Style TargetType="TextBlock">
+                                                        <TextBox Text="{Binding DomainText, Mode=OneWay}" ToolTip="{Binding DomainText}"
+                                                                 Visibility="{Binding DomainText, Converter={StaticResource TextVis}}">
+                                                            <TextBox.Style>
+                                                                <Style TargetType="TextBox" BasedOn="{StaticResource SelectableText}">
                                                                     <Setter Property="FontWeight" Value="SemiBold" />
                                                                     <Style.Triggers>
                                                                         <DataTrigger Binding="{Binding HasDomain}" Value="False">
@@ -585,12 +603,12 @@
                                                                         </DataTrigger>
                                                                     </Style.Triggers>
                                                                 </Style>
-                                                            </TextBlock.Style>
-                                                        </TextBlock>
+                                                            </TextBox.Style>
+                                                        </TextBox>
                                                         <StackPanel Orientation="Horizontal">
-                                                        <TextBlock Text="{Binding Ip}" VerticalAlignment="Center" FontFamily="{StaticResource MonoFont}" FontSize="12.5">
-                                                            <TextBlock.Style>
-                                                                <Style TargetType="TextBlock">
+                                                        <TextBox Text="{Binding Ip, Mode=OneWay}" FontFamily="{StaticResource MonoFont}" FontSize="12.5">
+                                                            <TextBox.Style>
+                                                                <Style TargetType="TextBox" BasedOn="{StaticResource SelectableText}">
                                                                     <Setter Property="Foreground" Value="{DynamicResource Text3Brush}" />
                                                                     <Style.Triggers>
                                                                         <DataTrigger Binding="{Binding IsChild}" Value="True">
@@ -602,8 +620,8 @@
                                                                         </DataTrigger>
                                                                     </Style.Triggers>
                                                                 </Style>
-                                                            </TextBlock.Style>
-                                                        </TextBlock>
+                                                            </TextBox.Style>
+                                                        </TextBox>
                                                         <Border CornerRadius="8" Padding="6,0" Margin="8,0,0,0" VerticalAlignment="Center"
                                                                 Background="{DynamicResource DangerSoftBrush}" ToolTip="{Binding BlockTip}"
                                                                 Visibility="{Binding IsBlocked, Converter={StaticResource BoolToVis}}">
@@ -614,7 +632,7 @@
                                                             <TextBlock Text="{Binding Mark}" FontSize="10.5" FontWeight="SemiBold" />
                                                         </Border>
                                                         <Border Style="{StaticResource NewBadge}" Visibility="{Binding IsNew, Converter={StaticResource BoolToVis}}"
-                                                                ToolTip="Программа впервые пошла сюда за последние сутки">
+                                                                ToolTip="Обращение к адресу впервые замечено за последние сутки">
                                                             <TextBlock Text="НОВОЕ" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource NewBrush}" />
                                                         </Border>
                                                         </StackPanel>
@@ -877,8 +895,17 @@
                                                     <TextBlock Grid.Column="6" Text="ОТВЕТ БЫЛ" />
                                                     <TextBlock Grid.Column="7" Text="ЗА МИНУТУ ↑ / ↓" ToolTip="Сколько отправлено и получено за последнюю минуту" />
                                                 </Grid>
-                                                <ItemsControl ItemsSource="{Binding LinkServers}">
-                                                    <ItemsControl.ItemTemplate>
+                                                <ListBox x:Name="ServerList" ItemsSource="{Binding LinkServers}" SelectedItem="{Binding SelectedLinkServer}"
+                                                         BorderThickness="0" Background="Transparent" Padding="0"
+                                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                                         PreviewMouseDown="OnServerMouseDown">
+                                                    <ListBox.ItemContainerStyle>
+                                                        <Style TargetType="ListBoxItem" BasedOn="{StaticResource ListRow}">
+                                                            <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                                            <Setter Property="ContextMenu" Value="{StaticResource ServerMenu}" />
+                                                        </Style>
+                                                    </ListBox.ItemContainerStyle>
+                                                    <ListBox.ItemTemplate>
                                                         <DataTemplate DataType="{x:Type vm:LinkServerView}">
                                                             <Border BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="0,1,0,0" Padding="12,6" ToolTip="{Binding Reason}">
                                                                 <Grid>
@@ -894,10 +921,12 @@
                                                                     </Grid.ColumnDefinitions>
                                                                     <!-- Name on top, address and owner below: in one line a long name hid the address. -->
                                                                     <StackPanel Margin="0,0,8,0">
-                                                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                                                                        <TextBlock FontSize="12" TextTrimming="CharacterEllipsis">
-                                                                            <Run Text="{Binding Address, Mode=OneWay}" FontFamily="{StaticResource MonoFont}" Foreground="{DynamicResource Text2Brush}" /><Run Text="  " /><Run Text="{Binding Owner, Mode=OneWay}" Foreground="{DynamicResource Text3Brush}" />
-                                                                        </TextBlock>
+                                                                        <TextBox Text="{Binding Title, Mode=OneWay}" FontWeight="SemiBold" Style="{StaticResource SelectableText}" ContextMenu="{StaticResource ServerMenu}" Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                                                        <DockPanel>
+                                                                            <TextBox DockPanel.Dock="Left" Text="{Binding Address, Mode=OneWay}" FontSize="12" FontFamily="{StaticResource MonoFont}"
+                                                                                     Foreground="{DynamicResource Text2Brush}" Style="{StaticResource SelectableText}" ContextMenu="{StaticResource ServerMenu}" Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}" Margin="0,0,8,0" />
+                                                                            <TextBlock Text="{Binding Owner}" FontSize="12" Foreground="{DynamicResource Text3Brush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                                                        </DockPanel>
                                                                     </StackPanel>
                                                                     <Border Grid.Column="1" Style="{StaticResource Tag}" HorizontalAlignment="Left">
                                                                         <TextBlock Text="{Binding Proto}" FontSize="11" Foreground="{DynamicResource Text2Brush}" />
@@ -924,8 +953,8 @@
                                                                 </Grid>
                                                             </Border>
                                                         </DataTemplate>
-                                                    </ItemsControl.ItemTemplate>
-                                                </ItemsControl>
+                                                    </ListBox.ItemTemplate>
+                                                </ListBox>
                                             </StackPanel>
                                         </Border>
 
@@ -1068,8 +1097,13 @@
                                                         CommandParameter="{Binding Key}" ToolTip="Открыть связь этой программы">
                                                     <Button.Template>
                                                         <ControlTemplate TargetType="Button">
-                                                            <Border x:Name="b" Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource StrokeBrush}"
+                                                            <Border x:Name="b" BorderBrush="{DynamicResource StrokeBrush}"
                                                                     BorderThickness="1" CornerRadius="8" Padding="12">
+                                                                <Border.Style>
+                                                                    <Style TargetType="Border" BasedOn="{StaticResource HoverRow}">
+                                                                        <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+                                                                    </Style>
+                                                                </Border.Style>
                                                                 <ContentPresenter HorizontalAlignment="Stretch" />
                                                             </Border>
                                                             <ControlTemplate.Triggers>
@@ -1265,278 +1299,270 @@
                         </Grid>
                     </DockPanel>
                 </Border>
+                <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch" Background="Transparent"
+                              ResizeBehavior="PreviousAndNext" Cursor="SizeNS" DragCompleted="OnPanelsResized" ToolTip="Потяните, чтобы изменить высоту" />
 
-                <!-- Details -->
-                <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" Padding="16,14">
+                <!-- Details: under the table, groups side by side; they wrap when the window is narrow. -->
+                <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="16,12" Background="{DynamicResource LayerBrush}">
                     <Grid>
                         <!-- Selected address or domain -->
-                        <StackPanel Visibility="{Binding HasSelection, Converter={StaticResource BoolToVis}}">
-                            <DockPanel Margin="0,0,0,14">
-                                <Button DockPanel.Dock="Right" Style="{StaticResource BtnGhost}" Content="&#xE711;" ToolTip="Закрыть" Click="OnCloseDetails" VerticalAlignment="Top" />
-                                <Border Width="32" Height="32" CornerRadius="8" Background="{DynamicResource AccentSoftBrush}" Margin="0,0,10,0" VerticalAlignment="Top">
-                                    <TextBlock Text="&#xE774;" Style="{StaticResource Icon}" Foreground="{DynamicResource AccentBrush}" />
-                                </Border>
-                                <StackPanel>
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="{Binding D[Title]}" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" MaxWidth="200" />
-                                        <Border Style="{StaticResource NewBadge}" Visibility="{Binding DetailsNew, Converter={StaticResource BoolToVis}}">
-                                            <TextBlock Text="НОВОЕ" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource NewBrush}" />
-                                        </Border>
+                        <WrapPanel Visibility="{Binding HasSelection, Converter={StaticResource BoolToVis}}">
+                            <StackPanel Width="330" Margin="0,0,24,0">
+                                <DockPanel Margin="0,0,0,14">
+                                    <Button DockPanel.Dock="Right" Style="{StaticResource BtnGhost}" Content="&#xE711;" ToolTip="Закрыть" Click="OnCloseDetails" VerticalAlignment="Top" />
+                                    <Border Width="32" Height="32" CornerRadius="8" Background="{DynamicResource AccentSoftBrush}" Margin="0,0,10,0" VerticalAlignment="Top">
+                                        <TextBlock Text="&#xE774;" Style="{StaticResource Icon}" Foreground="{DynamicResource AccentBrush}" />
+                                    </Border>
+                                    <StackPanel>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding D[Title]}" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" MaxWidth="200" />
+                                            <Border Style="{StaticResource NewBadge}" Visibility="{Binding DetailsNew, Converter={StaticResource BoolToVis}}">
+                                                <TextBlock Text="НОВОЕ" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource NewBrush}" />
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding D[Subtitle]}" Style="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" />
                                     </StackPanel>
-                                    <TextBlock Text="{Binding D[Subtitle]}" Style="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" />
-                                </StackPanel>
-                            </DockPanel>
-
-                            <TextBlock Text="{Binding D[IpLabel], Converter={StaticResource Upper}}" Style="{StaticResource Caption}" />
-                            <Border Style="{StaticResource Field}" Margin="0,0,0,12">
-                                <DockPanel>
-                                    <Button DockPanel.Dock="Right" Style="{StaticResource BtnGhost}" Content="&#xE8C8;" ToolTip="Копировать"
-                                            Command="{Binding CopyValueCommand}" CommandParameter="{Binding D[Ip]}" VerticalAlignment="Top" />
-                                    <TextBox Text="{Binding D[Ip], Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent"
-                                             Foreground="{DynamicResource TextBrush}" FontFamily="{StaticResource MonoFont}" TextWrapping="Wrap" VerticalAlignment="Center" />
                                 </DockPanel>
-                            </Border>
 
-                            <TextBlock Text="ДОМЕНЫ ЭТОГО АДРЕСА" Style="{StaticResource Caption}" />
-                            <Border Style="{StaticResource Field}" Margin="0,0,0,12">
-                                <DockPanel>
-                                    <Button DockPanel.Dock="Right" Style="{StaticResource BtnGhost}" Content="&#xE8C8;" ToolTip="Копировать"
-                                            Command="{Binding CopyValueCommand}" CommandParameter="{Binding D[Domains]}" VerticalAlignment="Top" />
-                                    <TextBox Text="{Binding D[Domains], Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent"
-                                             Foreground="{DynamicResource TextBrush}" TextWrapping="Wrap" VerticalAlignment="Center" />
-                                </DockPanel>
-                            </Border>
-
-                            <DockPanel Margin="0,0,0,4">
-                                <Border DockPanel.Dock="Right" Style="{StaticResource SegmentHost}" Padding="1">
-                                    <StackPanel Orientation="Horizontal">
-                                        <RadioButton Style="{StaticResource Segment}" GroupName="fmt" Content="CIDR" FontSize="11" Padding="8,2" IsChecked="{Binding UseCidr}" ToolTip="1.2.3.0/24" />
-                                        <RadioButton Style="{StaticResource Segment}" GroupName="fmt" Content="Маска" FontSize="11" Padding="8,2" IsChecked="{Binding UseMask}" ToolTip="1.2.3.0 255.255.255.0" />
-                                    </StackPanel>
+                                <TextBlock Text="{Binding D[IpLabel], Converter={StaticResource Upper}}" Style="{StaticResource Caption}" />
+                                <Border Style="{StaticResource Field}" Margin="0,0,0,12">
+                                    <DockPanel>
+                                        <Button DockPanel.Dock="Right" Style="{StaticResource BtnGhost}" Content="&#xE8C8;" ToolTip="Копировать"
+                                                Command="{Binding CopyValueCommand}" CommandParameter="{Binding D[Ip]}" VerticalAlignment="Top" />
+                                        <TextBox Text="{Binding D[Ip], Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                                                 Foreground="{DynamicResource TextBrush}" FontFamily="{StaticResource MonoFont}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                    </DockPanel>
                                 </Border>
-                                <TextBlock Text="{Binding D[NetworkLabel], Converter={StaticResource Upper}}" Style="{StaticResource Caption}" VerticalAlignment="Bottom" />
-                            </DockPanel>
-                            <Border Style="{StaticResource Field}" Margin="0,0,0,12">
-                                <DockPanel>
-                                    <Button DockPanel.Dock="Right" Style="{StaticResource BtnGhost}" Content="&#xE8C8;" ToolTip="Копировать"
-                                            Command="{Binding CopyValueCommand}" CommandParameter="{Binding D[Network]}" VerticalAlignment="Top" />
-                                    <TextBox Text="{Binding D[Network], Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent"
-                                             Foreground="{DynamicResource TextBrush}" FontFamily="{StaticResource MonoFont}" TextWrapping="Wrap" VerticalAlignment="Center" />
-                                </DockPanel>
-                            </Border>
 
-                            <Border Style="{StaticResource Card}" Margin="0,0,0,12">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
-                                    </Grid.RowDefinitions>
-                                    <Grid.Resources>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="FontSize" Value="12" />
-                                            <Setter Property="Margin" Value="0,2,14,2" />
-                                            <Setter Property="TextWrapping" Value="Wrap" />
-                                        </Style>
-                                    </Grid.Resources>
-                                    <TextBlock Text="Владелец" Foreground="{DynamicResource Text3Brush}" />
-                                    <TextBlock Grid.Column="1" Text="{Binding D[Owner]}" ToolTip="{Binding D[OwnerRaw]}" />
-                                    <TextBlock Grid.Row="1" Text="Страна" Foreground="{DynamicResource Text3Brush}" />
-                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding D[Country]}" />
-                                    <TextBlock Grid.Row="2" Text="Протокол" Foreground="{DynamicResource Text3Brush}" />
-                                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding D[Protocol]}" />
-                                    <TextBlock Grid.Row="3" Text="Впервые" Foreground="{DynamicResource Text3Brush}" />
-                                    <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding D[First]}" />
-                                    <TextBlock Grid.Row="4" Text="Последний раз" Foreground="{DynamicResource Text3Brush}" />
-                                    <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding D[Last]}" />
-                                    <TextBlock Grid.Row="7" Text="Компания" Foreground="{DynamicResource Text3Brush}"
-                                               ToolTip="Кому принадлежит домен (не сеть, в которой стоит сервер)" />
-                                    <TextBlock Grid.Row="7" Grid.Column="1" Text="{Binding D[Company]}" ToolTip="{Binding D[CompanyTip]}" />
-                                    <TextBlock Grid.Row="6" Text="Трафик" Foreground="{DynamicResource Text3Brush}" />
-                                    <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding D[Traffic]}"
-                                               ToolTip="Полезные данные без заголовков пакетов. Для периодов дольше часа — с точностью до часа" />
-                                    <TextBlock Grid.Row="5" Text="Состояние" Foreground="{DynamicResource Text3Brush}" />
-                                    <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding D[Health]}">
-                                        <TextBlock.Style>
+                                <TextBlock Text="ДОМЕНЫ ЭТОГО АДРЕСА" Style="{StaticResource Caption}" />
+                                <Border Style="{StaticResource Field}" Margin="0,0,0,12">
+                                    <DockPanel>
+                                        <Button DockPanel.Dock="Right" Style="{StaticResource BtnGhost}" Content="&#xE8C8;" ToolTip="Копировать"
+                                                Command="{Binding CopyValueCommand}" CommandParameter="{Binding D[DomainsValue]}" VerticalAlignment="Top" />
+                                        <TextBox Text="{Binding D[Domains], Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                                                 Foreground="{DynamicResource TextBrush}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                    </DockPanel>
+                                </Border>
+                            </StackPanel>
+                            <StackPanel Width="330" Margin="0,0,24,0">
+                                <DockPanel Margin="0,0,0,4">
+                                    <Border DockPanel.Dock="Right" Style="{StaticResource SegmentHost}" Padding="1">
+                                        <StackPanel Orientation="Horizontal">
+                                            <RadioButton Style="{StaticResource Segment}" GroupName="fmt" Content="CIDR" FontSize="11" Padding="8,2" IsChecked="{Binding UseCidr}" ToolTip="1.2.3.0/24" />
+                                            <RadioButton Style="{StaticResource Segment}" GroupName="fmt" Content="Маска" FontSize="11" Padding="8,2" IsChecked="{Binding UseMask}" ToolTip="1.2.3.0 255.255.255.0" />
+                                        </StackPanel>
+                                    </Border>
+                                    <TextBlock Text="{Binding D[NetworkLabel], Converter={StaticResource Upper}}" Style="{StaticResource Caption}" VerticalAlignment="Bottom" />
+                                </DockPanel>
+                                <Border Style="{StaticResource Field}" Margin="0,0,0,12">
+                                    <DockPanel>
+                                        <Button DockPanel.Dock="Right" Style="{StaticResource BtnGhost}" Content="&#xE8C8;" ToolTip="Копировать"
+                                                Command="{Binding CopyValueCommand}" CommandParameter="{Binding D[Network]}" VerticalAlignment="Top" />
+                                        <TextBox Text="{Binding D[Network], Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                                                 Foreground="{DynamicResource TextBrush}" FontFamily="{StaticResource MonoFont}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                    </DockPanel>
+                                </Border>
+
+                                <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
+                                        </Grid.RowDefinitions>
+                                        <Grid.Resources>
                                             <Style TargetType="TextBlock">
                                                 <Setter Property="FontSize" Value="12" />
                                                 <Setter Property="Margin" Value="0,2,14,2" />
                                                 <Setter Property="TextWrapping" Value="Wrap" />
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding D[HealthLevel]}" Value="Fail">
-                                                        <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
-                                                        <Setter Property="FontWeight" Value="SemiBold" />
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding D[HealthLevel]}" Value="Warn">
-                                                        <Setter Property="Foreground" Value="{DynamicResource WarnBrush}" />
-                                                        <Setter Property="FontWeight" Value="SemiBold" />
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding D[HealthLevel]}" Value="Ok">
-                                                        <Setter Property="Foreground" Value="{DynamicResource OkBrush}" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
                                             </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
-                                </Grid>
-                            </Border>
-
-                            <StackPanel Visibility="{Binding D[WhatAny], Converter={StaticResource TextVis}}">
-                                <TextBlock Text="ЧТО ЭТО" Style="{StaticResource Caption}" />
-                                <Border Style="{StaticResource Card}" Margin="0,0,0,12">
-                                    <StackPanel>
-                                        <StackPanel Visibility="{Binding D[WhatProgramTitle], Converter={StaticResource TextVis}}">
-                                            <TextBlock Text="{Binding D[WhatProgramTitle]}" FontWeight="SemiBold" FontSize="12.5" TextWrapping="Wrap" />
-                                            <TextBlock Text="{Binding D[WhatProgram]}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0" />
-                                            <TextBlock Text="{Binding D[WhatProgramBlock]}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0" Style="{StaticResource Muted}" />
-                                        </StackPanel>
-                                        <StackPanel Margin="0,10,0,0" Visibility="{Binding D[WhatDomainTitle], Converter={StaticResource TextVis}}">
-                                            <TextBlock Text="{Binding D[WhatDomainTitle]}" FontWeight="SemiBold" FontSize="12.5" TextWrapping="Wrap" />
-                                            <TextBlock Text="{Binding D[WhatDomain]}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0" />
-                                            <TextBlock Text="{Binding D[WhatDomainBlock]}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0" Style="{StaticResource Muted}" />
-                                        </StackPanel>
-                                    </StackPanel>
+                                        </Grid.Resources>
+                                        <TextBlock Text="Владелец" Foreground="{DynamicResource Text3Brush}" />
+                                        <TextBlock Grid.Column="1" Text="{Binding D[Owner]}" ToolTip="{Binding D[OwnerRaw]}" />
+                                        <TextBlock Grid.Row="1" Text="Страна" Foreground="{DynamicResource Text3Brush}" />
+                                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding D[Country]}" />
+                                        <TextBlock Grid.Row="2" Text="Протокол" Foreground="{DynamicResource Text3Brush}" />
+                                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding D[Protocol]}" />
+                                        <TextBlock Grid.Row="3" Text="Впервые" Foreground="{DynamicResource Text3Brush}" />
+                                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding D[First]}" />
+                                        <TextBlock Grid.Row="4" Text="Последний раз" Foreground="{DynamicResource Text3Brush}" />
+                                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding D[Last]}" />
+                                        <TextBlock Grid.Row="7" Text="Компания" Foreground="{DynamicResource Text3Brush}"
+                                                   ToolTip="Кому принадлежит домен (не сеть, в которой стоит сервер)" />
+                                        <TextBlock Grid.Row="7" Grid.Column="1" Text="{Binding D[Company]}" ToolTip="{Binding D[CompanyTip]}" />
+                                        <TextBlock Grid.Row="6" Text="Трафик" Foreground="{DynamicResource Text3Brush}" />
+                                        <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding D[Traffic]}"
+                                                   ToolTip="Полезные данные без заголовков пакетов. Для периодов дольше часа — с точностью до часа" />
+                                        <TextBlock Grid.Row="5" Text="Состояние" Foreground="{DynamicResource Text3Brush}" />
+                                        <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding D[Health]}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="FontSize" Value="12" />
+                                                    <Setter Property="Margin" Value="0,2,14,2" />
+                                                    <Setter Property="TextWrapping" Value="Wrap" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding D[HealthLevel]}" Value="Fail">
+                                                            <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+                                                            <Setter Property="FontWeight" Value="SemiBold" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding D[HealthLevel]}" Value="Warn">
+                                                            <Setter Property="Foreground" Value="{DynamicResource WarnBrush}" />
+                                                            <Setter Property="FontWeight" Value="SemiBold" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding D[HealthLevel]}" Value="Ok">
+                                                            <Setter Property="Foreground" Value="{DynamicResource OkBrush}" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
                                 </Border>
                             </StackPanel>
+                            <StackPanel Width="330" Margin="0,0,24,0">
+                                <StackPanel Visibility="{Binding D[WhatAny], Converter={StaticResource TextVis}}">
+                                    <TextBlock Text="ЧТО ЭТО" Style="{StaticResource Caption}" />
+                                    <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                                        <StackPanel>
+                                            <StackPanel Visibility="{Binding D[WhatProgramTitle], Converter={StaticResource TextVis}}">
+                                                <TextBlock Text="{Binding D[WhatProgramTitle]}" FontWeight="SemiBold" FontSize="12.5" TextWrapping="Wrap" />
+                                                <TextBlock Text="{Binding D[WhatProgram]}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                                <TextBlock Text="{Binding D[WhatProgramBlock]}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0" Style="{StaticResource Muted}" />
+                                            </StackPanel>
+                                            <StackPanel Margin="0,10,0,0" Visibility="{Binding D[WhatDomainTitle], Converter={StaticResource TextVis}}">
+                                                <TextBlock Text="{Binding D[WhatDomainTitle]}" FontWeight="SemiBold" FontSize="12.5" TextWrapping="Wrap" />
+                                                <TextBlock Text="{Binding D[WhatDomain]}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                                <TextBlock Text="{Binding D[WhatDomainBlock]}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0" Style="{StaticResource Muted}" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
 
-                            <WrapPanel Margin="0,0,0,12">
-                                <Button Style="{StaticResource BtnPrimarySmall}" Margin="0,0,8,8" Command="{Binding OpenCheckCommand}"
-                                        ToolTip="Почему не работает: DNS, подключение, блокировка по имени, задержка, трасса (Ctrl+D)">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="&#xE9D9;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,6,0" />
-                                        <TextBlock Text="Проверить соединение" />
-                                    </StackPanel>
-                                </Button>
-                                <Button Style="{StaticResource BtnSmall}" Margin="0,0,8,8" Command="{Binding PeeringDbCommand}"
-                                        ToolTip="Кто владелец сети: название и тип по открытому справочнику PeeringDB">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="&#xE779;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,6,0" />
-                                        <TextBlock Text="Владелец (PeeringDB)" />
-                                    </StackPanel>
-                                </Button>
-                                <Button Style="{StaticResource BtnSmall}" Margin="0,0,8,8" Command="{Binding RdapCommand}" ToolTip="Спросить у реестра IP-адресов (RIPE, ARIN…) точный блок и организацию">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="&#xE774;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,6,0" />
-                                        <TextBlock Text="Подробно о сети (RDAP)" />
-                                    </StackPanel>
-                                </Button>
-                                <Button Style="{StaticResource BtnSmall}" Margin="0,0,8,8" Command="{Binding WhoElseCommand}" ToolTip="Найти все программы, которые ходили на этот адрес">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="&#xE721;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,6,0" />
-                                        <TextBlock Text="Кто ещё ходит сюда" />
-                                    </StackPanel>
-                                </Button>
-                            </WrapPanel>
-
-                            <Border Style="{StaticResource Card}" Margin="0,0,0,12" Visibility="{Binding HasPdb, Converter={StaticResource BoolToVis}}">
-                                <DockPanel>
-                                    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
-                                        <Button DockPanel.Dock="Right" Style="{StaticResource BtnGhost}" Content="&#xE8C8;" ToolTip="Копировать"
-                                                Command="{Binding CopyValueCommand}" CommandParameter="{Binding D[Pdb]}" />
-                                        <TextBlock Text="ВЛАДЕЛЕЦ СЕТИ (PEERINGDB)" Style="{StaticResource Caption}" VerticalAlignment="Center" />
+                                <WrapPanel Margin="0,0,0,12">
+                                    <Button Style="{StaticResource BtnPrimarySmall}" Margin="0,0,8,8" Command="{Binding OpenCheckCommand}"
+                                            ToolTip="Почему не работает: DNS, подключение, блокировка по имени, задержка, трасса (Ctrl+D)">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="&#xE9D9;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,6,0" />
+                                            <TextBlock Text="Проверить соединение" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Style="{StaticResource BtnSmall}" Margin="0,0,8,8" Command="{Binding PeeringDbCommand}"
+                                            ToolTip="Кто владелец сети: название и тип по открытому справочнику PeeringDB">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="&#xE779;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,6,0" />
+                                            <TextBlock Text="Владелец (PeeringDB)" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Style="{StaticResource BtnSmall}" Margin="0,0,8,8" Command="{Binding RdapCommand}" ToolTip="Спросить у реестра IP-адресов (RIPE, ARIN…) точный блок и организацию">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="&#xE774;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,6,0" />
+                                            <TextBlock Text="Подробно о сети (RDAP)" />
+                                        </StackPanel>
+                                    </Button>
+                                </WrapPanel>
+                            </StackPanel>
+                            <StackPanel Width="330" Margin="0,0,24,0">
+                                <Border Style="{StaticResource Card}" Margin="0,0,0,12" Visibility="{Binding HasPdb, Converter={StaticResource BoolToVis}}">
+                                    <DockPanel>
+                                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                                            <Button DockPanel.Dock="Right" Style="{StaticResource BtnGhost}" Content="&#xE8C8;" ToolTip="Копировать"
+                                                    Command="{Binding CopyValueCommand}" CommandParameter="{Binding D[Pdb]}" />
+                                            <TextBlock Text="ВЛАДЕЛЕЦ СЕТИ (PEERINGDB)" Style="{StaticResource Caption}" VerticalAlignment="Center" />
+                                        </DockPanel>
+                                        <TextBox Text="{Binding D[Pdb], Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                                                 Foreground="{DynamicResource TextBrush}" FontSize="12" TextWrapping="Wrap" />
                                     </DockPanel>
-                                    <TextBox Text="{Binding D[Pdb], Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent"
-                                             Foreground="{DynamicResource TextBrush}" FontSize="12" TextWrapping="Wrap" />
-                                </DockPanel>
-                            </Border>
+                                </Border>
 
-                            <Border Style="{StaticResource Card}" Margin="0,0,0,12" Visibility="{Binding HasRdap, Converter={StaticResource BoolToVis}}">
-                                <DockPanel>
-                                    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
-                                        <Button DockPanel.Dock="Right" Style="{StaticResource BtnGhost}" Content="&#xE8C8;" ToolTip="Копировать"
-                                                Command="{Binding CopyValueCommand}" CommandParameter="{Binding D[Rdap]}" />
-                                        <TextBlock Text="ДАННЫЕ РЕЕСТРА (RDAP)" Style="{StaticResource Caption}" VerticalAlignment="Center" />
+                                <Border Style="{StaticResource Card}" Margin="0,0,0,12" Visibility="{Binding HasRdap, Converter={StaticResource BoolToVis}}">
+                                    <DockPanel>
+                                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                                            <Button DockPanel.Dock="Right" Style="{StaticResource BtnGhost}" Content="&#xE8C8;" ToolTip="Копировать"
+                                                    Command="{Binding CopyValueCommand}" CommandParameter="{Binding D[Rdap]}" />
+                                            <TextBlock Text="ДАННЫЕ РЕЕСТРА (RDAP)" Style="{StaticResource Caption}" VerticalAlignment="Center" />
+                                        </DockPanel>
+                                        <TextBox Text="{Binding D[Rdap], Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                                                 Foreground="{DynamicResource TextBrush}" FontSize="12" TextWrapping="Wrap" />
                                     </DockPanel>
-                                    <TextBox Text="{Binding D[Rdap], Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent"
-                                             Foreground="{DynamicResource TextBrush}" FontSize="12" TextWrapping="Wrap" />
-                                </DockPanel>
-                            </Border>
+                                </Border>
 
-                            <TextBlock Style="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap">
-                                <Run Text="Ctrl+C" FontWeight="SemiBold" /><Run Text=" копирует выделенные строки, " /><Run Text="Ctrl+Shift+C" FontWeight="SemiBold" /><Run Text=" — только IP. Двойной щелчок по строке копирует её IP." />
-                            </TextBlock>
-                        </StackPanel>
+                                <TextBlock Style="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap">
+                                    <Run Text="Ctrl+C" FontWeight="SemiBold" /><Run Text=" копирует выделенные строки, " /><Run Text="Ctrl+Shift+C" FontWeight="SemiBold" /><Run Text=" — только IP. Двойной щелчок по строке копирует её IP." />
+                                </TextBlock>
+                            </StackPanel>
+                        </WrapPanel>
 
                         <!-- Nothing selected: summary of the program -->
-                        <StackPanel Visibility="{Binding NoSelection, Converter={StaticResource BoolToVis}}">
-                            <TextBlock Text="{Binding D[SumTitle], Converter={StaticResource Upper}}" Style="{StaticResource Caption}" TextWrapping="Wrap" />
-                            <Border Style="{StaticResource Card}" Margin="0,0,0,16">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
-                                    </Grid.RowDefinitions>
-                                    <Grid.Resources>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="FontSize" Value="12" />
-                                            <Setter Property="Margin" Value="0,3,14,3" />
-                                            <Setter Property="TextWrapping" Value="Wrap" />
-                                        </Style>
-                                    </Grid.Resources>
-                                    <TextBlock Text="Адресов" Foreground="{DynamicResource Text3Brush}" />
-                                    <TextBlock Grid.Column="1" Text="{Binding D[SumAddresses]}" />
-                                    <TextBlock Grid.Row="1" Text="Сетей владельцев" Foreground="{DynamicResource Text3Brush}" />
-                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding D[SumNetworks]}" />
-                                    <TextBlock Grid.Row="2" Text="Страны" Foreground="{DynamicResource Text3Brush}" />
-                                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding D[SumCountries]}" />
-                                    <TextBlock Grid.Row="3" Text="Без домена" Foreground="{DynamicResource Text3Brush}" />
-                                    <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding D[SumNoDomain]}" />
-                                    <TextBlock Grid.Row="4" Text="Трафик" Foreground="{DynamicResource Text3Brush}" />
-                                    <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding D[SumTraffic]}"
-                                               ToolTip="За выбранный период: получено ↓ и отправлено ↑. Полезные данные без заголовков пакетов" />
-                                    <TextBlock Grid.Row="5" Text="Скорость" Foreground="{DynamicResource Text3Brush}" />
-                                    <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding D[SumSpeed]}" ToolTip="Средняя за последние 10 секунд" />
-                                    <TextBlock Grid.Row="6" Text="Трекеры" Foreground="{DynamicResource Text3Brush}" />
-                                    <TextBlock Grid.Row="7" Grid.ColumnSpan="2" Margin="0,6,0,0">
-                                        <Hyperlink Command="{Binding OpenHistoryCommand}">Трафик за 30 дней по данным Windows…</Hyperlink>
-                                    </TextBlock>
-                                    <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding D[SumMarked]}"
-                                               ToolTip="По каталогу DuckDuckGo и WindowsSpyBlocker; фильтры «Трекеры» и «Телеметрия» покажут их" />
-                                </Grid>
-                            </Border>
-                            <StackPanel Visibility="{Binding D[SumAny], Converter={StaticResource TextVis}}">
-                                <TextBlock Text="ЧТО ЭТО" Style="{StaticResource Caption}" />
+                        <WrapPanel Visibility="{Binding NoSelection, Converter={StaticResource BoolToVis}}">
+                            <StackPanel Width="330" Margin="0,0,24,0">
+                                <TextBlock Text="{Binding D[SumTitle], Converter={StaticResource Upper}}" Style="{StaticResource Caption}" TextWrapping="Wrap" />
                                 <Border Style="{StaticResource Card}" Margin="0,0,0,16">
-                                    <StackPanel>
-                                        <StackPanel Visibility="{Binding D[SumProgramTitle], Converter={StaticResource TextVis}}">
-                                            <TextBlock Text="{Binding D[SumProgramTitle]}" FontWeight="SemiBold" FontSize="12.5" TextWrapping="Wrap" />
-                                            <TextBlock Text="{Binding D[SumProgram]}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0" />
-                                            <TextBlock Text="{Binding D[SumProgramBlock]}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0" Style="{StaticResource Muted}" />
-                                        </StackPanel>
-                                        <StackPanel Margin="0,10,0,0" Visibility="{Binding D[SumDomainTitle], Converter={StaticResource TextVis}}">
-                                            <TextBlock Text="{Binding D[SumDomainTitle]}" FontWeight="SemiBold" FontSize="12.5" TextWrapping="Wrap" />
-                                            <TextBlock Text="{Binding D[SumDomain]}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0" />
-                                            <TextBlock Text="{Binding D[SumDomainBlock]}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0" Style="{StaticResource Muted}" />
-                                        </StackPanel>
-                                    </StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
+                                        </Grid.RowDefinitions>
+                                        <Grid.Resources>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="FontSize" Value="12" />
+                                                <Setter Property="Margin" Value="0,3,14,3" />
+                                                <Setter Property="TextWrapping" Value="Wrap" />
+                                            </Style>
+                                        </Grid.Resources>
+                                        <TextBlock Text="Адресов" Foreground="{DynamicResource Text3Brush}" />
+                                        <TextBlock Grid.Column="1" Text="{Binding D[SumAddresses]}" />
+                                        <TextBlock Grid.Row="1" Text="Сетей владельцев" Foreground="{DynamicResource Text3Brush}" />
+                                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding D[SumNetworks]}" />
+                                        <TextBlock Grid.Row="2" Text="Страны" Foreground="{DynamicResource Text3Brush}" />
+                                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding D[SumCountries]}" />
+                                        <TextBlock Grid.Row="3" Text="Без домена" Foreground="{DynamicResource Text3Brush}" />
+                                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding D[SumNoDomain]}" />
+                                        <TextBlock Grid.Row="4" Text="Трафик" Foreground="{DynamicResource Text3Brush}" />
+                                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding D[SumTraffic]}"
+                                                   ToolTip="За выбранный период: получено ↓ и отправлено ↑. Полезные данные без заголовков пакетов" />
+                                        <TextBlock Grid.Row="5" Text="Скорость" Foreground="{DynamicResource Text3Brush}" />
+                                        <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding D[SumSpeed]}" ToolTip="Средняя за последние 10 секунд" />
+                                        <TextBlock Grid.Row="6" Text="Трекеры" Foreground="{DynamicResource Text3Brush}" />
+                                        <TextBlock Grid.Row="7" Grid.ColumnSpan="2" Margin="0,6,0,0">
+                                            <Hyperlink Command="{Binding OpenHistoryCommand}">Трафик за 30 дней по данным Windows…</Hyperlink>
+                                        </TextBlock>
+                                        <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding D[SumMarked]}"
+                                                   ToolTip="По каталогу DuckDuckGo и WindowsSpyBlocker; фильтры «Трекеры» и «Телеметрия» покажут их" />
+                                    </Grid>
                                 </Border>
                             </StackPanel>
-
-                            <TextBlock Text="СЕТИ ДЛЯ ПРАВИЛ VPN / ФАЙРВОЛА" Style="{StaticResource Caption}" />
-                            <Border Style="{StaticResource Field}" Padding="10,8" Margin="0,0,0,10">
-                                <TextBox Text="{Binding SumNetworksText, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent"
-                                         Foreground="{DynamicResource TextBrush}" FontFamily="{StaticResource MonoFont}" MaxHeight="260"
-                                         VerticalScrollBarVisibility="Auto" />
-                            </Border>
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
-                                <Button Style="{StaticResource BtnPrimarySmall}" Command="{Binding CopySummaryNetworksCommand}">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="&#xE8C8;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,6,0" />
-                                        <TextBlock Text="Копировать" />
-                                    </StackPanel>
-                                </Button>
-                                <Button Style="{StaticResource BtnSmall}" Margin="8,0,0,0" Content="Другие форматы…" Command="{Binding OpenOwnerExportCommand}" />
+                            <StackPanel Width="330" Margin="0,0,24,0">
+                                <StackPanel Visibility="{Binding D[SumAny], Converter={StaticResource TextVis}}">
+                                    <TextBlock Text="ЧТО ЭТО" Style="{StaticResource Caption}" />
+                                    <Border Style="{StaticResource Card}" Margin="0,0,0,16">
+                                        <StackPanel>
+                                            <StackPanel Visibility="{Binding D[SumProgramTitle], Converter={StaticResource TextVis}}">
+                                                <TextBlock Text="{Binding D[SumProgramTitle]}" FontWeight="SemiBold" FontSize="12.5" TextWrapping="Wrap" />
+                                                <TextBlock Text="{Binding D[SumProgram]}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                                <TextBlock Text="{Binding D[SumProgramBlock]}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0" Style="{StaticResource Muted}" />
+                                            </StackPanel>
+                                            <StackPanel Margin="0,10,0,0" Visibility="{Binding D[SumDomainTitle], Converter={StaticResource TextVis}}">
+                                                <TextBlock Text="{Binding D[SumDomainTitle]}" FontWeight="SemiBold" FontSize="12.5" TextWrapping="Wrap" />
+                                                <TextBlock Text="{Binding D[SumDomain]}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                                <TextBlock Text="{Binding D[SumDomainBlock]}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0" Style="{StaticResource Muted}" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
                             </StackPanel>
-                            <TextBlock Style="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap"
-                                       Text="Выберите строку в таблице, чтобы увидеть подробности: домены, сеть, владельца и данные реестра." />
-                        </StackPanel>
+                            <StackPanel Width="330" Margin="0,0,24,0">
+                                <TextBlock Style="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap"
+                                           Text="Выберите строку в таблице, чтобы увидеть подробности: домены, сеть, владельца и данные реестра." />
+                            </StackPanel>
+                        </WrapPanel>
                     </Grid>
                 </ScrollViewer>
+                </Grid>
             </Grid>
         </Border>
 
@@ -1783,6 +1809,7 @@
                                     <ItemsControl ItemsSource="{Binding Hops}" Margin="0,0,0,4">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate DataType="{x:Type vm:HopView}">
+                                                <Border Style="{StaticResource HoverRow}">
                                                 <Grid Margin="12,3">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="28" />
@@ -1820,6 +1847,7 @@
                                                     <TextBlock Grid.Column="5" Text="{Binding Worst}" Style="{StaticResource Muted}" />
                                                     <TextBlock Grid.Column="6" Text="{Binding Owner}" Style="{StaticResource Muted}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Owner}" />
                                                 </Grid>
+                                                </Border>
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>

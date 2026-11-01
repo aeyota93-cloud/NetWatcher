@@ -74,9 +74,10 @@ public class DiagnosticsTests
     {
         var r = await Run(new FakeProbe());
         Assert.Equal(VerdictLevel.Ok, r.Verdict!.Level);
-        Assert.Equal("Всё работает", r.Verdict.Title);
+        Assert.Equal("Проверки пройдены", r.Verdict.Title);
         Assert.Contains("подключение 40 мс", r.Verdict.Text);
         Assert.Equal(StepStatus.Ok, StepOf(r, "dnsint"));
+        Assert.StartsWith("на запрос к 8.8.8.8 ответил DNS из сети Google.", r.Steps.Single(s => s.Id == "dnsint").Text);
         Assert.Contains("95.2.2.2 (AS12389 · Ростелеком)", r.Steps.Single(s => s.Id == "dnsint").Text);
         Assert.Equal(StepStatus.Skipped, StepOf(r, "quic")); // site does not advertise HTTP/3
         Assert.Contains("10 проб на узел", r.ToText());
@@ -86,7 +87,7 @@ public class DiagnosticsTests
     public async Task Dns_sinkhole_is_a_block()
     {
         var r = await Run(new FakeProbe { Sys = new([Ip("0.0.0.0")], false, null, 5) });
-        Assert.Equal("Домен заблокирован через DNS", r.Verdict!.Title);
+        Assert.Equal("DNS вернул заглушку", r.Verdict!.Title);
         Assert.Equal(StepStatus.Fail, StepOf(r, "dns"));
     }
 
@@ -94,7 +95,7 @@ public class DiagnosticsTests
     public async Task System_dns_fails_but_independent_works()
     {
         var r = await Run(new FakeProbe { Sys = new([], false, "DNS-сервер не ответил", 2000) });
-        Assert.Equal("Проблема с DNS: системный DNS не отдаёт адрес", r.Verdict!.Title);
+        Assert.Equal("Системный DNS не нашёл адрес", r.Verdict!.Title);
         Assert.NotNull(r.Tcp);
     }
 
@@ -102,20 +103,23 @@ public class DiagnosticsTests
     public async Task No_such_domain()
     {
         var r = await Run(new FakeProbe { Sys = new([], true, "домен не найден", 10), Ind = new([], true, "домен не найден", 20) });
-        Assert.Equal("Такого домена нет", r.Verdict!.Title);
+        Assert.Equal("DNS не нашёл домен", r.Verdict!.Title);
+        Assert.Contains("Проверенные DNS-серверы не нашли адрес", r.Verdict.Text);
+        Assert.Equal("DNS не нашёл домен", r.Steps.Single(s => s.Id == "dns").Text);
+        Assert.Equal("DNS не нашёл домен", DnsStatus.Describe(9003));
         Assert.Null(r.Tcp);
     }
 
     [Fact]
-    public async Task Different_network_but_valid_certificate_is_a_cdn()
+    public async Task Different_network_with_valid_certificate_does_not_prove_spoofing()
     {
         var r = await Run(new FakeProbe { Ind = new([Ip("151.101.1.1")], false, null, 20) });
         Assert.Equal(StepStatus.Ok, StepOf(r, "dns"));
-        Assert.Contains("это CDN", r.Steps.Single(s => s.Id == "dns").Text);
+        Assert.Contains("сертификат сайта действителен. Различие адресов само по себе не доказывает подмену", r.Steps.Single(s => s.Id == "dns").Text);
     }
 
     [Fact]
-    public async Task Timeout_points_to_where_the_route_breaks()
+    public async Task Timeout_reports_last_answer_without_proving_a_broken_route()
     {
         var p = new FakeProbe
         {
@@ -125,7 +129,8 @@ public class DiagnosticsTests
         };
         var r = await Run(p);
         Assert.Equal("Сервер не отвечает на подключение", r.Verdict!.Title);
-        Assert.Contains("обрывается после узла 2", r.Verdict.Text);
+        Assert.Contains("после узла 2", r.Verdict.Text);
+        Assert.Contains("Это не доказывает обрыв пути", r.Verdict.Text);
         Assert.Contains("сеть вашего провайдера (AS12389 · Ростелеком)", r.Verdict.Text);
         Assert.Equal(StepStatus.Skipped, StepOf(r, "tls"));
     }
@@ -137,8 +142,9 @@ public class DiagnosticsTests
     {
         var r = await Run(new FakeProbe { Tls = SiteCut(cut, cut) });
         Assert.Equal(code, r.Sni!.Code);
-        Assert.Equal("Блокировка по имени сайта (DPI)", r.Verdict!.Title);
+        Assert.Equal("Похоже на блокировку по имени сайта", r.Verdict!.Title);
         Assert.Contains("ts-024", r.Verdict.Text);
+        Assert.Contains("Это может указывать на фильтрацию", r.Verdict.Text);
     }
 
     [Fact]
@@ -155,6 +161,7 @@ public class DiagnosticsTests
         // The site cuts TLS, but the neutral server answers the site's name (with its own certificate).
         var r = await Run(new FakeProbe { Tls = SiteCut(TlsOutcome.Reset, TlsOutcome.Ok) });
         Assert.Equal("success.got_server_hello", r.Sni!.Code);
+        Assert.Contains("признаков фильтра на этом пути нет", r.Sni.Text);
         Assert.Equal("Защищённое соединение с сайтом не устанавливается", r.Verdict!.Title);
     }
 
@@ -177,6 +184,9 @@ public class DiagnosticsTests
         Assert.Equal("success.got_server_hello", SniResult.Classify(new(TlsOutcome.Alert, 10), ok).Code);
         Assert.Equal("anomaly.unexpected_failure", SniResult.Classify(new(TlsOutcome.Error, 10, Error: "x"), ok).Code);
         Assert.Equal("anomaly.test_helper_unreachable", SniResult.Classify(new(TlsOutcome.Reset, 10), new(TlsOutcome.Timeout, 10)).Code);
+        Assert.Contains("возможна подмена ответа", SniResult.Classify(new(TlsOutcome.Ok, 10, CertStatus.UnknownAuthority), ok).Text);
+        Assert.Contains("сертификат не прошёл проверку — возможна подмена ответа", SniResult.Classify(new(TlsOutcome.Ok, 10, CertStatus.Invalid), ok).Text);
+        Assert.Equal((StepStatus.Warn, "сертификат не прошёл проверку"), Verdicts.DescribeTls(new(TlsOutcome.Ok, 10, CertStatus.Invalid)));
     }
 
     [Fact]
@@ -185,6 +195,7 @@ public class DiagnosticsTests
         var r = await Run(new FakeProbe { Tls = (_, _) => new TlsProbe(TlsOutcome.Ok, 50, CertStatus.UnknownAuthority, "CN=Kaspersky") });
         Assert.Equal(VerdictLevel.Warn, r.Verdict!.Level);
         Assert.Contains("не доверяет", r.Verdict.Text);
+        Assert.Equal("Есть признаки проблем", r.Verdict.Title);
     }
 
     [Fact]
@@ -239,15 +250,23 @@ public class DiagnosticsTests
     {
         var r = await Run(new FakeProbe { Udp = new(Ip("95.3.3.3"), null) });
         Assert.Equal(StepStatus.Warn, StepOf(r, "dnsint"));
-        Assert.Contains("по UDP перехватываются: ответил резолвер 95.3.3.3 (AS12389 · Ростелеком), а по TCP — Google", r.Steps.Single(s => s.Id == "dnsint").Text);
-        Assert.Contains("запросы к публичному DNS перехватываются", r.Verdict!.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("по UDP ответил DNS из другой сети: 95.3.3.3 (AS12389 · Ростелеком), а по TCP — DNS из сети Google", r.Steps.Single(s => s.Id == "dnsint").Text);
+        Assert.Contains("возможна подмена запросов к 8.8.8.8", r.Verdict!.Text, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
     public async Task Udp_53_closed()
     {
         var r = await Run(new FakeProbe { Udp = new(null, "нет ответа") });
-        Assert.Contains("UDP-порт 53 к чужим DNS закрыт", r.Steps.Single(s => s.Id == "dnsint").Text);
+        Assert.Contains("8.8.8.8 не ответил по UDP, но ответил по TCP. Возможна фильтрация UDP-порта 53", r.Steps.Single(s => s.Id == "dnsint").Text);
+
+        var unanswered = await Run(new FakeProbe { Udp = new(null, "нет ответа"), Tcp = new(null, "нет ответа") });
+        Assert.Contains("8.8.8.8 не ответил ни по UDP, ни по TCP (нет ответа). Причина не установлена.", unanswered.Steps.Single(s => s.Id == "dnsint").Text);
+        Assert.Contains("8.8.8.8 не ответил напрямую", unanswered.Verdict!.Text);
+
+        var otherTcp = await Run(new FakeProbe { Tcp = new(Ip("95.3.3.3"), null) });
+        Assert.Contains("по TCP ответил DNS из другой сети: 95.3.3.3", otherTcp.Steps.Single(s => s.Id == "dnsint").Text);
+        Assert.Contains("Возможна подмена запросов к 8.8.8.8.", otherTcp.Steps.Single(s => s.Id == "dnsint").Text);
     }
 
     [Fact]
@@ -255,7 +274,9 @@ public class DiagnosticsTests
     {
         var r = await Run(new FakeProbe { H3 = true, Quic = new(QuicOutcome.Timeout, 5000) });
         Assert.Equal(StepStatus.Warn, StepOf(r, "quic"));
-        Assert.Contains("HTTP/3 (UDP 443) не проходит", r.Verdict!.Text);
+        Assert.Contains("Проверка HTTP/3 не получила ответ по UDP 443", r.Verdict!.Text);
+        Assert.Contains("возможна фильтрация, браузер может перейти на TCP", r.Verdict.Text);
+        Assert.Contains("Возможна фильтрация; браузер может перейти на TCP", r.Steps.Single(s => s.Id == "quic").Text);
     }
 
     [Fact]
@@ -352,6 +373,7 @@ public class DiagnosticsTests
         var r = await Run(new FakeProbe { Tls = SiteCut(TlsOutcome.Reset, TlsOutcome.Alert) });
         Assert.Equal("success.got_server_hello", r.Sni!.Code);
         Assert.Equal(StepStatus.Ok, StepOf(r, "sni"));
+        Assert.Contains("результат не подтверждает фильтрацию", r.Sni.Text);
         Assert.Equal("Защищённое соединение с сайтом не устанавливается", r.Verdict!.Title);
     }
 
@@ -403,6 +425,7 @@ public class DiagnosticsTests
         Assert.Null(r.Tcp);
         Assert.Equal(StepStatus.Skipped, StepOf(r, "tcp"));
         Assert.Equal("Сервер доступен по сети", r.Verdict!.Title);
+        Assert.Equal("TLS в этой проверке не используется", r.Steps.Single(s => s.Id == "tls").Text);
         Assert.Equal("udp://104.16.1.1:27015", r.Target.Display);
         Assert.Null(CheckTarget.Parse("udp://104.16.1.1")); // a UDP service needs its port
     }

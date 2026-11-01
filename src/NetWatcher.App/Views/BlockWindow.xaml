@@ -18,7 +18,11 @@
                            Text="Правило брандмауэра Windows запретит исходящие соединения. Оно действует и когда NetWatcher закрыт; снять — в окне «Блокировки» или в самом брандмауэре." />
                 <TextBlock Text="ЧТО ЗАБЛОКИРОВАТЬ" Style="{StaticResource Caption}" />
                 <Border Style="{StaticResource Card}">
-                    <StackPanel x:Name="Choices" />
+                    <StackPanel x:Name="Choices">
+                        <StackPanel.Resources>
+                            <Style TargetType="RadioButton" BasedOn="{StaticResource ChoiceRow}" />
+                        </StackPanel.Resources>
+                    </StackPanel>
                 </Border>
                 <CheckBox x:Name="OnlyProgram" Margin="0,10,0,0" Checked="OnChanged" Unchecked="OnChanged" />
                 <Border x:Name="WarningBox" Margin="0,12,0,0" Padding="12,8" CornerRadius="6" Background="{DynamicResource WarnSoftBrush}"

@@ -293,7 +293,7 @@ public sealed class LinkMonitor(TimeSpan history)
         {
             LinkLevel.Warn when partial => $"не отвечает {failing} из {TextFormat.Plural(active.Count, "сервера", "серверов", "серверов")}",
             LinkLevel.Fail or LinkLevel.Warn => worst!.StateText,
-            LinkLevel.Ok => main?.LatencyMs is { } ms ? $"{ms:0} мс" : "работает",
+            LinkLevel.Ok => main?.LatencyMs is { } ms ? $"{ms:0} мс" : "сбоев не видно",
             _ => "простаивает",
         };
         var first = servers[0];
@@ -368,7 +368,7 @@ public sealed class LinkMonitor(TimeSpan history)
         else
         {
             level = LinkLevel.Ok;
-            text = "работает";
+            text = "сбоев не видно";
             loss = pingable ? pingLoss : null;
             reason = "";
         }

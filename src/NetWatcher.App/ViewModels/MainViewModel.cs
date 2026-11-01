@@ -65,9 +65,9 @@ internal sealed partial class MainViewModel : ObservableObject
             new("TCP", QuickFilter.Tcp, "Только соединения TCP"),
             new("UDP", QuickFilter.Udp, "Только UDP: QUIC/HTTP3, звонки, игры, DNS"),
             new("С доменом", QuickFilter.WithDomain, "Адреса, для которых известен домен"),
-            new("Без домена", QuickFilter.NoDomain, "Программа обращается напрямую по IP — стоит присмотреться"),
+            new("Без домена", QuickFilter.NoDomain, "Адреса, для которых домен не определён"),
             new("Проблемные", QuickFilter.Problems, "Адреса, которые не отвечают, подключаются с повторами или теряют пакеты; в журнале DNS — ошибки"),
-            new("Только новые", QuickFilter.OnlyNew, "Адреса, на которые программа впервые пошла за последние сутки"),
+            new("Только новые", QuickFilter.OnlyNew, "Адреса, впервые замеченные у программы за последние сутки"),
             new("Трекеры", QuickFilter.Trackers, "Домены рекламы и аналитики, которые DuckDuckGo блокирует как трекеры, и отмеченные им как вредоносные"),
             new("Телеметрия", QuickFilter.Telemetry, "Адреса телеметрии и рекламы Windows из списка WindowsSpyBlocker"),
             new("Скрыть Microsoft", QuickFilter.HideMicrosoft, "Убрать обращения к сетям и доменам Microsoft"),
@@ -107,15 +107,25 @@ internal sealed partial class MainViewModel : ObservableObject
         CopyNetworkCommand = new RelayCommand(p => CopyLines(Rows(p).Select(r => r.NetworkText(Format)).Where(n => n != "").Distinct(), "сети"));
         CopyRowCommand = new RelayCommand(p => CopyLines(Items(p).SelectMany(i => i.Lines()), "строки"));
         CopyValueCommand = new RelayCommand(p => Copy(p as string ?? "", null));
-        CopyAllIpsCommand = new RelayCommand(() => CopyLines(Analysis.Addresses(VisibleRows).Select(a => a.ToString()), "все IP"));
-        CopyAllDomainsCommand = new RelayCommand(() => CopyLines(VisibleRows.SelectMany(r => r.Domains).Distinct().Order(StringComparer.OrdinalIgnoreCase), "все домены"));
-        CopySummaryNetworksCommand = new RelayCommand(() => Copy(SumNetworksText, "сети владельцев"));
-        SearchIpCommand = new RelayCommand(p => SearchFor(Rows(p).FirstOrDefault()?.RemoteIpText));
+        SearchIpCommand = new RelayCommand(p =>
+        {
+            if (p is LinkServerView) IsAddressesTab = true;
+            SearchFor(Rows(p).FirstOrDefault()?.RemoteIpText);
+        });
         SearchDomainCommand = new RelayCommand(p => SearchFor(Rows(p).FirstOrDefault()?.PrimaryDomain));
         SearchProgramCommand = new RelayCommand(p => SearchFor(Rows(p).FirstOrDefault()?.Process));
         SearchTextCommand = new RelayCommand(p => SearchFor(p as string));
-        WhoElseCommand = new RelayCommand(() => SearchFor(SelectedItem?.Rows.FirstOrDefault()?.RemoteIpText));
-        RdapCommand = new RelayCommand(p => _ = RdapAsync(Rows(p).FirstOrDefault() ?? SelectedItem?.Rows.FirstOrDefault()));
+        RdapCommand = new RelayCommand(p =>
+        {
+            var row = Rows(p).FirstOrDefault() ?? SelectedItem?.Rows.FirstOrDefault();
+            if (p is LinkServerView && row != null)
+            {
+                var item = new TableItem("link:" + row.Key, ItemKind.Single);
+                item.Update([row], row.PrimaryDomain, r => r.NetworkText(Format), r => TitleFor(r.GroupKey), DateTimeOffset.Now, LiveWindow);
+                SelectedItem = item;
+            }
+            _ = RdapAsync(row);
+        });
         OpenFolderCommand = new RelayCommand(p => OpenFolder(Rows(p).FirstOrDefault()?.Path));
         BlockCommand = new RelayCommand(p => OpenBlock(Rows(p) is { Count: > 0 } r ? r : SelectedItem?.Rows.ToList() ?? []));
         UnblockCommand = new RelayCommand(p => Unblock(Rows(p) is { Count: > 0 } r ? r : SelectedItem?.Rows.ToList() ?? []));
@@ -129,24 +139,13 @@ internal sealed partial class MainViewModel : ObservableObject
         CloseConnectionCommand = new RelayCommand(p => CloseConnections(Rows(p) is { Count: > 0 } r ? r : SelectedItem?.Rows.ToList() ?? []));
         UndoCopyCommand = new RelayCommand(UndoCopy);
         OpenExportCommand = new RelayCommand(() => Export.Open(ExportContext));
-        OpenVpnExportCommand = new RelayCommand(() => Export.Open(ExportContext, ExportWhat.Subnets));
-        OpenOwnerExportCommand = new RelayCommand(() => Export.Open(ExportContext, ExportWhat.OwnerNetworks));
         DownloadAsnCommand = new RelayCommand(_ => _ = DownloadAsnAsync(), _ => !AsnBusy);
         HideBannerCommand = new RelayCommand(() =>
         {
             _bannerHidden = true;
             OnPropertyChanged(nameof(AsnBannerVisible));
         });
-        SetThemeCommand = new RelayCommand(p =>
-        {
-            if (p is not string mode) return;
-            _state.Settings.Theme = mode;
-            _state.SaveSettings();
-            ThemeService.Apply(mode);
-            foreach (var n in new[] { nameof(ThemeGlyph), nameof(IsThemeSystem), nameof(IsThemeLight), nameof(IsThemeDark), nameof(ThemeTitle) })
-                OnPropertyChanged(n);
-        });
-        OpenCheckCommand = new RelayCommand(p => Diagnostics.Open(CheckTargetOf(Items(p).FirstOrDefault() ?? (p == null ? SelectedItem : null))));
+        OpenCheckCommand = new RelayCommand(p => Diagnostics.Open(CheckTargetOf(Rows(p).FirstOrDefault() ?? (p == null ? SelectedItem?.Rows.FirstOrDefault() : null))));
         OpenEmptyCheckCommand = new RelayCommand(() => Diagnostics.Open(null));
         PeeringDbCommand = new RelayCommand(() => _ = PeeringDbAsync(SelectedItem?.Rows.FirstOrDefault()?.Asn?.Asn));
         TogglePauseCommand = new RelayCommand(() => Paused = !Paused);
@@ -227,10 +226,12 @@ internal sealed partial class MainViewModel : ObservableObject
             LiveOk = false;
             return;
         }
-        var ago = (int)(DateTime.Now - _lastRefresh).TotalSeconds;
-        LiveText = _lastRefresh == DateTime.MinValue ? "Запись идёт" : $"Запись идёт · обновлено {Math.Max(ago, 0)} с назад";
-        LiveShort = _lastRefresh == DateTime.MinValue ? "Запись" : $"Запись · {Math.Min(Math.Max(ago, 0), 99)} с";
-        LiveOk = _state.Collector.LastError == null;
+        // Seconds since the last refresh only matter when the screen has stopped refreshing.
+        var ago = _lastRefresh == DateTime.MinValue ? 0 : Math.Max(0, (int)(DateTime.Now - _lastRefresh).TotalSeconds);
+        var stale = ago > Math.Max(10, _state.Settings.PollSeconds * 5);
+        LiveText = stale ? $"Экран не обновлялся {ago} с" + (_state.Collector.LastError is { } err ? ": " + err : "") : "Запись идёт, экран обновляется";
+        LiveShort = stale ? $"Нет данных {Math.Min(ago, 999)} с" : "Запись";
+        LiveOk = !stale && _state.Collector.LastError == null;
     }
 
     private void OnPeriod(PeriodItem p)
@@ -517,7 +518,7 @@ internal sealed partial class MainViewModel : ObservableObject
         }
 
         Sync(Table, wanted, 0);
-        if (SelectedItem != null && !Table.Contains(SelectedItem)) SelectedItem = null;
+        if (SelectedItem != null && !Table.Contains(SelectedItem) && !(IsLinkTab && SelectedItem.Key.StartsWith("link:", StringComparison.Ordinal))) SelectedItem = null;
 
         DomainsCount = groups.Count.ToString();
         AddressesCount = rows.Count.ToString();
@@ -690,8 +691,6 @@ internal sealed partial class MainViewModel : ObservableObject
     private bool _hasRdap;
     public bool HasRdap { get => _hasRdap; private set => Set(ref _hasRdap, value); }
 
-    private string _sumNetworksText = "";
-    public string SumNetworksText { get => _sumNetworksText; private set => Set(ref _sumNetworksText, value); }
 
     private void UpdateDetails()
     {
@@ -720,9 +719,8 @@ internal sealed partial class MainViewModel : ObservableObject
             _details["SumCountries"] = string.Join(", ", rows.Select(r => r.CountryText).Where(c => c != "").Distinct().Take(8)) is { Length: > 0 } c ? c : "—";
             _details["SumNoDomain"] = ips.Count == 0 ? "—" : noDomain == 0 ? "нет"
                 : $"{noDomain} из {ips.Count}" + (!_state.Collector.DnsCapture ? " — домены не видны: журнал DNS работает только с правами администратора"
-                    : noDomain * 2 > ips.Count ? (SelectedNav?.IsAll == true ? " — программы часто ходят напрямую по IP" : " — программа часто ходит напрямую по IP")
+                    : noDomain * 2 > ips.Count ? " — для многих адресов домен не определён"
                     : "");
-            SumNetworksText = owners.Text;
             if (SelectedNav is { IsAll: false } && rows.Count > 0)
                 Explain("Sum", Explanations.Builtin.ForProgram(rows[0].Process, rows[0].Services), null);
             var marked = rows.Where(r => r.Catalog is { Tag: not Core.Catalog.DomainTag.None }).ToList();
@@ -758,7 +756,9 @@ internal sealed partial class MainViewModel : ObservableObject
             _details["Subtitle"] = $"{who} · замечено {TextFormat.Plural(hits, "раз", "раза", "раз")}";
             _details["Ip"] = string.Join(Environment.NewLine, ips);
             _details["IpLabel"] = ips.Count == 1 ? "IP-адрес" : $"IP-адреса ({ips.Count})";
-            _details["Domains"] = domains.Count > 0 ? string.Join(", ", domains) : "неизвестен — программа обратилась по IP без запроса DNS";
+            _details["Domains"] = domains.Count > 0 ? string.Join(", ", domains) : "не определён — DNS-запрос не замечен";
+            // What the copy button takes: the domains only, never the explanation above.
+            _details["DomainsValue"] = string.Join(", ", domains);
             _details["Network"] = string.Join(Environment.NewLine, rows.Select(r => r.NetworkText(Format)).Where(n => n != "").Distinct());
             _details["NetworkLabel"] = rows.Select(r => r.NetworkText(Format)).Where(n => n != "").Distinct().Count() > 1 ? "Сети владельцев" : "Сеть владельца";
             var info = rows.Select(r => r.Catalog).Where(c => c != null).MaxBy(c => c!.Tag);
@@ -914,7 +914,8 @@ internal sealed partial class MainViewModel : ObservableObject
     private static List<TableItem> Items(object? p) =>
         p is IList list ? list.OfType<TableItem>().ToList() : p is TableItem t ? [t] : [];
 
-    private static List<DestinationRow> Rows(object? p) => Items(p).SelectMany(i => i.Rows).Distinct().ToList();
+    private static List<DestinationRow> Rows(object? p) =>
+        p is LinkServerView server ? [server.Row] : Items(p).SelectMany(i => i.Rows).Distinct().ToList();
 
     public void SearchFor(string? text)
     {
@@ -944,7 +945,7 @@ internal sealed partial class MainViewModel : ObservableObject
         }
         var programs = plan.Close.Select(r => _state.Collector.ProcessName(r.Pid)).Distinct().ToList();
         var question = $"Разорвать {TextFormat.Plural(plan.Close.Count, "соединение", "соединения", "соединений")} "
-            + $"({string.Join(", ", programs)})?\n\nПрограмма увидит обрыв и, скорее всего, подключится заново."
+            + $"({string.Join(", ", programs)})?\n\nПрограмма может подключиться снова."
             + (plan.Ipv6Skipped > 0 ? $"\n\nСоединения IPv6 ({plan.Ipv6Skipped}) Windows разорвать не даёт — они останутся." : "");
         if (MessageBox.Show(owner, question, "Разорвать соединение", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
 
@@ -1087,14 +1088,10 @@ internal sealed partial class MainViewModel : ObservableObject
     public RelayCommand CopyNetworkCommand { get; }
     public RelayCommand CopyRowCommand { get; }
     public RelayCommand CopyValueCommand { get; }
-    public RelayCommand CopyAllIpsCommand { get; }
-    public RelayCommand CopyAllDomainsCommand { get; }
-    public RelayCommand CopySummaryNetworksCommand { get; }
     public RelayCommand SearchIpCommand { get; }
     public RelayCommand SearchDomainCommand { get; }
     public RelayCommand SearchProgramCommand { get; }
     public RelayCommand SearchTextCommand { get; }
-    public RelayCommand WhoElseCommand { get; }
     public RelayCommand RdapCommand { get; }
     public RelayCommand OpenFolderCommand { get; }
     public RelayCommand CloseConnectionCommand { get; }
@@ -1137,11 +1134,8 @@ internal sealed partial class MainViewModel : ObservableObject
     }
     public RelayCommand UndoCopyCommand { get; }
     public RelayCommand OpenExportCommand { get; }
-    public RelayCommand OpenVpnExportCommand { get; }
-    public RelayCommand OpenOwnerExportCommand { get; }
     public RelayCommand DownloadAsnCommand { get; }
     public RelayCommand HideBannerCommand { get; }
-    public RelayCommand SetThemeCommand { get; }
     public RelayCommand OpenCheckCommand { get; }
     public RelayCommand OpenEmptyCheckCommand { get; }
     public RelayCommand PeeringDbCommand { get; }
@@ -1149,16 +1143,10 @@ internal sealed partial class MainViewModel : ObservableObject
     public DiagnosticsViewModel Diagnostics { get; }
 
     // ---- theme menu ----
-    public string ThemeGlyph => _state.Settings.Theme switch { "Light" => "\uE706", "Dark" => "\uE708", _ => "\uE7F4" };
-    public string ThemeTitle => _state.Settings.Theme switch { "Light" => "Тема: светлая", "Dark" => "Тема: тёмная", _ => "Тема: как в Windows" };
-    public bool IsThemeSystem => _state.Settings.Theme == "System";
-    public bool IsThemeLight => _state.Settings.Theme == "Light";
-    public bool IsThemeDark => _state.Settings.Theme == "Dark";
 
     /// <summary>"youtube.com" or "1.2.3.4:8080" for the check panel.</summary>
-    private static string? CheckTargetOf(TableItem? item)
+    private static string? CheckTargetOf(DestinationRow? r)
     {
-        var r = item?.Rows.FirstOrDefault();
         if (r == null) return null;
         var host = r.PrimaryDomain != "" ? r.PrimaryDomain : r.RemoteIp.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6 ? $"[{r.RemoteIpText}]" : r.RemoteIpText;
         // A UDP row is checked as a UDP service: a TCP connection to its port would say nothing about it.

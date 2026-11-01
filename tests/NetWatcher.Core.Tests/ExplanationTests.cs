@@ -18,6 +18,11 @@ public class ExplanationTests
             Assert.False(string.IsNullOrWhiteSpace(item.GetProperty("title").GetString()));
             Assert.False(string.IsNullOrWhiteSpace(item.GetProperty("what").GetString()));
             Assert.False(string.IsNullOrWhiteSpace(item.GetProperty("block").GetString()));
+            var scope = item.TryGetProperty("service", out _) ? "всех соединений службы"
+                : item.TryGetProperty("process", out _) ? "всех соединений программы"
+                : item.TryGetProperty("domain", out _) ? "всех адресов этого домена"
+                : "всех адресов доменов с этим префиксом";
+            Assert.StartsWith($"При блокировке {scope}:", item.GetProperty("block").GetString());
         }
     }
 

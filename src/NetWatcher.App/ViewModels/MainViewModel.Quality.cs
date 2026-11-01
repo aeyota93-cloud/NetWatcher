@@ -114,16 +114,17 @@ internal sealed partial class MainViewModel
     private static string Hint(QualityReport r, LoadTestResult? test)
     {
         var g = r.Gateway;
-        if (g.Samples >= 10 && (g.Loss >= 0.03 || g.LatencyMs >= 20 || g.JitterMs >= 15))
-            return "Задержка или потери уже до роутера — для домашней сети это много. Обычно дело в Wi-Fi: далеко от роутера, стены, помехи от соседних сетей. Проверьте по кабелю.";
+        // A gateway that never answers ping (often a VPN adapter) says nothing about Wi-Fi.
+        if (g.Samples >= 10 && g.LatencyMs != null && (g.Loss >= 0.03 || g.LatencyMs >= 20 || g.JitterMs >= 15))
+            return "Задержка или потери видны уже до роутера — для домашней сети это много. Так бывает с Wi-Fi: далеко от роутера, стены, помехи. Попробуйте подключиться по кабелю.";
         var i = r.Internet;
         if (i.Samples >= 10 && (i.Loss >= 0.02 || i.LatencyMs is null))
             return g.Samples >= 10 && g.LatencyMs != null
-                ? "До роутера всё в порядке, а дальше есть потери — проблема у провайдера или на пути к интернету."
+                ? "До роутера потерь не видно, а до внешнего сервера они есть. Причина может быть на пути или в ограничении ответов."
                 : "Потери на пути к интернету.";
         var inc = test?.IncreaseMs ?? r.Load.IncreaseMs;
         if (inc >= 50)
-            return "Когда линия загружена, задержка сильно растёт (bufferbloat): игры и звонки будут лагать, пока что-то качается. "
+            return "Когда линия загружена, задержка сильно растёт (bufferbloat): игры и звонки могут прерываться, пока что-то качается. "
                    + "Помогает управление очередями на роутере (SQM: CAKE или FQ-CoDel) или ограничение скорости чуть ниже тарифа.";
         return "";
     }
