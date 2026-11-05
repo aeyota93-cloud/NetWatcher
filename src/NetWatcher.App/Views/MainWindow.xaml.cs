@@ -96,6 +96,13 @@ internal partial class MainWindow : Window
         {
             _vm.Export.CopyCommand.Execute(null);
         }
+        else if (ctrl && e.Key == Key.C && ServerList.IsKeyboardFocusWithin && ServerList.SelectedItem is LinkServerView server
+                 && Keyboard.FocusedElement is not TextBox { SelectionLength: > 0 })
+        {
+            // As in the table: Ctrl+C — the line (domain, IP:port, protocol), Ctrl+Shift+C — only the IP.
+            if (shift) _vm.CopyServerIpCommand?.Execute(server);
+            else _vm.Copy(string.Join('\t', new[] { server.Name, server.Address, server.Proto }.Where(x => x != "")), "строку");
+        }
         else if (ctrl && e.Key == Key.C && Grid.IsKeyboardFocusWithin && Keyboard.FocusedElement is not TextBox { SelectionLength: > 0 })
         {
             // Ctrl+C — whole rows, Ctrl+Shift+C — only the addresses.
@@ -192,6 +199,7 @@ internal partial class MainWindow : Window
     private void OnCloseDetails(object sender, RoutedEventArgs e)
     {
         Grid.SelectedItems.Clear();
+        _vm.SelectedLinkServer = null;
         _vm.SelectedItem = null;
     }
 

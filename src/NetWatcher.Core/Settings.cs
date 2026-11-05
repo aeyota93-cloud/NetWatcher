@@ -59,6 +59,9 @@ public sealed class Settings
     /// <summary>Browsers visit new countries and networks with every site: only their first start is news.</summary>
     public bool AlertSkipBrowsers { get; set; } = true;
 
+    /// <summary>The "Связь" latency chart at full height; by default it is a narrow strip.</summary>
+    public bool LinkChartExpanded { get; set; }
+
     /// <summary>Ping the router and an internet reference point every 2 s, for connection quality.</summary>
     public bool QualityPings { get; set; } = true;
 

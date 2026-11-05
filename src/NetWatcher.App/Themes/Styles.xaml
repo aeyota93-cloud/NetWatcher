@@ -58,6 +58,35 @@
             </Setter.Value>
         </Setter>
     </Style>
+    <!-- Frame of a column filter in the "Связь" table: accent-tinted while the filter is on. -->
+    <Style x:Key="FilterCellCombo" TargetType="Border">
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="1" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+        <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding Child.SelectedIndex, RelativeSource={RelativeSource Self}}" Value="0">
+                <Setter Property="BorderBrush" Value="Transparent" />
+                <Setter Property="Background" Value="Transparent" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+    <Style x:Key="FilterCellText" TargetType="Border">
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="1" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+        <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding Child.Text, RelativeSource={RelativeSource Self}}" Value="">
+                <Setter Property="BorderBrush" Value="Transparent" />
+                <Setter Property="Background" Value="Transparent" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
     <Style x:Key="ListRow" TargetType="ListBoxItem" BasedOn="{StaticResource RowHighlight}">
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         <Setter Property="Padding" Value="0" />

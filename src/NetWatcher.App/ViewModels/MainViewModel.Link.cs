@@ -13,7 +13,18 @@ public sealed record LinkServerView(
     string Latency, string Jitter, string Loss, string LastAnswer, string Traffic, string Reason, bool HasLoss)
 {
     public required DestinationRow Row { get; init; }
+
+    /// <summary>The same values as numbers, for the column filters.</summary>
+    public required ServerFacts Facts { get; init; }
+
     public string Name { get; init; } = "";
+    public bool HasName => Name != "";
+    public string Ip => Row.RemoteIpText;
+    public bool IsTcp => Proto == "TCP";
+
+    /// <summary>A NetWatcher block covers this server: the menu offers to lift it instead of blocking again.</summary>
+    public bool IsBlocked { get; init; }
+
     public string Key => Row.Key;
 }
 
@@ -37,7 +48,29 @@ internal sealed partial class MainViewModel
     public LinkServerView? SelectedLinkServer
     {
         get => _selectedLinkServer;
-        set => Set(ref _selectedLinkServer, value);
+        set
+        {
+            // While the list is rebuilt the selection is briefly empty: that must not close the details below.
+            if (Set(ref _selectedLinkServer, value) && !(value == null && _rebuildingServers)) ShowServerDetails(value);
+        }
+    }
+
+    private bool _rebuildingServers;
+
+    // Per refresh: table rows by key and the block rules, so each server line does not scan them again.
+    private Dictionary<string, DestinationRow> _rowIndex = [];
+    private List<DestinationRow>? _rowIndexOf;
+    private List<Core.Blocking.BlockRule> _blockRules = [];
+
+    private void PrepareServerLookups()
+    {
+        if (!ReferenceEquals(_rowIndexOf, _rows))
+        {
+            _rowIndex = new Dictionary<string, DestinationRow>(StringComparer.Ordinal);
+            foreach (var r in _rows) _rowIndex.TryAdd(r.Key, r);
+            _rowIndexOf = _rows;
+        }
+        _blockRules = _state.Blocks.Rules;
     }
 
     private void StartLink()
@@ -55,6 +88,7 @@ internal sealed partial class MainViewModel
         ToggleNotifyCommand = new RelayCommand(ToggleNotify);
         InitQuality();
         InitUpdates();
+        InitServerFilter();
         OnPropertyChanged(nameof(SelectProgramCommand));
         OnPropertyChanged(nameof(ToggleNotifyCommand));
     }
@@ -171,6 +205,8 @@ internal sealed partial class MainViewModel
             }
         }
 
+        NotifyServerFilter();
+        PrepareServerLookups();
         if (SelectedNav is null or { IsAll: true })
         {
             LinkShowAll = true;
@@ -211,6 +247,51 @@ internal sealed partial class MainViewModel
     private string ServerName(IPAddress ip, string process) =>
         _state.Dns.Get(ip, process).FirstOrDefault() ?? "";
 
+    /// <summary>A line of the server table, with the numbers the column filters need.</summary>
+    private LinkServerView ServerView(ProgramLink p, ServerLink s, DateTimeOffset now)
+    {
+        var name = ServerName(s.Ip, p.Process);
+        var asn = _state.Asn.Lookup(s.Ip);
+        var country = _state.Geo.Lookup(s.Ip) is { Length: > 0 } g ? g : asn?.Country ?? "";
+        var owner = asn is { } a ? a.OwnerText + (country != "" ? " · " + country : "") : country;
+        var addr = s.Ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6 ? $"[{s.Ip}]:{s.Port}" : $"{s.Ip}:{s.Port}";
+        if (!_rowIndex.TryGetValue(LinkMonitor.KeyOf(p.GroupKey, s.Proto, s.Ip, s.Port), out var row))
+        {
+            // Not in the table for this period or these filters: enough of a row for the menu, details and filters.
+            row = new DestinationRow
+            {
+                Process = p.Process, Services = p.Services, Path = p.Path,
+                Proto = s.Proto, RemoteIp = s.Ip, RemotePort = s.Port,
+                Domains = name != "" ? [name] : [], Asn = asn,
+            };
+            row.ServerCountry = _state.Geo.Lookup(s.Ip);
+            row.Catalog = _state.Catalog.Lookup(row.Domains);
+        }
+        return new LinkServerView(
+            name != "" ? name : "сервер",
+            addr,
+            owner,
+            s.Proto,
+            s.Level.ToString(),
+            s.StateText,
+            s.LatencyMs is { } l ? $"{l:0} мс" + (s.LatencyFrom == Core.Link.LatencySource.Connection ? " (TCP)" : "") : s.Pingable ? "—" : "нет пинга",
+            s.JitterMs is { } jj ? $"±{jj:0} мс" : "—",
+            s.LossPercent is { } loss ? $"{loss:0}%" : "—",
+            s.LastAnswer is { } la ? (now - la < TimeSpan.FromSeconds(ServerFilter.AnswerNowSeconds) ? "сейчас" : $"{(int)(now - la).TotalSeconds} с назад") : "—",
+            $"{TextFormat.Bytes(s.BytesOut)} / {TextFormat.Bytes(s.BytesIn)}",
+            s.Reason != "" ? s.Reason
+                : s.LatencyFrom == Core.Link.LatencySource.Connection ? "Сервер не отвечает на пинг; задержка — по самому TCP-соединению программы (её измеряет Windows)"
+                : s.Pingable || s.Proto == "TCP" ? "" : "Сервер не отвечает на пинг, а у UDP нет подтверждений — задержку измерить нельзя, это не ошибка",
+            (s.LossPercent ?? 0) >= ServerFilter.LossThreshold)
+        {
+            Name = name,
+            Row = row,
+            Facts = new ServerFacts(name, addr, owner, s.Proto, s.Level, name != "", s.LatencyMs, s.JitterMs, s.LossPercent,
+                s.LastAnswer is { } ago ? (now - ago).TotalSeconds : null, s.BytesOut + s.BytesIn),
+            IsBlocked = _blockRules.Any(b => b.Covers(row)),
+        };
+    }
+
     private void ApplyProgram(ProgramLink p, List<ProgramLink> all, DateTimeOffset now)
     {
         LinkLevel = p.Level.ToString();
@@ -246,38 +327,24 @@ internal sealed partial class MainViewModel
         LinkChart = p.Chart;
 
         var selectedServerKey = SelectedLinkServer?.Key;
-        if (!HoldServerList) Replace(LinkServers, p.Servers.Select(s =>
+        if (!HoldServerList)
         {
-            var name = ServerName(s.Ip, p.Process);
-            var country = _state.Geo.Lookup(s.Ip) is { Length: > 0 } g ? g : _state.Asn.Lookup(s.Ip)?.Country ?? "";
-            var owner = _state.Asn.Lookup(s.Ip) is { } a ? a.OwnerText + (country != "" ? " · " + country : "") : country;
-            var addr = s.Ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6 ? $"[{s.Ip}]:{s.Port}" : $"{s.Ip}:{s.Port}";
-            return new LinkServerView(
-                name != "" ? name : "сервер",
-                addr,
-                owner,
-                s.Proto,
-                s.Level.ToString(),
-                s.StateText,
-                s.LatencyMs is { } l ? $"{l:0} мс" + (s.LatencyFrom == Core.Link.LatencySource.Connection ? " (TCP)" : "") : s.Pingable ? "—" : "нет пинга",
-                s.JitterMs is { } jj ? $"±{jj:0} мс" : "—",
-                s.LossPercent is { } loss ? $"{loss:0}%" : "—",
-                s.LastAnswer is { } la ? (now - la < TimeSpan.FromSeconds(5) ? "сейчас" : $"{(int)(now - la).TotalSeconds} с назад") : "—",
-                $"{TextFormat.Bytes(s.BytesOut)} / {TextFormat.Bytes(s.BytesIn)}",
-                s.Reason != "" ? s.Reason
-                    : s.LatencyFrom == Core.Link.LatencySource.Connection ? "Сервер не отвечает на пинг; задержка — по самому TCP-соединению программы (её измеряет Windows)"
-                    : s.Pingable || s.Proto == "TCP" ? "" : "Сервер не отвечает на пинг, а у UDP нет подтверждений — задержку измерить нельзя, это не ошибка",
-                (s.LossPercent ?? 0) >= 1)
+            var filter = CurrentServerFilter();
+            var servers = p.Servers.Select(s => ServerView(p, s, now)).ToList();
+            var shown = servers.Where(s => PassServer(filter, s)).ToList();
+            _rebuildingServers = true;
+            try
             {
-                Name = name,
-                Row = _rows.FirstOrDefault(r => r.GroupKey == p.GroupKey && r.RemoteIp.Equals(s.Ip) && r.RemotePort == s.Port && r.Proto == s.Proto) ?? new DestinationRow
-                {
-                    Process = p.Process, Services = p.Services, Path = p.Path,
-                    Proto = s.Proto, RemoteIp = s.Ip, RemotePort = s.Port,
-                    Domains = name != "" ? [name] : [], Asn = _state.Asn.Lookup(s.Ip),
-                },
-            };
-        }));
+                Replace(LinkServers, shown);
+            }
+            finally
+            {
+                _rebuildingServers = false;
+            }
+            LinkShownText = LinkFilterActive
+                ? $"Показано {shown.Count} из {TextFormat.Plural(servers.Count, "сервера", "серверов", "серверов")}"
+                : TextFormat.Plural(servers.Count, "сервер", "сервера", "серверов");
+        }
         SelectedLinkServer = LinkServers.FirstOrDefault(s => s.Key == selectedServerKey);
 
         // Why: the reasons of problem servers, and whether other programs are fine.
@@ -342,8 +409,16 @@ internal sealed partial class MainViewModel
                 p.Chart.Count > 60 ? p.Chart.Skip(p.Chart.Count - 60).ToList() : p.Chart,
                 AvatarFor(p));
         }
-        Replace(LinkCards, programs.Where(p => p.Level != Core.Link.LinkLevel.Idle).Select(Card));
-        Replace(LinkIdle, programs.Where(p => p.Level == Core.Link.LinkLevel.Idle).Select(Card));
+        // With filters on, only programs that have a matching server; their state still counts every server.
+        var shown = programs;
+        if (LinkFilterActive)
+        {
+            var filter = CurrentServerFilter();
+            shown = programs.Where(p => p.Servers.Any(s => PassServer(filter, ServerView(p, s, DateTimeOffset.Now)))).ToList();
+        }
+        LinkShownText = LinkFilterActive ? $"Показано {shown.Count} из {TextFormat.Plural(programs.Count, "программы", "программ", "программ")}" : "";
+        Replace(LinkCards, shown.Where(p => p.Level != Core.Link.LinkLevel.Idle).Select(Card));
+        Replace(LinkIdle, shown.Where(p => p.Level == Core.Link.LinkLevel.Idle).Select(Card));
         HasLinkIdle = LinkIdle.Count > 0;
     }
 

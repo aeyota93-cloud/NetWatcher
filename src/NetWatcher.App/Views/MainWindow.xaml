@@ -59,19 +59,23 @@
                       CommandParameter="{Binding PlacementTarget.SelectedItems, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
         </ContextMenu>
 
+        <!-- Server menu: only what neither the row buttons nor the details pane below offer. -->
         <ContextMenu x:Key="ServerMenu" DataContext="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource Self}}">
-            <MenuItem Header="Копировать адрес" Command="{Binding CopyValueCommand}"
-                      CommandParameter="{Binding PlacementTarget.DataContext.Address, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-            <MenuItem Header="Копировать имя сервера" Command="{Binding CopyValueCommand}"
-                      CommandParameter="{Binding PlacementTarget.DataContext.Name, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                      Visibility="{Binding PlacementTarget.DataContext.Name, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource TextVis}}" />
+            <MenuItem Header="Копировать IP:порт" Command="{Binding CopyServerAddressCommand}"
+                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+            <MenuItem Header="Найти в «Все адреса»" Command="{Binding SearchIpCommand}"
+                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
             <Separator />
-            <MenuItem Header="Проверить соединение" Command="{Binding OpenCheckCommand}" CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-            <MenuItem Header="Найти всё с этим IP" Command="{Binding SearchIpCommand}" CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-            <MenuItem Header="Подробно о сети (RDAP)" Command="{Binding RdapCommand}" CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-            <MenuItem Header="Заблокировать…" Command="{Binding BlockCommand}" CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-            <MenuItem Header="Снять блокировку…" Command="{Binding UnblockCommand}" CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-            <MenuItem Header="Разорвать соединение…" Command="{Binding CloseConnectionCommand}" CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+            <MenuItem Header="Заблокировать…" Command="{Binding BlockCommand}"
+                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      Visibility="{Binding PlacementTarget.DataContext.IsBlocked, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource NotVis}}" />
+            <MenuItem Header="Снять блокировку…" Command="{Binding UnblockCommand}"
+                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      Visibility="{Binding PlacementTarget.DataContext.IsBlocked, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVis}}" />
+            <MenuItem Header="Разорвать соединение…" Command="{Binding CloseConnectionCommand}"
+                      ToolTip="Закрыть открытые TCP-соединения программы с этим адресом: программа может подключиться снова"
+                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      Visibility="{Binding PlacementTarget.DataContext.IsTcp, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVis}}" />
         </ContextMenu>
         <!-- Rows: no grid lines, a soft hover, the accent-tinted selection. -->
         <Style x:Key="RowStyle" TargetType="DataGridRow" BasedOn="{StaticResource TableRow}">
@@ -844,9 +848,12 @@
 
                                     <!-- One program -->
                                     <StackPanel Visibility="{Binding LinkHasProgram, Converter={StaticResource BoolToVis}}">
-                                        <Border Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12,10">
+                                        <Border Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12,8">
                                             <StackPanel>
-                                                <DockPanel Margin="0,0,0,6">
+                                                <DockPanel Margin="0,0,0,4">
+                                                    <Button DockPanel.Dock="Right" Style="{StaticResource BtnSmall}" Padding="8,1" Margin="12,0,0,0" FontSize="12"
+                                                            Content="{Binding LinkChartToggleText}" Command="{Binding ToggleLinkChartCommand}"
+                                                            ToolTip="Узкая полоса или полный график со шкалами; наведите на график, чтобы увидеть значения" />
                                                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                                                         <Rectangle Width="12" Height="3" Fill="{DynamicResource AccentBrush}" VerticalAlignment="Center" Margin="0,0,5,0" />
                                                         <TextBlock Text="задержка, мс" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,12,0" />
@@ -859,22 +866,51 @@
                                                         <Run Text="Задержка и потери, " /><Run Text="{Binding LinkWindowText, Mode=OneWay}" />
                                                     </TextBlock>
                                                 </DockPanel>
-                                                <v:LinkChart Height="150" Points="{Binding LinkChart}" />
+                                                <v:LinkChart Height="{Binding LinkChartHeight}" Compact="{Binding LinkChartCompact}" Points="{Binding LinkChart}" />
                                             </StackPanel>
                                         </Border>
 
                                         <!-- Servers -->
                                         <Border Style="{StaticResource Card}" Padding="0" Margin="0,0,0,12">
                                             <StackPanel>
+                                                <!-- Shown / total, reset, and copying of what is shown. -->
+                                                <DockPanel Margin="12,10,12,0">
+                                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                                        <Button Style="{StaticResource BtnSmall}" Command="{Binding CopyShownDomainsCommand}" Margin="0,0,6,0"
+                                                                ToolTip="Домены показанных серверов, по одному в строке">
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <TextBlock Text="&#xE8C8;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,6,0" />
+                                                                <TextBlock Text="Все домены" />
+                                                            </StackPanel>
+                                                        </Button>
+                                                        <Button Style="{StaticResource BtnSmall}" Command="{Binding CopyShownIpsCommand}"
+                                                                ToolTip="IP-адреса показанных серверов, по одному в строке, без портов">
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <TextBlock Text="&#xE8C8;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,6,0" />
+                                                                <TextBlock Text="Все IP" />
+                                                            </StackPanel>
+                                                        </Button>
+                                                    </StackPanel>
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding LinkShownText}" FontSize="12" Style="{StaticResource Muted}" />
+                                                        <TextBlock FontSize="12" Margin="8,0,0,0" Visibility="{Binding LinkFilterActive, Converter={StaticResource BoolToVis}}">
+                                                            <Hyperlink Command="{Binding ResetServerFiltersCommand}" ToolTip="Сбросить фильтры столбцов и быстрые фильтры сверху; поиск останется">Сбросить фильтры</Hyperlink>
+                                                        </TextBlock>
+                                                    </StackPanel>
+                                                </DockPanel>
                                                 <Grid Margin="12,8,12,4">
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition />
+                                                        <RowDefinition />
+                                                    </Grid.RowDefinitions>
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="2.4*" />
-                                                        <ColumnDefinition Width="58" />
+                                                        <ColumnDefinition Width="76" />
                                                         <ColumnDefinition Width="1.2*" />
-                                                        <ColumnDefinition Width="74" />
-                                                        <ColumnDefinition Width="64" />
-                                                        <ColumnDefinition Width="56" />
-                                                        <ColumnDefinition Width="84" />
+                                                        <ColumnDefinition Width="96" />
+                                                        <ColumnDefinition Width="90" />
+                                                        <ColumnDefinition Width="96" />
+                                                        <ColumnDefinition Width="92" />
                                                         <ColumnDefinition Width="1.3*" />
                                                     </Grid.ColumnDefinitions>
                                                     <Grid.Resources>
@@ -888,6 +924,79 @@
                                                     <TextBlock Grid.Column="5" Text="ПОТЕРИ" />
                                                     <TextBlock Grid.Column="6" Text="ОТВЕТ БЫЛ" />
                                                     <TextBlock Grid.Column="7" Text="ЗА МИНУТУ ↑ / ↓" ToolTip="Сколько отправлено и получено за последнюю минуту" />
+
+                                                    <!-- One filter per column. TCP/UDP, domain/IP and «Проблемы» are the quick filters above the tabs. -->
+                                                    <DockPanel Grid.Row="1" Margin="0,4,8,0">
+                                                    <Border Style="{StaticResource FilterCellCombo}" DockPanel.Dock="Right" Margin="6,0,0,0" Width="112">
+                                                        <ComboBox FontSize="12" SelectedIndex="{Binding LinkFilterAddress}" ToolTip="Как программа обратилась к серверу: по имени (известен ответ DNS) или сразу по IP. Домен бывает неизвестен и при обращении по имени — если программа спрашивает DNS сама (DNS через HTTPS) или узнала адрес до запуска NetWatcher. То же, что «С доменом» и «Без домена» сверху">
+                                                            <ComboBoxItem Content="Домен и IP" />
+                                                            <ComboBoxItem Content="По домену" />
+                                                            <ComboBoxItem Content="По IP" />
+                                                        </ComboBox>
+                                                    </Border>
+                                                        <Border Style="{StaticResource FilterCellText}">
+                                                            <TextBox FontSize="12" Text="{Binding LinkFilterText, UpdateSourceTrigger=PropertyChanged}" VerticalContentAlignment="Center"
+                                                                     ToolTip="Часть домена, IP-адреса или владельца сети; несколько слов — все должны найтись" />
+                                                        </Border>
+                                                    </DockPanel>
+                                                    <Border Style="{StaticResource FilterCellCombo}" Grid.Row="1" Grid.Column="1" Margin="0,4,6,0">
+                                                        <ComboBox FontSize="12" SelectedIndex="{Binding LinkFilterProto}" ToolTip="То же, что фильтры TCP и UDP сверху">
+                                                        <ComboBoxItem Content="Все" />
+                                                        <ComboBoxItem Content="TCP" />
+                                                        <ComboBoxItem Content="UDP" />
+                                                    </ComboBox>
+                                                    </Border>
+                                                    <Border Style="{StaticResource FilterCellCombo}" Grid.Row="1" Grid.Column="2" Margin="0,4,6,0">
+                                                        <ComboBox FontSize="12" SelectedIndex="{Binding LinkFilterState}" ToolTip="«Проблемы» — то же, что фильтр «Проблемные» сверху">
+                                                        <ComboBoxItem Content="Все" />
+                                                        <ComboBoxItem Content="Сбоев не видно" />
+                                                        <ComboBoxItem Content="Проблемы" />
+                                                        <ComboBoxItem Content="Нет ответа" />
+                                                        <ComboBoxItem Content="Простаивает" />
+                                                    </ComboBox>
+                                                    </Border>
+                                                    <Border Style="{StaticResource FilterCellCombo}" Grid.Row="1" Grid.Column="3" Margin="0,4,6,0">
+                                                        <ComboBox FontSize="12" SelectedIndex="{Binding LinkFilterLatency}" ToolTip="Границы — как в оценке Cloudflare AIM: 20, 50 и 100 мс">
+                                                        <ComboBoxItem Content="Все" />
+                                                        <ComboBoxItem Content="до 20 мс" />
+                                                        <ComboBoxItem Content="20–50 мс" />
+                                                        <ComboBoxItem Content="50–100 мс" />
+                                                        <ComboBoxItem Content="от 100 мс" />
+                                                        <ComboBoxItem Content="нет замера" />
+                                                    </ComboBox>
+                                                    </Border>
+                                                    <Border Style="{StaticResource FilterCellCombo}" Grid.Row="1" Grid.Column="4" Margin="0,4,6,0">
+                                                        <ComboBox FontSize="12" SelectedIndex="{Binding LinkFilterJitter}" ToolTip="Границы — как в оценке Cloudflare AIM: 10 и 20 мс">
+                                                        <ComboBoxItem Content="Все" />
+                                                        <ComboBoxItem Content="до 10 мс" />
+                                                        <ComboBoxItem Content="10–20 мс" />
+                                                        <ComboBoxItem Content="от 20 мс" />
+                                                        <ComboBoxItem Content="нет замера" />
+                                                    </ComboBox>
+                                                    </Border>
+                                                    <Border Style="{StaticResource FilterCellCombo}" Grid.Row="1" Grid.Column="5" Margin="0,4,6,0">
+                                                        <ComboBox FontSize="12" SelectedIndex="{Binding LinkFilterLoss}" ToolTip="«Есть» — от 1%, как подсвечивает таблица">
+                                                        <ComboBoxItem Content="Все" />
+                                                        <ComboBoxItem Content="Есть" />
+                                                        <ComboBoxItem Content="Нет" />
+                                                        <ComboBoxItem Content="Не измерены" />
+                                                    </ComboBox>
+                                                    </Border>
+                                                    <Border Style="{StaticResource FilterCellCombo}" Grid.Row="1" Grid.Column="6" Margin="0,4,6,0">
+                                                        <ComboBox FontSize="12" SelectedIndex="{Binding LinkFilterAnswer}" ToolTip="«Сейчас» — ответ был за последние 5 секунд">
+                                                        <ComboBoxItem Content="Все" />
+                                                        <ComboBoxItem Content="Сейчас" />
+                                                        <ComboBoxItem Content="Раньше" />
+                                                        <ComboBoxItem Content="Не было" />
+                                                    </ComboBox>
+                                                    </Border>
+                                                    <Border Style="{StaticResource FilterCellCombo}" Grid.Row="1" Grid.Column="7" Margin="0,4,0,0" HorizontalAlignment="Left" Width="110">
+                                                        <ComboBox FontSize="12" SelectedIndex="{Binding LinkFilterTraffic}" ToolTip="Был ли обмен данными за последнюю минуту">
+                                                        <ComboBoxItem Content="Все" />
+                                                        <ComboBoxItem Content="Есть обмен" />
+                                                        <ComboBoxItem Content="Без обмена" />
+                                                    </ComboBox>
+                                                    </Border>
                                                 </Grid>
                                                 <ListBox x:Name="ServerList" ItemsSource="{Binding LinkServers}" SelectedItem="{Binding SelectedLinkServer}"
                                                          BorderThickness="0" Background="Transparent" Padding="0"
@@ -914,6 +1023,37 @@
                                                                         <ColumnDefinition Width="84" />
                                                                         <ColumnDefinition Width="1.3*" />
                                                                     </Grid.ColumnDefinitions>
+                                                                    <!-- Copy buttons: one click, shown on the row under the mouse and on the selected one. -->
+                                                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0" Panel.ZIndex="1">
+                                                                        <StackPanel.Style>
+                                                                            <Style TargetType="StackPanel">
+                                                                                <Setter Property="Visibility" Value="Hidden" />
+                                                                                <Style.Triggers>
+                                                                                    <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                                                                                        <Setter Property="Visibility" Value="Visible" />
+                                                                                    </DataTrigger>
+                                                                                    <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                                                                                        <Setter Property="Visibility" Value="Visible" />
+                                                                                    </DataTrigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                        </StackPanel.Style>
+                                                                        <Button Style="{StaticResource BtnSmall}" Padding="8,2" Margin="0,0,4,0" ToolTip="Копировать домен"
+                                                                                Command="{Binding DataContext.CopyServerDomainCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"
+                                                                                Visibility="{Binding HasName, Converter={StaticResource BoolToVis}}">
+                                                                            <StackPanel Orientation="Horizontal">
+                                                                                <TextBlock Text="&#xE8C8;" Style="{StaticResource Icon}" FontSize="11" Margin="0,0,5,0" />
+                                                                                <TextBlock Text="домен" FontSize="12" />
+                                                                            </StackPanel>
+                                                                        </Button>
+                                                                        <Button Style="{StaticResource BtnSmall}" Padding="8,2" ToolTip="Копировать IP (без порта)"
+                                                                                Command="{Binding DataContext.CopyServerIpCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}">
+                                                                            <StackPanel Orientation="Horizontal">
+                                                                                <TextBlock Text="&#xE8C8;" Style="{StaticResource Icon}" FontSize="11" Margin="0,0,5,0" />
+                                                                                <TextBlock Text="IP" FontSize="12" />
+                                                                            </StackPanel>
+                                                                        </Button>
+                                                                    </StackPanel>
                                                                     <!-- Name on top, address and owner below: in one line a long name hid the address. -->
                                                                     <StackPanel Margin="0,0,8,0">
                                                                         <TextBox Text="{Binding Title, Mode=OneWay}" FontWeight="SemiBold" Style="{StaticResource SelectableText}" ContextMenu="{StaticResource ServerMenu}" Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}" />
@@ -1077,6 +1217,18 @@
                                                        Text="Оценки — по методике Cloudflare AIM; они появляются, когда известен рост задержки под нагрузкой, а «Видео» — после теста скорости. «Под нагрузкой» без теста — по вашему же трафику: это нагрузка, какая была, а не предел линии." />
                                         </StackPanel>
                                     </Border>
+
+                                    <!-- All programs: the quick filters and column filters narrow the cards too. -->
+                                    <TextBlock Margin="2,0,0,8" FontSize="12" Style="{StaticResource Muted}">
+                                        <TextBlock.Visibility>
+                                            <MultiBinding Converter="{StaticResource AllVis}">
+                                                <Binding Path="LinkShowAll" />
+                                                <Binding Path="LinkFilterActive" />
+                                            </MultiBinding>
+                                        </TextBlock.Visibility>
+                                        <Run Text="{Binding LinkShownText, Mode=OneWay}" /><Run Text=" — с серверами, подходящими под фильтры · " />
+                                        <Hyperlink Command="{Binding ResetServerFiltersCommand}">Сбросить фильтры</Hyperlink>
+                                    </TextBlock>
 
                                     <!-- All programs: cards -->
                                     <ItemsControl ItemsSource="{Binding LinkCards}" Visibility="{Binding LinkShowAll, Converter={StaticResource BoolToVis}}">
