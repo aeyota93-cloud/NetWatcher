@@ -65,28 +65,43 @@ public sealed class LinkFilterBindingTests
             object? Get(string p) => type.GetProperty(p)!.GetValue(vm);
             void Put(string p, object v) => type.GetProperty(p)!.SetValue(vm, v);
 
-            // The protocol column sets the TCP/UDP quick filters, and the quick filters show in the column.
+            // Wire the quick filters as the window does, without refreshing anything else.
+            var toColumns = type.GetMethod("QuickFilterToColumns", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            foreach (var c in chips)
+            {
+                var chip = c;
+                chip.Changed = () => toColumns.Invoke(vm, [chip]);
+            }
+            Put("HoldServerList", true); // no list rebuild: only the filter state is checked
+
+            // A column narrows only the "Связь" table: no quick filter changes, so the program list stays as it is.
             Assert.Equal(false, Get("LinkFilterActive"));
             Put("LinkFilterProto", 2);
-            Assert.True(chips[1].IsOn);
-            Assert.False(chips[0].IsOn);
+            Put("LinkFilterAddress", 2);
+            Put("LinkFilterState", (int)StateFilter.Problems);
+            Assert.All(chips, c => Assert.False(c.IsOn));
+            Assert.Equal(true, Get("LinkColumnFilterActive"));
+
+            // "Сбросить фильтры" resets the columns only.
+            chips[5].IsOn = true;
+            buttons[Array.IndexOf(names, "ResetServerFiltersCommand")].Command.Execute(null);
+            Assert.Equal(0, Get("LinkFilterProto"));
+            Assert.Equal(false, Get("LinkColumnFilterActive"));
+            Assert.True(chips[5].IsOn);
+            Assert.Equal(true, Get("LinkFilterActive")); // «Трекеры» above still narrows the servers
+            chips[5].IsOn = false;
+
+            // A quick filter sets its column.
+            chips[1].IsOn = true;
             Assert.Equal(2, Get("LinkFilterProto"));
             chips[0].IsOn = true; // both on — "either"
             Assert.Equal(0, Get("LinkFilterProto"));
-
-            Put("LinkFilterAddress", 1);
-            Assert.True(chips[2].IsOn);
-            Assert.Equal(1, Get("LinkFilterAddress"));
-
-            Put("LinkFilterState", (int)StateFilter.Problems);
-            Assert.True(chips[4].IsOn);
+            chips[3].IsOn = true;
+            Assert.Equal(2, Get("LinkFilterAddress"));
+            chips[4].IsOn = true;
             Assert.Equal((int)StateFilter.Problems, Get("LinkFilterState"));
-
-            // A quick filter without a column still narrows the servers.
-            chips[0].IsOn = chips[1].IsOn = chips[2].IsOn = chips[4].IsOn = false;
-            Assert.Equal(false, Get("LinkFilterActive"));
-            chips[5].IsOn = true;
-            Assert.Equal(true, Get("LinkFilterActive"));
+            chips[4].IsOn = false;
+            Assert.Equal((int)StateFilter.All, Get("LinkFilterState"));
 
             foreach (var button in buttons) BindingOperations.ClearAllBindings(button);
         });

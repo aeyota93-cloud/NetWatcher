@@ -73,7 +73,12 @@ internal sealed partial class MainViewModel : ObservableObject
             new("Скрыть Microsoft", QuickFilter.HideMicrosoft, "Убрать обращения к сетям и доменам Microsoft"),
             new("Только IPv4", QuickFilter.Ipv4, "Скрыть адреса IPv6"),
         ];
-        foreach (var c in Chips) c.Changed = () => _ = RefreshAsync();
+        foreach (var c in Chips)
+            c.Changed = () =>
+            {
+                QuickFilterToColumns(c);
+                _ = RefreshAsync();
+            };
 
         Nav.Add(new NavItem(AllKey, "", "") { Title = "Все" });
         _selectedNav = Nav[0];

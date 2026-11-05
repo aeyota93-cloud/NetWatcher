@@ -5,15 +5,17 @@ namespace NetWatcher.App.ViewModels;
 
 /// <summary>
 /// Filters of the server table in the "Связь" tab, one per column, and quick copying.
-/// The quick filters above the tabs drive the matching columns: TCP/UDP → protocol, «С доменом» / «Без домена» →
-/// how the server was reached, «Проблемные» → state; changing those columns turns the quick filters on and off.
+/// The columns narrow only this table. The quick filters above the tabs set the matching columns —
+/// TCP/UDP → protocol, «С доменом» / «Без домена» → how the server was reached, «Проблемные» → state — but a
+/// column never changes a quick filter: the program list and the address table stay as they are.
 /// The other quick filters («Трекеры», «Только новые»…) apply to the servers as they do to the table.
 /// </summary>
 internal sealed partial class MainViewModel
 {
-    // Columns without a quick filter of their own.
     private string _filterText = "";
-    private StateFilter _filterStateLocal;
+    private ProtoFilter _filterProto;
+    private AddressFilter _filterAddress;
+    private StateFilter _filterState;
     private LatencyFilter _filterLatency;
     private JitterFilter _filterJitter;
     private LossFilter _filterLoss;
@@ -26,13 +28,7 @@ internal sealed partial class MainViewModel
 
     private FilterChip Chip(QuickFilter flag) => Chips.First(c => c.Flag == flag);
 
-    /// <summary>Sets two "either" quick filters to one of three states: none, the first, the second.</summary>
-    private void SetPair(QuickFilter first, QuickFilter second, int value)
-    {
-        Chip(first).IsOn = value == 1;
-        Chip(second).IsOn = value == 2;
-    }
-
+    /// <summary>Two "either" quick filters as one of three states: none or both, the first, the second.</summary>
     private int GetPair(QuickFilter first, QuickFilter second)
     {
         var a = Chip(first).IsOn;
@@ -49,31 +45,61 @@ internal sealed partial class MainViewModel
         }
     }
 
-    /// <summary>0 — all, 1 — TCP, 2 — UDP; the TCP and UDP quick filters.</summary>
+    /// <summary>0 — all, 1 — TCP, 2 — UDP.</summary>
     public int LinkFilterProto
     {
-        get => GetPair(QuickFilter.Tcp, QuickFilter.Udp);
-        set => SetPair(QuickFilter.Tcp, QuickFilter.Udp, value);
-    }
-
-    /// <summary>0 — all, 1 — by domain, 2 — by address; the «С доменом» and «Без домена» quick filters.</summary>
-    public int LinkFilterAddress
-    {
-        get => GetPair(QuickFilter.WithDomain, QuickFilter.NoDomain);
-        set => SetPair(QuickFilter.WithDomain, QuickFilter.NoDomain, value);
-    }
-
-    /// <summary>Index in <see cref="StateFilter"/>; «Проблемы» is the «Проблемные» quick filter.</summary>
-    public int LinkFilterState
-    {
-        get => Chip(QuickFilter.Problems).IsOn ? (int)StateFilter.Problems : (int)_filterStateLocal;
+        get => (int)_filterProto;
         set
         {
-            var state = (StateFilter)value;
-            _filterStateLocal = state == StateFilter.Problems ? StateFilter.All : state;
-            if (Chip(QuickFilter.Problems).IsOn != (state == StateFilter.Problems)) Chip(QuickFilter.Problems).IsOn = state == StateFilter.Problems;
-            else ApplyServerFilter();
+            _filterProto = (ProtoFilter)value;
+            ApplyServerFilter();
         }
+    }
+
+    /// <summary>0 — all, 1 — by domain, 2 — by address.</summary>
+    public int LinkFilterAddress
+    {
+        get => (int)_filterAddress;
+        set
+        {
+            _filterAddress = (AddressFilter)value;
+            ApplyServerFilter();
+        }
+    }
+
+    /// <summary>Index in <see cref="StateFilter"/>.</summary>
+    public int LinkFilterState
+    {
+        get => (int)_filterState;
+        set
+        {
+            _filterState = (StateFilter)value;
+            ApplyServerFilter();
+        }
+    }
+
+    /// <summary>
+    /// A quick filter above the tabs was switched: set the matching column of the "Связь" table to it.
+    /// One way only — the columns do not switch quick filters back.
+    /// </summary>
+    private void QuickFilterToColumns(FilterChip chip)
+    {
+        switch (chip.Flag)
+        {
+            case QuickFilter.Tcp or QuickFilter.Udp:
+                _filterProto = (ProtoFilter)GetPair(QuickFilter.Tcp, QuickFilter.Udp);
+                break;
+            case QuickFilter.WithDomain or QuickFilter.NoDomain:
+                _filterAddress = (AddressFilter)GetPair(QuickFilter.WithDomain, QuickFilter.NoDomain);
+                break;
+            case QuickFilter.Problems:
+                if (chip.IsOn) _filterState = StateFilter.Problems;
+                else if (_filterState == StateFilter.Problems) _filterState = StateFilter.All;
+                break;
+            default:
+                return;
+        }
+        NotifyServerFilter();
     }
 
     public int LinkFilterLatency
@@ -130,9 +156,9 @@ internal sealed partial class MainViewModel
     private ServerFilter CurrentServerFilter() => new()
     {
         Text = _filterText ?? "",
-        Proto = (ProtoFilter)LinkFilterProto,
-        Address = (AddressFilter)LinkFilterAddress,
-        State = (StateFilter)LinkFilterState,
+        Proto = _filterProto,
+        Address = _filterAddress,
+        State = _filterState,
         Latency = _filterLatency,
         Jitter = _filterJitter,
         Loss = _filterLoss,
@@ -144,6 +170,13 @@ internal sealed partial class MainViewModel
 
     /// <summary>Any column filter or quick filter that narrows the server list.</summary>
     public bool LinkFilterActive => CurrentServerFilter().IsActive || ExtraFilters != QuickFilter.None;
+
+    /// <summary>A column filter is on: "Сбросить фильтры" has something to reset.</summary>
+    public bool LinkColumnFilterActive => CurrentServerFilter().IsActive;
+
+    /// <summary>" · также: Трекеры" — quick filters above the tabs that narrow the servers without a column of their own.</summary>
+    private string ExtraFiltersText =>
+        ExtraFilters == QuickFilter.None ? "" : " · с фильтрами сверху: " + string.Join(", ", Chips.Where(c => c.IsOn && (c.Flag & ExtraServerFilters) != 0).Select(c => c.Title));
 
     private bool PassServer(ServerFilter filter, LinkServerView s) =>
         filter.Pass(s.Facts) && (ExtraFilters == QuickFilter.None || QuickFilters.Pass(s.Row, ExtraFilters));
@@ -164,22 +197,23 @@ internal sealed partial class MainViewModel
                  {
                      nameof(LinkFilterProto), nameof(LinkFilterAddress), nameof(LinkFilterState), nameof(LinkFilterLatency),
                      nameof(LinkFilterJitter), nameof(LinkFilterLoss), nameof(LinkFilterAnswer), nameof(LinkFilterTraffic),
-                     nameof(LinkFilterText), nameof(LinkFilterActive),
+                     nameof(LinkFilterText), nameof(LinkFilterActive), nameof(LinkColumnFilterActive),
                  })
             OnPropertyChanged(n);
     }
 
-    /// <summary>"Сбросить фильтры": every column and every quick filter (they narrow the servers too). The search stays.</summary>
+    /// <summary>"Сбросить фильтры": the columns of this table only. Quick filters above the tabs stay as they are.</summary>
     private void ResetServerFilters()
     {
         _filterText = "";
-        _filterStateLocal = StateFilter.All;
+        _filterProto = ProtoFilter.All;
+        _filterAddress = AddressFilter.All;
+        _filterState = StateFilter.All;
         _filterLatency = LatencyFilter.All;
         _filterJitter = JitterFilter.All;
         _filterLoss = LossFilter.All;
         _filterAnswer = AnswerFilter.All;
         _filterTraffic = TrafficFilter.All;
-        foreach (var c in Chips) c.IsOn = false;
         ApplyServerFilter();
     }
 

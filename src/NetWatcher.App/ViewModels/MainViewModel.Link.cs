@@ -342,7 +342,7 @@ internal sealed partial class MainViewModel
                 _rebuildingServers = false;
             }
             LinkShownText = LinkFilterActive
-                ? $"Показано {shown.Count} из {TextFormat.Plural(servers.Count, "сервера", "серверов", "серверов")}"
+                ? $"Показано {shown.Count} из {TextFormat.Plural(servers.Count, "сервера", "серверов", "серверов")}{ExtraFiltersText}"
                 : TextFormat.Plural(servers.Count, "сервер", "сервера", "серверов");
         }
         SelectedLinkServer = LinkServers.FirstOrDefault(s => s.Key == selectedServerKey);
@@ -416,7 +416,7 @@ internal sealed partial class MainViewModel
             var filter = CurrentServerFilter();
             shown = programs.Where(p => p.Servers.Any(s => PassServer(filter, ServerView(p, s, DateTimeOffset.Now)))).ToList();
         }
-        LinkShownText = LinkFilterActive ? $"Показано {shown.Count} из {TextFormat.Plural(programs.Count, "программы", "программ", "программ")}" : "";
+        LinkShownText = LinkFilterActive ? $"Показано {shown.Count} из {TextFormat.Plural(programs.Count, "программы", "программ", "программ")}{ExtraFiltersText}" : "";
         Replace(LinkCards, shown.Where(p => p.Level != Core.Link.LinkLevel.Idle).Select(Card));
         Replace(LinkIdle, shown.Where(p => p.Level == Core.Link.LinkLevel.Idle).Select(Card));
         HasLinkIdle = LinkIdle.Count > 0;
