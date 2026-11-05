@@ -45,7 +45,10 @@ public sealed class ServerFilter
     /// <summary>An answer within this many seconds is "сейчас", as the table says.</summary>
     public const double AnswerNowSeconds = 5;
 
-    public string Text { get; set; } = "";
+    private string _text = "";
+
+    /// <summary>Words to find in the domain, address or owner; null is the same as empty.</summary>
+    public string Text { get => _text; set => _text = value ?? ""; }
     public ProtoFilter Proto { get; set; }
     public AddressFilter Address { get; set; }
     public StateFilter State { get; set; }

@@ -76,5 +76,8 @@ public class ServerFilterTests
         Assert.Equal(3, f.ActiveCount);
         f.Clear();
         Assert.False(f.IsActive);
+        f.Text = null!;
+        Assert.False(f.IsActive);
+        Assert.True(f.Pass(Claude));
     }
 }

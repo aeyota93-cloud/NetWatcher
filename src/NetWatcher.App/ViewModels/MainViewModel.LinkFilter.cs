@@ -129,7 +129,7 @@ internal sealed partial class MainViewModel
     /// <summary>The column filters as they are now, quick filters included.</summary>
     private ServerFilter CurrentServerFilter() => new()
     {
-        Text = _filterText,
+        Text = _filterText ?? "",
         Proto = (ProtoFilter)LinkFilterProto,
         Address = (AddressFilter)LinkFilterAddress,
         State = (StateFilter)LinkFilterState,
