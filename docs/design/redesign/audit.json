@@ -1,0 +1,739 @@
+{
+  "date": "2026-11-06",
+  "sourceRevision": "3066155ec88bec9fbbf258a1faa4ffeb7b99aeab",
+  "scope": "Source/UI audit plus previously checked prototype interactions; build and tests run at sourceRevision (Core 246, App 3 passed); WPF app not launched for this audit",
+  "prototypeSha256": "be750f61b2da14db25f2e50fa4b78eb1db285f3f193b448a58b65058a22cc78d",
+  "counts": {
+    "Совпадает": 5,
+    "Расхождение": 10,
+    "Частично": 24,
+    "Не показано": 13,
+    "Новое": 3
+  },
+  "items": [
+    {
+      "id": "F01",
+      "feature": "Приложения и именованные службы",
+      "status": "Совпадает",
+      "priority": "P2",
+      "source": {
+        "file": "src/NetWatcher.App/ViewModels/MainViewModel.cs",
+        "line": 284,
+        "symbol": "public NavItem? SelectedNav"
+      },
+      "mock": "appsPage / appList",
+      "decision": "Сохранить GroupKey служб и реальные данные; шесть строк в HTML — только примеры."
+    },
+    {
+      "id": "F02",
+      "feature": "Все приложения в одной выборке",
+      "status": "Совпадает",
+      "priority": "P2",
+      "source": {
+        "file": "src/NetWatcher.App/ViewModels/MainViewModel.cs",
+        "line": 416,
+        "symbol": "public bool ShowProgramColumn"
+      },
+      "mock": "connectionsPage / currentRows",
+      "decision": "Уже есть контекст «Все». Новым является отдельный раздел и его навигация, а не второй сборщик."
+    },
+    {
+      "id": "F03",
+      "feature": "Протокол, порт, домен, владелец в поиске",
+      "status": "Совпадает",
+      "priority": "P2",
+      "source": {
+        "file": "src/NetWatcher.Core/Model.cs",
+        "line": 125,
+        "symbol": "private bool Has"
+      },
+      "mock": "filteredRows / searchBar",
+      "decision": "Поиск UDP и порта уже реализован. Улучшить видимость в поле и сохранить действующие возможности."
+    },
+    {
+      "id": "F04",
+      "feature": "Поиск по CIDR, пути, тегам и нескольким доменам",
+      "status": "Расхождение",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.Core/Model.cs",
+        "line": 111,
+        "symbol": "public bool Matches"
+      },
+      "mock": "filteredRows",
+      "decision": "HTML не разбирает CIDR и не содержит пути, каталога и массива доменов. Переиспользовать модель C#, не копировать упрощённый поиск."
+    },
+    {
+      "id": "F05",
+      "feature": "Числа и разделители запроса",
+      "status": "Расхождение",
+      "priority": "P2",
+      "source": {
+        "file": "src/NetWatcher.Core/Model.cs",
+        "line": 134,
+        "symbol": "public static IReadOnlyList<string> SplitQuery"
+      },
+      "mock": "filteredRows",
+      "decision": "C# делит по пробелу, табуляции и запятой; Has также ищет число внутри IP. HTML делит только по пробельным и трактует число как точный порт. Уточнить контракт и покрыть примеры тестами."
+    },
+    {
+      "id": "F06",
+      "feature": "Периоды наблюдения",
+      "status": "Частично",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.App/ViewModels/MainViewModel.cs",
+        "line": 53,
+        "symbol": "new(\"15 мин\""
+      },
+      "mock": "periods / action period",
+      "decision": "Все варианты названы, но данные и подписи HTML не пересчитываются. Связать с текущими Periods и окнами истории."
+    },
+    {
+      "id": "F07",
+      "feature": "Расширенные быстрые фильтры",
+      "status": "Не показано",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.App/ViewModels/MainViewModel.cs",
+        "line": 70,
+        "symbol": "new(\"Только новые\""
+      },
+      "mock": "filterSheet",
+      "decision": "В последнем макете нет новых, трекеров, телеметрии, скрытия Microsoft и IPv4. Вернуть в панель фильтров."
+    },
+    {
+      "id": "F08",
+      "feature": "Фильтр «Проблемные»",
+      "status": "Расхождение",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.App/ViewModels/MainViewModel.cs",
+        "line": 69,
+        "symbol": "new(\"Проблемные\""
+      },
+      "mock": "filteredRows / onlybad",
+      "decision": "В коде включает повторы, потери, неподключения и ошибки DNS. «Только без ответа» в HTML уже по смыслу; сохранить отдельные условия. С 0.8.3 этот фильтр также выставляет столбец состояния на «Связи» (F49)."
+    },
+    {
+      "id": "F09",
+      "feature": "Сортировка списка программ",
+      "status": "Не показано",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.App/ViewModels/MainViewModel.cs",
+        "line": 299,
+        "symbol": "public int NavSortIndex"
+      },
+      "mock": "program-title",
+      "decision": "В HTML стрелки регулируют ширину. Добавить отдельный выбор активности, имени и трафика."
+    },
+    {
+      "id": "F10",
+      "feature": "Сортировка плоской таблицы",
+      "status": "Не показано",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.App/Views/MainWindow.xaml",
+        "line": 562,
+        "symbol": "CanUserSortColumns"
+      },
+      "mock": "addressTable",
+      "decision": "HTML-заголовки статичны. Сохранить сортировку с указателем направления и числовыми значениями."
+    },
+    {
+      "id": "F11",
+      "feature": "Настоящее дерево доменов",
+      "status": "Расхождение",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.App/ViewModels/MainViewModel.cs",
+        "line": 477,
+        "symbol": "private void ApplyTable()"
+      },
+      "mock": "addressTable / group",
+      "decision": "«Домены и IP» в макете меняет подпись, но не группирует строки. Сохранить раскрытие домена и дочерние адреса."
+    },
+    {
+      "id": "F12",
+      "feature": "Журнал DNS и DNS-ошибки",
+      "status": "Частично",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.App/ViewModels/MainViewModel.cs",
+        "line": 542,
+        "symbol": "private void ApplyDns"
+      },
+      "mock": "dnsTable",
+      "decision": "В HTML только простой пример, а остальные программы могут получать одну подставленную запись. Нужны реальные ответы, ошибки и фильтры; не переносить фикстуры."
+    },
+    {
+      "id": "F13",
+      "feature": "Сведения об адресе, владельце, стране и времени",
+      "status": "Частично",
+      "priority": "P2",
+      "source": {
+        "file": "src/NetWatcher.App/ViewModels/MainViewModel.cs",
+        "line": 803,
+        "symbol": "_details[\"First\"]"
+      },
+      "mock": "details",
+      "decision": "Основные поля есть; добавить все известные домены, число обращений, регистрацию сети и различие между страной сервера и страны AS. Сведения о выбранном сервере идут в ту же панель (F52)."
+    },
+    {
+      "id": "F14",
+      "feature": "Каталог доменов и пояснения «Что это»",
+      "status": "Не показано",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.App/ViewModels/MainViewModel.cs",
+        "line": 821,
+        "symbol": "private void Explain"
+      },
+      "mock": "details",
+      "decision": "Вернуть компанию, категории и человеческое объяснение программы, службы, домена и последствий блокировки."
+    },
+    {
+      "id": "F15",
+      "feature": "RDAP и PeeringDB",
+      "status": "Частично",
+      "priority": "P2",
+      "source": {
+        "file": "src/NetWatcher.App/ViewModels/MainViewModel.cs",
+        "line": 155,
+        "symbol": "PeeringDbCommand ="
+      },
+      "mock": "actions rdap / peering",
+      "decision": "Кнопки есть, ответы — текстовые заглушки. Сохранить раздельные запросы, реальные данные, кэш и состояния ошибок. С 0.8.3 RDAP и PeeringDB для сервера доступны в панели внизу, а не в его меню (F52, F53)."
+    },
+    {
+      "id": "F16",
+      "feature": "Копирование IP, доменов, сетей и строк",
+      "status": "Частично",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.App/ViewModels/MainViewModel.cs",
+        "line": 111,
+        "symbol": "CopyDomainCommand ="
+      },
+      "mock": "row-copy / copyRowsText",
+      "decision": "Прямые кнопки и массовый выбор реализованы в HTML. Но C# копирует все известные домены, HTML хранит один. Сохранить массив Domains и оговорить контракт полной строки. Копирование на «Связи» — отдельный путь (F51)."
+    },
+    {
+      "id": "F17",
+      "feature": "Горячие клавиши и копирование выделенного текста",
+      "status": "Частично",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.App/Views/MainWindow.xaml.cs",
+        "line": 99,
+        "symbol": "else if (ctrl && e.Key == Key.C"
+      },
+      "mock": "keydown",
+      "decision": "В новом HTML есть Ctrl+F и Escape. Сохранить Ctrl+D/E/Enter/C/Shift+C, F5 и клавиши дерева; не перехватывать копирование выделенного текста. С 0.8.3 Ctrl+C и Ctrl+Shift+C работают и в списке серверов."
+    },
+    {
+      "id": "F18",
+      "feature": "Трафик: получено, отправлено и текущая скорость",
+      "status": "Частично",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.App/ViewModels/MainViewModel.cs",
+        "line": 748,
+        "symbol": "_details[\"SumSpeed\"]"
+      },
+      "mock": "program-metrics / addressTable",
+      "decision": "Макет показывает общий объём. Нужны раздельные направления и скорость; не путать объём за период со скоростью."
+    },
+    {
+      "id": "F19",
+      "feature": "История трафика Windows",
+      "status": "Не показано",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.App/ViewModels/MainViewModel.cs",
+        "line": 138,
+        "symbol": "OpenHistoryCommand ="
+      },
+      "mock": "appsPage",
+      "decision": "В выбранном A-макете нет доступной кнопки; оставшийся обработчик windows-history не является маршрутом UI. Добавить вход из сводки программы."
+    },
+    {
+      "id": "F20",
+      "feature": "История Windows: сеть, сутки/неделя/30 дней, копирование",
+      "status": "Не показано",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.App/Views/HistoryWindow.xaml",
+        "line": 19,
+        "symbol": "x:Name=\"Network\""
+      },
+      "mock": "action windows-history",
+      "decision": "Демонстрационный обработчик упрощён и недоступен из основного экрана. Сохранить выбор сети, направления, таблицу и копирование."
+    },
+    {
+      "id": "F21",
+      "feature": "Задержка, jitter, потери, обрывы и события",
+      "status": "Частично",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.App/ViewModels/MainViewModel.Link.cs",
+        "line": 122,
+        "symbol": "public string LinkJitter"
+      },
+      "mock": "linkContent / chart",
+      "decision": "Макет показывает часть показателей и статичный график. Нужны все серии, серверы, события, основания вывода и состояния неизвестности. График и фильтры таблицы серверов изменились в 0.8.3–0.8.4 (F47, F48, F54)."
+    },
+    {
+      "id": "F22",
+      "feature": "Уведомления о пропаже/возвращении ответов",
+      "status": "Частично",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.App/ViewModels/MainViewModel.Link.cs",
+        "line": 156,
+        "symbol": "public bool NotifyOn"
+      },
+      "mock": "action notify",
+      "decision": "В коде есть NotifyAll, исключения и отдельные программы. В HTML галочки не сохраняют реальную конфигурацию. Сохранить семантику исключений."
+    },
+    {
+      "id": "F23",
+      "feature": "Качество: роутер, интернет, VPN, нагрузка и AIM",
+      "status": "Частично",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.App/ViewModels/MainViewModel.Quality.cs",
+        "line": 63,
+        "symbol": "private void ApplyQuality()"
+      },
+      "mock": "diagnostics / action load-result",
+      "decision": "Карточки и пример результата не показывают всю логику: VPN, пассивную нагрузку, оценки игр/звонков/видео и отсутствие достаточных замеров."
+    },
+    {
+      "id": "F24",
+      "feature": "Тест под нагрузкой: прогресс и отмена",
+      "status": "Частично",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.App/ViewModels/MainViewModel.Quality.cs",
+        "line": 139,
+        "symbol": "private async Task RunTestAsync()"
+      },
+      "mock": "actions loadtest / load-result",
+      "decision": "В HTML только показ примера. Сохранить расход трафика, запуск по кнопке, прогресс, остановку и ошибки."
+    },
+    {
+      "id": "F25",
+      "feature": "Диагностика DNS/TLS/SNI/QUIC/MTU/пути/VPN",
+      "status": "Частично",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.Core/Diagnostics/Checker.cs",
+        "line": 45,
+        "symbol": "public sealed record CheckTarget"
+      },
+      "mock": "diagnostics / run-check / trace",
+      "decision": "В макете четыре статичных шага и короткая трасса. Расширенные проверки, UDP-цель, несколько IP и корректные выводы должны сохраниться."
+    },
+    {
+      "id": "F26",
+      "feature": "Диагностика: выполнение, отмена, отчёт",
+      "status": "Частично",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.App/ViewModels/DiagnosticsViewModel.cs",
+        "line": 110,
+        "symbol": "public RelayCommand StopCommand"
+      },
+      "mock": "run-check / copy-report",
+      "decision": "Отчёт демонстрационный; реальный прогресс и остановка не показаны. Переиспользовать RunCommand, StopCommand, CopyCommand и содержимое CheckReport."
+    },
+    {
+      "id": "F27",
+      "feature": "Передача протокола и порта выбранной цели",
+      "status": "Расхождение",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.App/ViewModels/MainViewModel.cs",
+        "line": 1153,
+        "symbol": "private static string? CheckTargetOf"
+      },
+      "mock": "action check-address",
+      "decision": "HTML передаёт только IP; для UDP теряются udp:// и порт. Передавать цель через существующий CheckTargetOf, иначе проверяется другая служба."
+    },
+    {
+      "id": "F28",
+      "feature": "Экспорт: типы, форматы, предпросмотр и файл",
+      "status": "Совпадает",
+      "priority": "P2",
+      "source": {
+        "file": "src/NetWatcher.App/ViewModels/ExportViewModel.cs",
+        "line": 130,
+        "symbol": "public void Rebuild()"
+      },
+      "mock": "exportSheet / updateExport",
+      "decision": "Структура сценария совпадает. Использовать текущий отфильтрованный набор и Export.Build вместо расчётов HTML."
+    },
+    {
+      "id": "F29",
+      "feature": "Экспорт IPv6, агрегация и точные адреса",
+      "status": "Расхождение",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.Core/Export.cs",
+        "line": 35,
+        "symbol": "public static readonly (int V4, int V6)[] Widths"
+      },
+      "mock": "updateExport",
+      "decision": "JS использует арифметику IPv4; ширина может применяться даже к IP-списку, в C# она доступна только для подсетей. Сохранить /128, IPv6-пары и CidrMath."
+    },
+    {
+      "id": "F30",
+      "feature": "Комментарии экспорта и несколько доменов",
+      "status": "Расхождение",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.Core/Export.cs",
+        "line": 81,
+        "symbol": "var domains = list.Where"
+      },
+      "mock": "updateExport",
+      "decision": "C# добавляет домены к каждой сети для Lines/Mask. HTML добавляет имя программы в начало Lines. Это демонстрационная разница, не новое требование."
+    },
+    {
+      "id": "F31",
+      "feature": "Блокировка: объект, область и реальная команда",
+      "status": "Частично",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.App/Views/BlockWindow.xaml",
+        "line": 34,
+        "symbol": "x:Name=\"Command\""
+      },
+      "mock": "actions block / block-preview",
+      "decision": "В HTML выбор объекта/области не отражён в конечном примере. Сохранить реальные варианты, команду, предупреждения CDN/служб и подтверждение."
+    },
+    {
+      "id": "F32",
+      "feature": "Снять одно или все правила; показать ошибки",
+      "status": "Частично",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.App/Views/BlocksWindow.xaml",
+        "line": 15,
+        "symbol": "x:Name=\"RemoveAllButton\""
+      },
+      "mock": "rules / action unblock",
+      "decision": "HTML удаляет строку из DOM, счётчик остаётся фиксированным; «Снять все» не показан. Нужны реальные состояние и ошибки."
+    },
+    {
+      "id": "F33",
+      "feature": "Разорвать TCP IPv4 и открыть папку",
+      "status": "Частично",
+      "priority": "P2",
+      "source": {
+        "file": "src/NetWatcher.App/ViewModels/MainViewModel.cs",
+        "line": 144,
+        "symbol": "CloseConnectionCommand ="
+      },
+      "mock": "actions disconnect / folder",
+      "decision": "Точки входа есть, действия демонстрационные. Сохранить ограничения протокола, права и объяснение повторного подключения."
+    },
+    {
+      "id": "F34",
+      "feature": "Светлая/тёмная/системная тема",
+      "status": "Совпадает",
+      "priority": "P2",
+      "source": {
+        "file": "src/NetWatcher.App/ThemeService.cs",
+        "line": 29,
+        "symbol": "public static void Apply"
+      },
+      "mock": "data-select theme / render",
+      "decision": "Выбор есть. Переиспользовать ThemeService и DynamicResource; все диалоги и стандартные контролы тоже должны меняться."
+    },
+    {
+      "id": "F35",
+      "feature": "Размеры панелей и сохранение настроек",
+      "status": "Частично",
+      "priority": "P2",
+      "source": {
+        "file": "src/NetWatcher.App/Views/MainWindow.xaml.cs",
+        "line": 58,
+        "symbol": "private void OnPanelsResized"
+      },
+      "mock": "pointerdown / programWidth",
+      "decision": "Регулировка уже есть в приложении; HTML демонстрирует её и скрытие, но не полноценное восстановление при запуске. Сохранить NavWidth и ограничение ширины. Также сохранить DetailsHeight (F52) и LinkChartExpanded (F54)."
+    },
+    {
+      "id": "F36",
+      "feature": "Подробные параметры журнала и сбора",
+      "status": "Не показано",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.App/Views/SettingsWindow.xaml",
+        "line": 73,
+        "symbol": "x:Name=\"Poll\""
+      },
+      "mock": "settings",
+      "decision": "В HTML только короткий выбор хранения. Нужны 1–365 дней, опрос 1–60 с, loopback, папка и очистка истории."
+    },
+    {
+      "id": "F37",
+      "feature": "Уведомления о новой программе/стране/AS и браузеры",
+      "status": "Частично",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.App/Views/SettingsWindow.xaml",
+        "line": 36,
+        "symbol": "x:Name=\"AlertSkipBrowsers\""
+      },
+      "mock": "settings",
+      "decision": "Макет объединяет страну и AS и не показывает исключение браузеров. Сохранить независимые настройки и период обучения."
+    },
+    {
+      "id": "F38",
+      "feature": "Настройка опорных пингов",
+      "status": "Не показано",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.App/Views/SettingsWindow.xaml",
+        "line": 56,
+        "symbol": "x:Name=\"QualityPings\""
+      },
+      "mock": "settings",
+      "decision": "Нужно сохранить выключение опорных пингов и объяснение расхода/назначения."
+    },
+    {
+      "id": "F39",
+      "feature": "Справочники: отдельные базы, импорт, состояние",
+      "status": "Частично",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.App/Views/SettingsWindow.xaml",
+        "line": 92,
+        "symbol": "x:Name=\"AsnButton\""
+      },
+      "mock": "settings / update-db",
+      "decision": "Одна кнопка HTML не заменяет ASN, страны, каталог, импорт файлов, версии/ошибки и ссылки на источники."
+    },
+    {
+      "id": "F40",
+      "feature": "Обновление приложения: загрузка, установка, ошибки",
+      "status": "Частично",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.App/ViewModels/MainViewModel.Update.cs",
+        "line": 37,
+        "symbol": "public RelayCommand? InstallUpdateCommand"
+      },
+      "mock": "settings / update-app",
+      "decision": "Проверка в HTML — сообщение. Сохранить настройку проверки, доступность версии, прогресс, установку и контроль суммы."
+    },
+    {
+      "id": "F41",
+      "feature": "Первый запуск, нет прав, нет базы или данных",
+      "status": "Не показано",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.App/ViewModels/MainViewModel.cs",
+        "line": 1029,
+        "symbol": "public bool AdminOk"
+      },
+      "mock": "shellA / overview",
+      "decision": "В HTML только пустой поиск. Нужны разные причины и действия; не рисовать успешные показатели без прав/замеров."
+    },
+    {
+      "id": "F42",
+      "feature": "Область уведомлений Windows и фоновые оповещения",
+      "status": "Не показано",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.App/Views/MainWindow.xaml.cs",
+        "line": 43,
+        "symbol": "new Native.TrayIcon"
+      },
+      "mock": "нет отдельного состояния",
+      "decision": "Это не декоративный элемент главного окна. Сохранить жизненный цикл, восстановление окна и уведомления при редизайне оболочки."
+    },
+    {
+      "id": "F43",
+      "feature": "Пауза, ручное обновление, состояние сбора",
+      "status": "Частично",
+      "priority": "P2",
+      "source": {
+        "file": "src/NetWatcher.App/ViewModels/MainViewModel.cs",
+        "line": 156,
+        "symbol": "TogglePauseCommand ="
+      },
+      "mock": "live / pause",
+      "decision": "HTML меняет надпись; сбор не подключён и F5 не перехвачен. Сохранить реальные статусы, ошибки и обновление."
+    },
+    {
+      "id": "F44",
+      "feature": "Обзор компьютера и лента изменений",
+      "status": "Новое",
+      "priority": "P2",
+      "source": {
+        "file": "src/NetWatcher.App/ViewModels/MainViewModel.cs",
+        "line": 413,
+        "symbol": "public string HeaderTitle"
+      },
+      "mock": "overview",
+      "decision": "Новая композиция на существующих данных. Определить источники и границы периода; лента «Что изменилось» пока фикстуры и не доказательство готового общего журнала событий."
+    },
+    {
+      "id": "F45",
+      "feature": "Компактное главное меню и скрытие списка",
+      "status": "Новое",
+      "priority": "P2",
+      "source": {
+        "file": "src/NetWatcher.App/Views/MainWindow.xaml",
+        "line": 1,
+        "symbol": "x:Class=\"NetWatcher.App.Views.MainWindow\""
+      },
+      "mock": "shellA / toggle-nav / toggle-list",
+      "decision": "Утверждённое изменение оболочки. В приложении нет такой навигации; реализовать без потери разделов и клавиатуры."
+    },
+    {
+      "id": "F46",
+      "feature": "Массовый выбор кнопками прямо над таблицей",
+      "status": "Новое",
+      "priority": "P2",
+      "source": {
+        "file": "src/NetWatcher.App/ViewModels/MainViewModel.cs",
+        "line": 110,
+        "symbol": "CopyIpCommand ="
+      },
+      "mock": "addressTable / copy-selected",
+      "decision": "Множественное копирование уже есть через команды; новая панель — явный путь к нему. Проверить область выбора при фильтрации и автоматическом обновлении."
+    },
+    {
+      "id": "F47",
+      "feature": "Фильтры по столбцам таблицы «Связь»",
+      "status": "Не показано",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.App/ViewModels/MainViewModel.LinkFilter.cs",
+        "line": 49,
+        "symbol": "public int LinkFilterProto"
+      },
+      "mock": "linkContent / addressTable",
+      "decision": "С версии 0.8.3 под заголовками есть фильтры: текст, домен или IP, протокол, состояние, задержка, разброс, потери, ответ и обмен за минуту. Границы задержки и разброса — из оценки Cloudflare AIM. В макете их нет. Сохранить все и показать в компактном виде из 0.8.4."
+    },
+    {
+      "id": "F48",
+      "feature": "Столбцы таблицы серверов: разброс, потери, ответ, обмен за минуту",
+      "status": "Расхождение",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.App/Views/MainWindow.xaml",
+        "line": 992,
+        "symbol": "x:Name=\"ServerList\""
+      },
+      "mock": "linkContent / addressTable",
+      "decision": "В макете «Связь» повторяет таблицу соединений: протокол, порт, связь, объём. Так теряются столбцы по каждому серверу. Оставить отдельную таблицу серверов, а общую таблицу использовать только для соединений."
+    },
+    {
+      "id": "F49",
+      "feature": "Быстрые фильтры и фильтры столбцов «Связи»",
+      "status": "Не показано",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.App/ViewModels/MainViewModel.LinkFilter.cs",
+        "line": 85,
+        "symbol": "private void QuickFilterToColumns"
+      },
+      "mock": "filterSheet / reset-filters",
+      "decision": "Быстрые фильтры выставляют столбцы только в одну сторону. Столбцы не меняют список программ и таблицу адресов. «Сбросить фильтры» сбрасывает только столбцы, а в макете кнопка «Сбросить всё». Сохранить эту область действия и подпись над таблицей."
+    },
+    {
+      "id": "F50",
+      "feature": "Счётчик «Показано N из M» на «Связи»",
+      "status": "Частично",
+      "priority": "P2",
+      "source": {
+        "file": "src/NetWatcher.App/ViewModels/MainViewModel.LinkFilter.cs",
+        "line": 185,
+        "symbol": "public string LinkShownText"
+      },
+      "mock": "searchBar",
+      "decision": "В макете есть «Найдено N из M», но только для соединений. Показать счётчик и для серверов, и для карточек «Все программы»."
+    },
+    {
+      "id": "F51",
+      "feature": "Копирование на «Связи»: домен и IP в строке, «Все домены», «Все IP»",
+      "status": "Частично",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.App/ViewModels/MainViewModel.LinkFilter.cs",
+        "line": 245,
+        "symbol": "public RelayCommand? CopyShownIpsCommand"
+      },
+      "mock": "row-copy / copy-selected",
+      "decision": "В строке IP копируется без порта, IP:порт есть в меню. «Все домены» и «Все IP» берут показанные серверы без повторов. В макете для этого нужно отметить строки флажками. Решение пользователя: на «Связи» оставить копирование одним щелчком, флажки — в таблице соединений."
+    },
+    {
+      "id": "F52",
+      "feature": "Сведения в панели под таблицей, в том числе о сервере",
+      "status": "Расхождение",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.App/ViewModels/MainViewModel.LinkFilter.cs",
+        "line": 276,
+        "symbol": "private void ShowServerDetails"
+      },
+      "mock": "details / sheet",
+      "decision": "В макете сведения открываются всплывающим окном поверх таблицы. В 0.8.0 пользователь попросил перенести панель вниз, чтобы освободить место, а с 0.8.3 в ней показан и выбранный сервер. Сведения не закрываются при обновлении списка. Решение пользователя: сохранить панель внизу и её высоту."
+    },
+    {
+      "id": "F53",
+      "feature": "Меню сервера без повторов",
+      "status": "Частично",
+      "priority": "P2",
+      "source": {
+        "file": "src/NetWatcher.App/Views/MainWindow.xaml",
+        "line": 63,
+        "symbol": "x:Key=\"ServerMenu\""
+      },
+      "mock": "row-menu",
+      "decision": "В меню остались «Копировать IP:порт», «Найти в «Все адреса»», блокировка или её снятие и для TCP разрыв соединения. Не возвращать повторы. Переход вести в новый раздел с тем же адресом."
+    },
+    {
+      "id": "F54",
+      "feature": "Узкий график задержки и потерь",
+      "status": "Расхождение",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.Core/Settings.cs",
+        "line": 63,
+        "symbol": "public bool LinkChartExpanded"
+      },
+      "mock": "linkContent / chart",
+      "decision": "По умолчанию график — узкая полоса с подсказкой при наведении. «Развернуть» показывает шкалы, выбор запоминается. В макете постоянный полный график над таблицей: он забирает место, которое пользователь просил освободить. Сохранить текущее поведение."
+    },
+    {
+      "id": "F55",
+      "feature": "Карточки «Все программы» на «Связи»",
+      "status": "Не показано",
+      "priority": "P1",
+      "source": {
+        "file": "src/NetWatcher.App/Views/MainWindow.xaml",
+        "line": 1229,
+        "symbol": "ItemsSource=\"{Binding LinkCards}\""
+      },
+      "mock": "overview / appList",
+      "decision": "Карточки показывают состояние программ и реагируют на фильтры столбцов. Простаивающие программы вынесены отдельно. В макете «Обзор» показывает только список, а во «Всех соединениях» вкладки «Связь» нет. Определить новое место и не потерять общий вид связи."
+    }
+  ],
+  "previousSourceRevision": "ab421f478f507dbd05f83c1d177fcb4c68793771",
+  "appVersion": "0.8.4",
+  "userDecisions": {
+    "date": "2026-11-06",
+    "rowHeightPx": "44-48; owner in the tooltip and details",
+    "theme": "settings only",
+    "rowDetails": "panel below the table, not a sheet (F52)",
+    "bulkCopy": "Link tab keeps copy-all-shown buttons; connections table gets checkboxes (F51)"
+  }
+}

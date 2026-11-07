@@ -1,0 +1,441 @@
+<div id="nw-designs"><div class="nw a" id="nw-a" aria-label="Панель наблюдения NetWatcher"></div></div>
+<style>
+#nw-designs{width:100%;font-family:"Segoe UI",Arial,sans-serif}
+#nw-designs *{box-sizing:border-box}
+#nw-designs [hidden]{display:none!important}
+#nw-designs .nw{--accent:#7644c2;--soft:#f1eaf9;--bg:light-dark(#f6f6f8,#17191f);--panel:light-dark(#fff,#20232a);--ink:light-dark(#22232a,#f1f2f5);--muted:light-dark(#70727f,#a7acb9);--line:light-dark(#e9e9ee,#353942);--green:light-dark(#24765c,#65c4a3);--warn:light-dark(#9d6022,#ebbc7d);--warnbg:light-dark(#fff7eb,#3a3026);--red:light-dark(#ad4449,#f19c9f);color:var(--ink);background:var(--bg);min-height:870px;border:1px solid var(--line);border-radius:14px;overflow:hidden;font-size:13px;line-height:1.5;position:relative;text-align:left;isolation:isolate}
+#nw-designs button,#nw-designs input,#nw-designs select,#nw-designs textarea{font:inherit}
+#nw-designs button{cursor:pointer;color:inherit;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--panel);border:1px solid var(--line);padding:8px 12px;border-radius:8px;white-space:normal;line-height:1.4}
+#nw-designs button:hover{filter:brightness(.96)}
+#nw-designs button:focus-visible,#nw-designs input:focus-visible,#nw-designs select:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+#nw-designs button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+#nw-designs button.ghost{background:transparent;border-color:transparent;padding:5px 0;color:var(--muted)}
+#nw-designs button.selected{color:var(--accent);background:var(--soft);border-color:transparent}
+#nw-designs .ico{display:inline-flex;flex:none;align-items:center;justify-content:center}
+#nw-designs .ico svg{width:17px;height:17px;stroke-width:1.7}
+#nw-designs h1,#nw-designs h2,#nw-designs h3,#nw-designs p{margin:0}
+#nw-designs h1{font-size:27px;font-weight:600;letter-spacing:-.8px;line-height:1.2}
+#nw-designs h2{font-size:15px;font-weight:600;letter-spacing:-.2px}
+#nw-designs h3{font-size:13px;font-weight:600}
+#nw-designs .muted{color:var(--muted)}
+#nw-designs .small{font-size:11px}
+#nw-designs .mono{font-family:Consolas,"Courier New",monospace;font-size:12px;font-variant-numeric:tabular-nums}
+#nw-designs .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+#nw-designs .between{justify-content:space-between}
+#nw-designs .stack{display:grid;gap:18px}
+#nw-designs .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--green);margin-right:6px;vertical-align:middle;flex:none}
+#nw-designs .dot.warn{background:var(--warn)}
+#nw-designs .badge{font-size:11px;border-radius:5px;background:var(--bg);color:var(--muted);padding:3px 7px;white-space:nowrap;display:inline-flex;align-items:center}
+#nw-designs .badge.warn{color:var(--warn);background:var(--warnbg)}
+#nw-designs .avatar{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-size:15px;font-weight:600;flex:none;background:var(--soft);color:var(--accent)}
+#nw-designs .avatar.telegram{background:#e3f3fc;color:#187faf}
+#nw-designs .avatar.chrome{background:#fff2d5;color:#9a6906}
+#nw-designs .avatar.discord{background:#ececfe;color:#6065bf}
+#nw-designs .avatar.steam{background:#e5eaf0;color:#344960}
+#nw-designs .avatar.system{background:#e9efeb;color:#4b7562}
+#nw-designs input,#nw-designs select{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:9px 11px;min-width:0}
+#nw-designs input{width:100%}
+#nw-designs label{display:grid;gap:6px;color:var(--muted);font-size:12px}
+#nw-designs label input,#nw-designs label select{color:var(--ink);font-size:13px}
+#nw-designs .search{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:0 10px;color:var(--muted)}
+#nw-designs .search input{border:0;background:transparent;padding:9px 0;outline-offset:0}
+#nw-designs .titlebar{height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 17px;color:var(--muted);font-size:11px;background:var(--panel);border-bottom:1px solid var(--line)}
+#nw-designs .windowmarks{font-family:Consolas,monospace;letter-spacing:14px;opacity:.65}
+#nw-designs .a-shell{display:grid;grid-template-columns:178px minmax(0,1fr);min-height:834px}
+#nw-designs .a-sidebar{background:#202023;color:#b8b8c2;padding:24px 13px 16px;display:flex;flex-direction:column;gap:27px}
+#nw-designs .brand{font-size:17px;font-weight:600;letter-spacing:-.4px;display:flex;align-items:center;gap:9px;color:inherit}
+#nw-designs .brandmark{width:29px;height:29px;display:grid;place-items:center;border-radius:9px;background:#7644c2;color:white}
+#nw-designs .a-sidebar .brand{color:#fff;margin:0 5px}
+#nw-designs .navgroup{display:grid;gap:5px}
+#nw-designs .navlabel{font-size:11px;color:#81818d;padding:0 11px 7px}
+#nw-designs .a-sidebar button{justify-content:flex-start;background:transparent;border-color:transparent;color:#babac3;padding:10px 11px;border-radius:7px}
+#nw-designs .a-sidebar button.selected{background:#3b304b;color:#e7d8ff}
+#nw-designs .a-sidebar .spacer{flex:1}
+#nw-designs .sidebar-foot{border-top:1px solid #3a3a40;padding:14px 9px 0;font-size:11px;color:#858591}
+#nw-designs .a-main{padding:27px 27px 17px;min-width:0}
+#nw-designs .heading{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:23px;flex-wrap:wrap}
+#nw-designs .heading p{color:var(--muted);margin-top:7px}
+#nw-designs .contextbar{margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+#nw-designs .period{display:flex;border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:3px;gap:3px;flex-wrap:wrap}
+#nw-designs .period button{padding:4px 10px;background:transparent;border-color:transparent;font-size:11px;border-radius:5px}
+#nw-designs .period button.selected{background:var(--soft);color:var(--accent)}
+#nw-designs .metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:20px}
+#nw-designs .metric{background:var(--panel);border:1px solid var(--line);padding:17px;border-radius:12px}
+#nw-designs .metric .metric-label{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:7px}
+#nw-designs .metric strong{font-size:29px;font-weight:500;letter-spacing:-1px;display:block;margin-top:15px;line-height:1.1}
+#nw-designs .metric .small{margin-top:7px;color:var(--muted)}
+#nw-designs .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;min-width:0}
+#nw-designs .paneltop{padding:16px 18px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+#nw-designs .panelbody{padding:18px}
+#nw-designs .overview-grid{display:grid;grid-template-columns:minmax(0,1.27fr) minmax(0,1fr);gap:17px;margin-bottom:17px}
+#nw-designs .insight{border-radius:8px;padding:11px 13px;background:var(--warnbg);color:var(--warn);font-size:12px;display:flex;gap:8px;align-items:flex-start}
+#nw-designs .chart{width:100%;height:180px;display:block;overflow:visible}
+#nw-designs .chart text{fill:var(--muted);font:11px "Segoe UI",Arial,sans-serif}
+#nw-designs .chart .gridline{stroke:var(--line);stroke-width:1}
+#nw-designs .chart .signal{stroke:var(--accent);fill:none;stroke-width:2}
+#nw-designs .chart .area{fill:var(--soft)}
+#nw-designs .chart .incident{fill:var(--warnbg)}
+#nw-designs .applist{display:grid;gap:3px;padding:6px 12px}
+#nw-designs .appitem{display:flex;width:100%;justify-content:space-between;text-align:left;border:0;background:transparent;padding:10px 5px;border-radius:7px;gap:8px}
+#nw-designs .appitem.selected{background:var(--soft)}
+#nw-designs .appitem .identity{display:flex;align-items:center;gap:10px;min-width:0}
+#nw-designs .appitem .identity>span{min-width:0;overflow-wrap:anywhere}
+#nw-designs .appitem .identity strong{font-weight:500;font-size:13px;display:block}
+#nw-designs .appitem .right{text-align:right;font-size:11px;color:var(--muted)}
+#nw-designs .appitem .right b{font-weight:400;color:var(--ink)}
+#nw-designs .events{display:grid;gap:0}
+#nw-designs .event{display:grid;grid-template-columns:46px 9px minmax(0,1fr) auto;align-items:start;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+#nw-designs .event:last-child{border:0}
+#nw-designs .event .dot{margin-top:6px}
+#nw-designs .footer{font-size:11px;color:var(--muted);display:flex;justify-content:space-between;gap:10px;margin-top:20px;flex-wrap:wrap}
+#nw-designs .tabs{display:flex;gap:19px;border-bottom:1px solid var(--line);padding:0 18px;flex-wrap:wrap}
+#nw-designs .tabs button{border:0;border-radius:0;background:transparent;color:var(--muted);padding:12px 0;border-bottom:2px solid transparent}
+#nw-designs .tabs button.selected{color:var(--accent);border-bottom-color:var(--accent)}
+#nw-designs .data-layout{display:grid;grid-template-columns:190px minmax(0,1fr);gap:16px}
+#nw-designs .filters{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:13px 17px}
+#nw-designs .filters .search{flex:1;min-width:160px}
+#nw-designs .tablewrap{overflow:auto}
+#nw-designs table{width:100%;border-collapse:collapse;font-size:12px}
+#nw-designs th{text-align:left;color:var(--muted);font-size:11px;font-weight:400;background:var(--bg);padding:10px 15px;white-space:nowrap}
+#nw-designs td{padding:13px 15px;border-bottom:1px solid var(--line);vertical-align:middle}
+#nw-designs tr.chosen td{background:var(--soft)}
+#nw-designs td button.textlink{padding:0;background:transparent;border:0;font-size:12px;text-align:left;justify-content:flex-start}
+#nw-designs .num{text-align:right;font-variant-numeric:tabular-nums}
+#nw-designs .table-sub{color:var(--muted);font-size:11px;margin-top:3px}
+#nw-designs .appstats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:17px}
+#nw-designs .appstats>div{padding:15px 17px;border:1px solid var(--line);background:var(--panel);border-radius:10px}
+#nw-designs .appstats strong{font-size:21px;font-weight:500;display:block;margin-top:6px}
+#nw-designs .b{--accent:#67dcdb;--soft:#21393f;--bg:#101c23;--panel:#16252d;--ink:#e6f0f3;--muted:#94aab5;--line:#2a3c46;--green:#7ed3b1;--warn:#e9bd7a;--warnbg:#342e26;--red:#e5a29d;border-color:#2a3c46;border-radius:12px}
+#nw-designs .b button.primary{color:#102126}
+#nw-designs .b .titlebar{background:#101c23}
+#nw-designs .b-top{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:16px 22px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+#nw-designs .b-top .brand{font-weight:500;font-size:17px}
+#nw-designs .b-top .brandmark{background:#67dcdb;color:#14252d;border-radius:50%;width:28px;height:28px}
+#nw-designs .b-nav{display:flex;gap:6px;flex-wrap:wrap}
+#nw-designs .b-nav button{background:transparent;border-color:transparent;padding:7px 11px;color:var(--muted);border-radius:5px}
+#nw-designs .b-nav button.selected{color:var(--accent);background:var(--soft)}
+#nw-designs .b-layout{display:grid;grid-template-columns:210px minmax(0,1fr);min-height:765px}
+#nw-designs .b-programs{border-right:1px solid var(--line);padding:18px 12px;display:flex;flex-direction:column;gap:16px;background:#122028}
+#nw-designs .b-programs .applist{padding:0;gap:6px}
+#nw-designs .b-programs .appitem{padding:10px 8px;align-items:flex-start}
+#nw-designs .b-programs .appitem .identity{gap:9px}
+#nw-designs .b-programs .avatar{width:29px;height:29px;border-radius:8px;font-size:13px}
+#nw-designs .b-programs .appitem .right{font-size:11px}
+#nw-designs .b-programs .appitem .right b{white-space:nowrap}
+#nw-designs .b-programs .appitem .right .badge{display:none}
+#nw-designs .b-programs .statusline{color:var(--warn);font-size:11px;margin-top:5px;display:block}
+#nw-designs .b-programs .sectionname{padding:0 8px;display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--muted)}
+#nw-designs .b-programs .sidebar-foot{margin-top:auto;border-color:var(--line);color:var(--muted)}
+#nw-designs .b-main{padding:27px 27px 18px;min-width:0}
+#nw-designs .b h1{font-size:28px;font-weight:500}
+#nw-designs .eyebrow{font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px}
+#nw-designs .b .heading{margin-bottom:25px}
+#nw-designs .b .incident-title{font-size:23px;letter-spacing:-.45px;line-height:1.3;font-weight:400;margin:8px 0}
+#nw-designs .b .incident-block{display:grid;grid-template-columns:minmax(0,1fr) auto;border-left:2px solid var(--warn);padding:4px 0 4px 18px;gap:22px;margin-bottom:26px;align-items:center}
+#nw-designs .b .incident-block p{color:var(--muted);font-size:12px;max-width:480px}
+#nw-designs .b .incident-duration{font-size:31px;font-weight:400;letter-spacing:-1px;line-height:1.2;color:var(--warn)}
+#nw-designs .b .b-stats{display:flex;gap:35px;padding-bottom:23px;border-bottom:1px solid var(--line);margin-bottom:22px;flex-wrap:wrap}
+#nw-designs .b .b-stats strong{display:block;font-size:22px;font-weight:400;margin-top:4px}
+#nw-designs .b-grid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:24px}
+#nw-designs .b .panel{border-radius:6px;background:transparent}
+#nw-designs .b .signal-panel{border-bottom:1px solid var(--line);padding-bottom:18px;margin-bottom:19px}
+#nw-designs .b .chart{height:160px}
+#nw-designs .b .chart .area{fill:#193337}
+#nw-designs .b .tabs{padding:0;gap:22px}
+#nw-designs .b .detail{border-left:1px solid var(--line);padding-left:22px}
+#nw-designs .b .detail h2{font-size:14px}
+#nw-designs .keyvals{display:grid;gap:14px;margin:20px 0}
+#nw-designs .keyval{display:grid;gap:3px}
+#nw-designs .keyval .key{font-size:11px;color:var(--muted)}
+#nw-designs .b .events .event{grid-template-columns:40px 6px minmax(0,1fr);gap:8px;font-size:12px}
+#nw-designs .b .note{background:#1c2e37;border-radius:6px;padding:12px;font-size:11px;color:var(--muted);margin-top:20px}
+#nw-designs .b .compacttable td,#nw-designs .b .compacttable th{padding:12px 9px}
+#nw-designs .b .compacttable th{background:transparent}
+#nw-designs .b .footer{margin-top:23px}
+#nw-designs .overlay{position:absolute;inset:36px 0 0;background:#10142380;z-index:5;display:flex;align-items:flex-start;justify-content:flex-end;padding:22px;overflow:auto}
+#nw-designs .sheet{width:430px;max-width:100%;background:var(--panel);border:1px solid var(--line);border-radius:13px;box-shadow:0 15px 70px #0003;padding:23px;display:grid;gap:20px}
+#nw-designs .sheet h2{font-size:20px}
+#nw-designs .sheet .preview{background:var(--bg);padding:15px;border-radius:8px;white-space:pre-wrap;overflow-wrap:anywhere;font-family:Consolas,monospace;font-size:12px;color:var(--ink);margin:0;min-height:100px}
+#nw-designs .checkline{display:flex;align-items:center;gap:8px;color:var(--ink)}
+#nw-designs .checkline input{width:auto}
+#nw-designs .toast{position:absolute;bottom:23px;left:50%;transform:translateX(-50%);z-index:8;background:var(--ink);color:var(--bg);padding:11px 18px;border-radius:9px;box-shadow:0 4px 20px #0002;max-width:90%;font-size:12px}
+#nw-designs .formgrid{display:grid;grid-template-columns:1fr 1fr;gap:15px}
+#nw-designs .step{display:flex;justify-content:space-between;align-items:flex-start;padding:14px 0;border-bottom:1px solid var(--line);gap:14px}
+#nw-designs .step:last-child{border:0}
+#nw-designs .step .ok{color:var(--green)}
+#nw-designs .route-note{font-size:12px;color:var(--muted);margin-top:16px}
+#nw-designs>section[data-variant]{min-height:1200px}
+@media(max-width:850px){#nw-designs>section[data-variant]{min-height:1800px}}
+@media(max-width:560px){#nw-designs .b-layout,#nw-designs .a-shell{grid-template-columns:minmax(0,1fr)!important}#nw-designs .b-programs{min-width:0}#nw-designs .b-programs .applist{grid-template-columns:repeat(2,minmax(0,1fr))!important}#nw-designs .b-programs .appitem{min-width:0}#nw-designs .b-programs .appitem .right{display:none}#nw-designs>section[data-variant]{min-height:2450px}}
+@media(min-width:1250px){#nw-designs .nw{min-height:950px}#nw-designs .a-shell{min-height:914px}#nw-designs .a-main,#nw-designs .b-main{padding:35px 36px 22px}#nw-designs .overview-grid{gap:22px}#nw-designs .a-shell{grid-template-columns:207px minmax(0,1fr)}#nw-designs .b-layout{grid-template-columns:238px minmax(0,1fr);min-height:840px}#nw-designs .chart{height:215px}#nw-designs .b .chart{height:185px}#nw-designs .appitem{padding:13px 7px}#nw-designs td{padding-top:16px;padding-bottom:16px}}
+@media(max-width:850px){#nw-designs .a-shell{grid-template-columns:146px minmax(0,1fr)}#nw-designs .a-sidebar{padding:22px 9px}#nw-designs .a-sidebar .brand{font-size:14px}#nw-designs .a-main,#nw-designs .b-main{padding:22px 17px}#nw-designs .overview-grid{grid-template-columns:1fr}#nw-designs .metrics{gap:8px}#nw-designs .metric{padding:12px}#nw-designs .metric strong{font-size:25px}#nw-designs .b-layout{grid-template-columns:175px minmax(0,1fr)}#nw-designs .b-grid{grid-template-columns:1fr}#nw-designs .b .detail{border-left:0;border-top:1px solid var(--line);padding:20px 0 0}#nw-designs .b .detail .keyvals{grid-template-columns:1fr 1fr}#nw-designs .data-layout{grid-template-columns:1fr}#nw-designs .data-layout>.panel:first-child .applist{grid-template-columns:1fr 1fr}#nw-designs .data-layout>.panel:first-child .applist .right{display:none}#nw-designs .nw{min-height:1350px}}
+@media(max-width:560px){#nw-designs .nw{min-height:1660px;border-radius:8px}#nw-designs .titlebar{height:auto;min-height:34px;padding:7px 10px;gap:6px;flex-wrap:wrap}#nw-designs .windowmarks{display:none}#nw-designs .a-shell,#nw-designs .b-layout{grid-template-columns:1fr}#nw-designs .a-sidebar{padding:14px;gap:14px}#nw-designs .a-sidebar .navgroup{display:flex;flex-wrap:wrap;gap:3px}#nw-designs .a-sidebar .navlabel,#nw-designs .a-sidebar .sidebar-foot,#nw-designs .a-sidebar .spacer{display:none}#nw-designs .a-sidebar button{padding:7px 9px}#nw-designs .a-sidebar .navgroup:last-of-type{display:none}#nw-designs .metrics{grid-template-columns:1fr 1fr}#nw-designs .a-main,#nw-designs .b-main{padding:22px 14px}#nw-designs .heading{gap:16px}#nw-designs h1{font-size:24px}#nw-designs .metric strong{margin-top:9px}#nw-designs .event{grid-template-columns:38px 6px minmax(0,1fr);gap:8px}#nw-designs .event>button{grid-column:3;justify-self:start}#nw-designs .b-programs{padding:14px;border:0;border-bottom:1px solid var(--line)}#nw-designs .b-programs .applist{grid-template-columns:1fr 1fr}#nw-designs .b-programs .sidebar-foot,#nw-designs .b-programs .sectionname,#nw-designs .b-programs .program-filter{display:none}#nw-designs .b-top{padding:14px;gap:12px}#nw-designs .b-top .b-nav{width:100%;gap:1px}#nw-designs .b-nav button{padding:7px 9px}#nw-designs .b .incident-block{grid-template-columns:1fr;gap:10px}#nw-designs .b .incident-duration{font-size:25px}#nw-designs .b .b-stats{gap:22px}#nw-designs .appstats{grid-template-columns:1fr}#nw-designs .formgrid{grid-template-columns:1fr}#nw-designs .overlay{padding:10px}#nw-designs .sheet{padding:18px}#nw-designs .tabs{gap:14px}#nw-designs .data-layout>.panel:first-child .applist{grid-template-columns:1fr}#nw-designs .tablewrap{max-width:100%}}
+#nw-designs .nw{--soft:light-dark(#f1eaf9,#30283f);--accent:light-dark(#7644c2,#bf9bf2);--action:light-dark(#7644c2,#8050bc);--nav:#202023;--nav-line:#39363f;--nav-ink:#c7c3ce;--bg:light-dark(#f6f6f8,#17171d);--panel:light-dark(#fff,#202027);--ink:light-dark(#22232a,#eeedf3);--muted:light-dark(#6d707d,#aaa6b7);--line:light-dark(#e6e6ed,#36333f);min-height:990px}
+#nw-designs .nw[data-theme="light"]{color-scheme:light}
+#nw-designs .nw[data-theme="dark"]{color-scheme:dark}
+#nw-designs .nw button.primary{background:var(--action);border-color:var(--action);color:#fff}
+#nw-designs .a-shell{grid-template-columns:184px minmax(0,1fr);min-height:950px}
+#nw-designs .a-shell.nav-collapsed{grid-template-columns:64px minmax(0,1fr)}
+#nw-designs .a-sidebar{padding:20px 11px 16px;gap:20px;background:var(--nav);color:var(--nav-ink)}
+#nw-designs .a-sidebar button{color:var(--nav-ink);justify-content:flex-start;min-height:38px;white-space:nowrap}
+#nw-designs .a-sidebar .nav-toggle{color:#a8a2b4;padding:7px 9px;font-size:11px;gap:10px}
+#nw-designs .nav-collapsed .a-sidebar{padding:20px 10px 16px;align-items:stretch}
+#nw-designs .nav-collapsed .a-sidebar .navtext,#nw-designs .nav-collapsed .navlabel,#nw-designs .nav-collapsed .brandtext{display:none}
+#nw-designs .nav-collapsed .brand{margin:0;justify-content:center}
+#nw-designs .nav-collapsed .a-sidebar button{justify-content:center;padding:10px;min-height:40px}
+#nw-designs .nav-collapsed .sidebar-foot{padding:14px 0 0;text-align:center}
+#nw-designs .nav-collapsed .sidebar-foot .dot{margin:0}
+#nw-designs .a-main{padding:25px 24px 18px}
+#nw-designs .titlebar{height:auto;min-height:40px;padding:6px 15px;gap:10px;flex-wrap:wrap}
+#nw-designs .titlebar select{padding:3px 8px;font-size:11px;border:0;background:var(--bg);max-width:150px}
+#nw-designs .titlepath{opacity:.7;margin-left:8px}
+#nw-designs .compact-heading{margin-bottom:22px}
+#nw-designs .compact-heading h1{font-size:25px}
+#nw-designs .data-layout{display:grid;grid-template-columns:minmax(185px,var(--program-width,220px)) 10px minmax(0,1fr);gap:0;align-items:stretch}
+#nw-designs .workspace{min-width:0}
+#nw-designs .list-hidden{grid-template-columns:minmax(0,1fr)}
+#nw-designs .list-hidden>.program-panel,#nw-designs .list-hidden>.splitter{display:none}
+#nw-designs .program-panel{border-radius:11px;background:var(--panel)}
+#nw-designs .program-title{padding:14px 12px 10px;display:flex;justify-content:space-between;align-items:center;gap:5px;flex-wrap:wrap}
+#nw-designs .program-title h2{font-size:12px}
+#nw-designs .program-title .row{gap:0}
+#nw-designs .program-search{padding:0 10px 10px}
+#nw-designs .program-search input{font-size:12px}
+#nw-designs .program-foot{padding:12px;border-top:1px solid var(--line)}
+#nw-designs .program-panel .applist{padding:4px 7px;gap:5px}
+#nw-designs .program-panel .appitem{padding:11px 7px;align-items:flex-start;gap:6px}
+#nw-designs .program-panel .appitem .identity{gap:8px}
+#nw-designs .program-panel .appitem .identity>span{overflow:hidden}
+#nw-designs .program-panel .appitem strong{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+#nw-designs .program-panel .appitem .identity .small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#nw-designs .program-panel .avatar{width:29px;height:29px;border-radius:8px;font-size:13px}
+#nw-designs .program-panel .appitem .right{flex:none;font-size:11px}
+#nw-designs .program-panel .appitem .right b{white-space:nowrap}
+#nw-designs .attention{color:var(--warn)}
+#nw-designs .splitter{cursor:col-resize;display:flex;align-items:center;justify-content:center;color:var(--muted);touch-action:none}
+#nw-designs .splitter:hover{background:var(--soft);color:var(--accent)}
+#nw-designs .splitter svg{width:12px;height:25px}
+#nw-designs .program-summary{padding:17px 18px 13px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+#nw-designs .program-summary h2{font-size:17px}
+#nw-designs .program-summary .avatar{width:36px;height:36px}
+#nw-designs .program-metrics{display:flex;flex-wrap:wrap;align-items:center;gap:9px 20px;padding:0 18px 14px;font-size:11px;color:var(--muted)}
+#nw-designs .program-metrics b{font-weight:500;color:var(--ink);margin-left:5px}
+#nw-designs .program-metrics .badge{margin-left:auto}
+#nw-designs .filters{gap:8px;padding:14px 15px 7px}
+#nw-designs .filters .search{min-width:220px}
+#nw-designs .filters input{font-size:12px}
+#nw-designs .filters select{max-width:195px;padding:8px 9px;font-size:12px}
+#nw-designs .search-hint{display:flex;justify-content:space-between;gap:12px;padding:0 15px 13px;color:var(--muted);font-size:11px;flex-wrap:wrap}
+#nw-designs .search-hint button{background:var(--soft);border:0;color:var(--accent);padding:1px 5px;border-radius:4px;font:11px Consolas,monospace;margin-left:3px}
+#nw-designs .search-hint [data-result-count]{font-variant-numeric:tabular-nums}
+#nw-designs button.iconbtn{padding:4px;border:0;background:transparent;color:var(--muted);border-radius:5px;flex:none;min-width:24px;min-height:26px}
+#nw-designs button.iconbtn:hover{color:var(--accent);background:var(--soft)}
+#nw-designs button.iconbtn .ico svg{width:14px;height:14px}
+#nw-designs .connections-table{min-width:610px;width:100%;font-size:12px}
+#nw-designs .global-table{min-width:820px}
+#nw-designs .connections-table th{padding:10px 9px;font-size:11px}
+#nw-designs .connections-table td{padding:12px 9px}
+#nw-designs .connections-table .checkcell{width:31px;padding-left:12px;padding-right:4px}
+#nw-designs .checkcell input{appearance:auto;width:13px;height:13px;margin:0;accent-color:var(--action);vertical-align:middle}
+#nw-designs .connections-table tr.checked td{background:var(--soft)}
+#nw-designs .connections-table .inline-address{display:flex;align-items:center;justify-content:space-between;gap:6px}
+#nw-designs .connections-table .address-cell{min-width:190px}
+#nw-designs .connections-table .domain-name{font-weight:500;overflow-wrap:anywhere}
+#nw-designs .connections-table .mono{font-size:11px}
+#nw-designs .connections-table .owner{font-size:11px;white-space:normal}
+#nw-designs .copyhead{text-align:center}
+#nw-designs .copycell{white-space:nowrap;width:64px;text-align:right}
+#nw-designs .protocol{font-family:Consolas,monospace;font-size:11px;border:1px solid var(--line);padding:2px 5px;border-radius:4px;background:var(--bg);color:var(--ink)}
+#nw-designs .protocol.udp{color:var(--accent);background:var(--soft);border-color:transparent}
+#nw-designs .tablefoot{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;color:var(--muted);font-size:11px;padding:12px 15px}
+#nw-designs .selectionbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:9px 15px;background:var(--soft);color:var(--ink);font-size:12px;border-top:1px solid var(--line)}
+#nw-designs .selectionbar button{padding:5px 8px;font-size:11px}
+#nw-designs .bottom-context{margin:17px 0 0}
+#nw-designs .scope-info{color:var(--muted);font-size:12px}
+#nw-designs .empty{text-align:center;padding:32px 15px}
+#nw-designs .empty p{margin:6px 0 15px}
+#nw-designs .nw .avatar.telegram{background:light-dark(#e3f3fc,#17384b);color:light-dark(#187faf,#7ac5ef)}
+#nw-designs .nw .avatar.chrome{background:light-dark(#fff2d5,#42351f);color:light-dark(#9a6906,#e4be68)}
+#nw-designs .nw .avatar.discord{background:light-dark(#ececfe,#302e4b);color:light-dark(#6065bf,#aaa8ef)}
+#nw-designs .nw .avatar.steam{background:light-dark(#e5eaf0,#283640);color:light-dark(#344960,#a7bfce)}
+#nw-designs .nw .avatar.system{background:light-dark(#e9efeb,#27392f);color:light-dark(#4b7562,#a0c6af)}
+#nw-designs .overlay{inset:40px 0 0}
+#nw-designs .sheet{max-height:calc(100% - 12px);overflow:auto}
+#nw-designs .toast{white-space:pre-wrap}
+@media(min-width:1250px){#nw-designs .a-main{padding:30px}#nw-designs .a-shell{grid-template-columns:194px minmax(0,1fr);min-height:950px}#nw-designs .a-shell.nav-collapsed{grid-template-columns:64px minmax(0,1fr)}#nw-designs .connections-table td{padding-top:16px;padding-bottom:16px}}
+@media(max-width:850px){#nw-designs .a-main{padding:20px 16px}#nw-designs .a-shell{grid-template-columns:155px minmax(0,1fr)}#nw-designs .a-shell.nav-collapsed{grid-template-columns:58px minmax(0,1fr)}#nw-designs .program-panel .applist{grid-template-columns:1fr!important}#nw-designs .program-panel .appitem .right{display:block!important}#nw-designs .data-layout{grid-template-columns:185px 8px minmax(0,1fr)}#nw-designs .list-hidden{grid-template-columns:minmax(0,1fr)}#nw-designs .program-metrics .badge{margin-left:0}#nw-designs .nw{min-height:1150px}#nw-designs .a-shell{min-height:1110px}#nw-designs .overview-grid{grid-template-columns:1fr}}
+@media(max-width:560px){#nw-designs .a-shell,#nw-designs .a-shell.nav-collapsed{grid-template-columns:minmax(0,1fr)!important}#nw-designs .a-sidebar,#nw-designs .nav-collapsed .a-sidebar{padding:10px;gap:8px}#nw-designs .a-sidebar .brand,#nw-designs .a-sidebar .nav-toggle,#nw-designs .a-sidebar .spacer,#nw-designs .a-sidebar .sidebar-foot{display:none}#nw-designs .a-sidebar .navgroup{display:flex;flex-wrap:wrap;gap:4px}#nw-designs .a-sidebar .navgroup:last-of-type{display:flex}#nw-designs .a-sidebar .navgroup .navtext,#nw-designs .nav-collapsed .navgroup .navtext{display:inline}#nw-designs .a-sidebar .navgroup .navlabel{display:none}#nw-designs .a-sidebar button,#nw-designs .nav-collapsed .a-sidebar button{padding:6px;min-height:32px;font-size:11px}#nw-designs .a-sidebar .ico svg{width:14px;height:14px}#nw-designs .a-main{padding:20px 12px}#nw-designs .data-layout{grid-template-columns:minmax(0,1fr);gap:12px}#nw-designs .splitter{display:none}#nw-designs .program-title .row{display:none}#nw-designs .program-panel .applist{grid-template-columns:repeat(2,minmax(0,1fr))!important}#nw-designs .program-panel .appitem .right{display:none!important}#nw-designs .program-panel .appitem{min-width:0}#nw-designs .program-summary{padding:15px 12px}#nw-designs .program-metrics{padding:0 12px 12px;gap:10px}#nw-designs .compact-heading h1{font-size:23px}#nw-designs .filters .search{min-width:190px}#nw-designs .titlebar{padding:7px 10px}#nw-designs .nw{min-height:1300px}#nw-designs .heading{gap:14px}#nw-designs .sheet{padding:18px}}
+
+</style>
+<script>
+(() => {
+const root = document.getElementById('nw-designs');
+const icon = name => `<span class="ico"><i data-lucide="${name}" aria-hidden="true"></i></span>`;
+const apps = [
+ {name:'Telegram',exe:'Telegram.exe',class:'telegram',letter:'T',traffic:'186 МБ',type:'app'},
+ {name:'Google Chrome',exe:'chrome.exe',class:'chrome',letter:'C',traffic:'986 МБ',type:'app'},
+ {name:'Discord',exe:'Discord.exe',class:'discord',letter:'D',traffic:'92 МБ',type:'app'},
+ {name:'Steam',exe:'steam.exe',class:'steam',letter:'S',traffic:'640 МБ',type:'app'},
+ {name:'Центр обновления',exe:'wuauserv',class:'system',letter:'W',traffic:'78 МБ',type:'service'},
+ {name:'DNS-клиент',exe:'Dnscache',class:'system',letter:'D',traffic:'2 МБ',type:'service'}
+];
+const connections = [
+ [0,'149.154.167.51','', 'Telegram · AS62041','TCP',443,'32 МБ','Нет ответа 18 с',true,'149.154.164.0/22','Нидерланды'],
+ [0,'149.154.167.91','', 'Telegram · AS62041','TCP',443,'106 МБ','Отвечает · 42 мс',false,'149.154.164.0/22','Нидерланды'],
+ [0,'149.154.175.50','', 'Telegram · AS62041','TCP',443,'28 МБ','Отвечает · 46 мс',false,'149.154.172.0/22','Нидерланды'],
+ [0,'149.154.167.92','', 'Telegram · AS62041','UDP',443,'12 МБ','Ответы приходят',false,'149.154.164.0/22','Нидерланды'],
+ [0,'149.154.167.93','', 'Telegram · AS62041','UDP',599,'8 МБ','Ответы приходят',false,'149.154.164.0/22','Нидерланды'],
+ [1,'142.250.74.110','youtube.com','Google · AS15169','UDP',443,'920 МБ','Ответы приходят',false,'142.250.0.0/15','США'],
+ [1,'140.82.121.3','github.com','GitHub · AS36459','TCP',443,'62 МБ','Отвечает · 35 мс',false,'140.82.112.0/20','Германия'],
+ [1,'142.250.74.3','fonts.gstatic.com','Google · AS15169','UDP',443,'3 МБ','Ответы приходят',false,'142.250.0.0/15','США'],
+ [1,'104.18.32.7','example.com','Cloudflare · AS13335','TCP',80,'1 МБ','Отвечает · 29 мс',false,'104.16.0.0/13','США'],
+ [2,'162.159.135.234','discord.com','Cloudflare · AS13335','TCP',443,'62 МБ','Отвечает · 38 мс',false,'162.158.0.0/15','США'],
+ [2,'162.159.130.234','', 'Cloudflare · AS13335','UDP',50000,'30 МБ','Ответы приходят',false,'162.158.0.0/15','США'],
+ [3,'155.133.248.50','', 'Valve · AS32590','UDP',27015,'480 МБ','Ответы приходят',false,'155.133.248.0/24','Польша'],
+ [3,'23.45.67.89','steamcontent.com','Akamai · AS20940','TCP',443,'160 МБ','Отвечает · 22 мс',false,'23.32.0.0/11','Германия'],
+ [4,'13.107.4.50','download.windowsupdate.com','Microsoft · AS8075','TCP',443,'78 МБ','Отвечает · 26 мс',false,'13.64.0.0/11','США'],
+ [5,'192.168.1.1','', 'Локальная сеть','UDP',53,'1 МБ','Ответы приходят',false,'192.168.1.0/24','Локальная сеть'],
+ [5,'1.1.1.1','one.one.one.one','Cloudflare · AS13335','UDP',53,'1 МБ','Ответы приходят',false,'1.1.1.0/24','Австралия']
+].map((v,id)=>({id,appIndex:v[0],ip:v[1],domain:v[2]||v[1],owner:v[3],protocol:v[4],rawPort:v[5],port:v[4]+' '+v[5],traffic:v[6],status:v[7],bad:v[8],network:v[9],country:v[10]}));
+apps.forEach((a,i)=>a.addr=connections.filter(r=>r.appIndex===i).length);
+
+
+const state = {a:{route:'apps',app:0,tab:'addresses',group:'domains',period:'1 час',paused:false,query:'',onlybad:false,selected:0,selectedId:null,scope:'all',protocol:'all',domainMode:'all',checked:[],theme:'light',navCollapsed:true,listHidden:false,programWidth:230}};
+const esc = s => String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const act = (action,label,cls='',ico='') => `<button type="button" data-act="${action}" class="${cls}">${ico?icon(ico):''}${label}</button>`;
+const avatar = a => `<span class="avatar ${a.class}">${a.letter}</span>`;
+const periods = s => `<div class="period" aria-label="Период наблюдения">${['Сейчас','1 час','24 часа'].map(p=>act('period:'+p,p,p===s.period?'selected':'')).join('')}<select aria-label="Другой период" data-select="period"><option value="">Ещё</option>${['15 минут','7 дней','Всё время'].map(p=>`<option ${s.period===p?'selected':''}>${p}</option>`).join('')}</select></div>`;
+const live = s => `<span class="small muted"><span class="dot ${s.paused?'warn':''}"></span>${s.paused?'Запись приостановлена':'Запись идёт'}</span>${act('pause',s.paused?'Продолжить':'Пауза','ghost',s.paused?'play':'pause')}`;
+const footer = s => `<div class="footer"><span>Данные хранятся на этом компьютере · журнал за 7 дней</span><span>${s.period} · макет с примерами</span></div>`;
+function appList(s,compact=false){return `<div class="applist">${apps.map((a,i)=>`<button type="button" class="appitem ${s.app===i&&s.route==='apps'?'selected':''}" data-act="app:${i}" data-app-name="${esc(a.name+' '+a.exe)}"><span class="identity">${avatar(a)}<span><strong>${a.name}</strong><span class="small muted">${a.exe}</span></span></span><span class="right"><b>${a.traffic}</b><br><span class="small ${i===0?'attention':'muted'}">${i===0?'Нет ответа':a.addr+' соед.'}</span></span></button>`).join('')}</div>`;}
+function chart(kind='connection'){
+ const traffic=kind==='traffic';
+ const points=traffic?'38,120 50,110 62,117 75,81 89,97 100,110 113,54 127,92 140,117 154,111 168,87 181,98 195,72 209,90 223,93 237,112 250,78 264,92 278,44 292,95 306,110 320,105 334,70 348,86 362,102 376,71 390,97 404,92 418,120 432,93 446,84 460,96 480,70':'38,118 54,116 70,119 86,115 102,117 118,110 134,116 150,109 166,113 182,111 198,108 214,115 230,111 246,108 262,112 278,102 294,106 310,108 326,99 342,104 358,95 374,102 390,93 406,101 422,85 438,69 454,76 470,57 480,60';
+ return `<svg class="chart" viewBox="0 0 500 190" role="img" aria-label="${traffic?'Пример трафика за час: до 8 мегабайт в секунду':'Пример задержки за час: от 40 до 80 миллисекунд, в конце нет ответов одного сервера'}"><title>${traffic?'Трафик за час':'Задержка за час'}</title>${[35,80,125].map((y,i)=>`<line x1="38" x2="480" y1="${y}" y2="${y}" class="gridline"/><text x="0" y="${y+4}">${traffic?[8,4,0][i]:[120,80,40][i]}</text>`).join('')}<text x="0" y="16">${traffic?'МБ/с':'мс'}</text><path class="area" d="M${points.replace(/ /g,' L')} L480,145 L38,145 Z"/><polyline class="signal" points="${points}"/>${traffic?'':'<rect class="incident" x="471" y="27" width="9" height="120" opacity=".65"/><line x1="475" x2="475" y1="28" y2="146" stroke="var(--warn)" stroke-width="1"/>'}<line x1="38" x2="480" y1="145" y2="145" class="gridline"/><text x="38" y="174">13:32</text><text x="170" y="174">13:52</text><text x="315" y="174">14:12</text><text x="450" y="174">14:32</text></svg>`;
+}
+function overview(s){return `
+ <div class="heading"><div><h1>Сеть на виду</h1><p>Какие программы используют интернет и где нет ответов.</p></div>${act('route:diagnostics','Проверить сайт','primary','scan-line')}</div>
+ <div class="contextbar"><div class="row">${live(s)}</div>${periods(s)}</div>
+ <div class="metrics">
+  <div class="metric"><span class="metric-label">${icon('app-window')}Программ в сети</span><strong>6</strong><div class="small">Включая службы Windows</div></div>
+  <div class="metric"><span class="metric-label">${icon('arrow-down-up')}Передано за час</span><strong>2,0 <span style="font-size:17px">ГБ</span></strong><div class="small">↓ 1,7 ГБ &nbsp; ↑ 0,3 ГБ</div></div>
+  <div class="metric"><span class="metric-label">${icon('globe')}Адресов замечено</span><strong>16</strong><div class="small">За выбранный период</div></div>
+  <div class="metric"><span class="metric-label">${icon('activity')}Серверов без ответа</span><strong style="color:var(--warn)">1</strong><div class="small">У программы Telegram</div></div>
+ </div>
+ <div class="overview-grid"><section class="panel"><div class="paneltop"><h2>Связь с интернетом</h2><span class="badge"><span class="dot"></span>Ответы приходят</span></div><div class="panelbody"><div class="row between"><div><span class="muted small">До интернета</span><h2 style="font-size:24px;font-weight:500;margin-top:4px">42 <span class="muted" style="font-size:13px">мс</span></h2></div><div class="small muted">До роутера &nbsp; 2 мс<br>Потери проб &nbsp; 0%</div></div>${chart()}<div class="insight">${icon('info')}Один сервер Telegram не отвечает. Другие программы получают ответы.</div></div></section>
+ <section class="panel"><div class="paneltop"><h2>Программы</h2>${act('route:apps','Все 6','ghost','arrow-up-right')}</div>${appList(s)}<div style="padding:7px 18px 15px" class="small muted">6 программ и служб · получено и отправлено за час</div></section></div>
+ <section class="panel"><div class="paneltop"><h2>Что изменилось</h2><span class="muted small">За последний час</span></div><div class="panelbody events"><div class="event"><span class="mono muted">14:32</span><span class="dot warn"></span><div>Сервер Telegram перестал отвечать<div class="table-sub">149.154.167.51 · другие серверы программы отвечают</div></div>${act('app:0','Посмотреть','ghost','arrow-right')}</div><div class="event"><span class="mono muted">14:18</span><span class="dot"></span><div>У Chrome появились новые адреса<div class="table-sub">3 адреса впервые замечены за сутки</div></div>${act('app:1','Открыть','ghost','arrow-right')}</div></div></section>${footer(s)}`;}
+function addressTable(s){const global=s.route==='connections',rows=filteredRows(s);return `<div class="connection-table"><div class="selectionbar" ${s.checked.length?'':'hidden'}><span data-selection-count>Выбрано: ${s.checked.length}</span><div class="row">${act('copy-selected:rows','Копировать строки','','copy')}${act('copy-selected:ip','IP','','copy')}${act('copy-selected:domains','Домены','','copy')}${act('clear-selection','Снять выбор','ghost')}</div></div><div class="tablewrap"><table class="connections-table ${global?'global-table':''}"><thead><tr><th class="checkcell"><input type="checkbox" data-check-all aria-label="Выбрать все найденные соединения" ${rows.length&&rows.every(r=>s.checked.includes(r.id))?'checked':''}></th>${global?'<th>Программа / служба</th>':''}<th>${s.group==='addresses'?'IP-адрес':'Домен и IP-адрес'}</th><th>Протокол</th><th>Порт</th><th>Связь</th><th class="num">Объём</th><th class="copyhead">Копировать</th></tr></thead><tbody>${rows.length?rows.map(r=>`<tr class="${s.checked.includes(r.id)?'checked':''}" data-row-id="${r.id}"><td class="checkcell"><input type="checkbox" data-check-row="${r.id}" aria-label="Выбрать ${apps[r.appIndex].name}, ${r.ip}, ${r.port}" ${s.checked.includes(r.id)?'checked':''}></td>${global?`<td><button type="button" class="textlink" data-act="app:${r.appIndex}">${apps[r.appIndex].name}</button><div class="table-sub">${apps[r.appIndex].exe}${apps[r.appIndex].type==='service'?' · служба':''}</div></td>`:''}<td class="address-cell">${s.group==='domains'&&r.domain!==r.ip?`<div class="inline-address"><button type="button" class="textlink domain-name" data-act="detail-id:${r.id}">${r.domain}</button>${copyButton('row-copy:domains:'+r.id,'Копировать домен '+r.domain)}</div>`:''}<div class="inline-address"><button type="button" class="textlink mono" data-act="detail-id:${r.id}">${r.ip}</button>${copyButton('row-copy:ip:'+r.id,'Копировать IP '+r.ip)}</div><div class="table-sub owner">${r.owner}</div></td><td><span class="protocol ${r.protocol.toLowerCase()}">${r.protocol}</span></td><td class="mono">${r.rawPort}</td><td><span class="${r.bad?'badge warn':'small muted'}">${r.status}</span></td><td class="num">${r.traffic}</td><td class="copycell">${copyButton('row-copy:rows:'+r.id,'Копировать соединение целиком','copy')}${copyButton('actions-id:'+r.id,'Действия с соединением','ellipsis')}</td></tr>`).join(''):`<tr><td colspan="${global?9:8}"><div class="empty"><h3>Соединений по этим условиям нет</h3><p class="muted">Измените запрос или сбросьте фильтры.</p>${act('reset-filters','Сбросить поиск и фильтры')}</div></td></tr>`}</tbody></table></div><div class="tablefoot"><span>${global?'Все приложения и службы':'Только '+apps[s.app].name} · ${s.period}</span><span>IP и домен копируются рядом с адресом</span></div></div>`;}
+function dnsTable(s){let a=apps[s.app];return `<div class="tablewrap"><table><thead><tr><th>Запрошенное имя</th><th>Ответ DNS</th><th>Когда</th></tr></thead><tbody>${s.app===0?'<tr><td colspan="3">Для этих соединений Telegram имена не определены.<div class="table-sub">Программа может обращаться по IP или использовать собственный DNS.</div></td></tr>':`<tr><td>${s.app===1?'youtube.com':'discord.com'}</td><td class="mono">${currentRows(s)[0].ip}</td><td>14:31</td></tr>`}</tbody></table></div>`;}
+function linkContent(s){let a=apps[s.app];return `<div class="panelbody"><div class="row between"><h2>${s.app===0?'Один сервер не отвечает':'Серверы отвечают'}</h2>${act('notify','Уведомлять о сбоях','','bell')}</div><p class="muted small" style="margin-top:7px">${s.app===0?'Данные отправляются, ответа от 149.154.167.51 нет 18 секунд. Другие серверы отвечают.':'За последний час пропусков ответов в примере нет.'}</p>${chart()}${s.app===0?'<div class="insight">Повторные отправки TCP совпали с пропажей ответов. Причина пока неизвестна.</div>':''}</div>${addressTable(s)}`;}
+function appsPage(s){const a=apps[s.app];return `<div class="heading compact-heading"><div><h1>Программы</h1><p>Соединения и связь выбранной программы.</p></div><div class="row">${act('toggle-list',s.listHidden?'Показать список':'Скрыть список','','panel-left')}${act('export','Экспорт списка','primary','arrow-up-from-line')}</div></div><div class="data-layout ${s.listHidden?'list-hidden':''}" style="--program-width:${s.programWidth}px"><section class="panel program-panel" aria-label="Список программ"><div class="program-title"><h2>Программы и службы</h2><div class="row">${copyButton('narrow-list','Сузить список','chevron-left')}${copyButton('widen-list','Расширить список','chevron-right')}</div></div><div class="program-search"><div class="search">${icon('search')}<input data-input="program" aria-label="Найти программу или службу" placeholder="Найти программу"></div></div>${appList(s,true)}<div class="program-foot small muted">6 программ и служб · примеры</div></section><div class="splitter" role="separator" aria-orientation="vertical" aria-label="Изменить ширину списка программ" data-resize-programs>${icon('grip-vertical')}</div><div class="workspace"><section class="panel"><div class="program-summary"><div class="row">${avatar(a)}<div><h2>${a.name}</h2><span class="small muted">${a.exe} · ${a.addr} соединений в примере</span></div></div><div class="row">${act('notify','Уведомления','ghost','bell')}${act('app-menu','Действия','','ellipsis')}</div></div><div class="program-metrics"><span>Трафик <b>${a.traffic}</b></span><span>Задержка <b>${s.app===0?'42':'28'} мс</b></span><span>Потери проб <b>${s.app===0?'—':'0%'}</b></span>${s.app===0?'<span class="badge warn">1 сервер без ответа</span>':'<span class="badge"><span class="dot"></span>Ответы приходят</span>'}</div><div class="tabs">${[['addresses','Соединения'],['link','Связь'],['dns','DNS']].map(([v,n])=>act('tab:'+v,n,s.tab===v?'selected':'')).join('')}</div>${s.tab==='link'?linkContent(s):s.tab==='dns'?dnsTable(s):searchBar(s)+addressTable(s)}</section><div class="contextbar bottom-context"><div class="row">${live(s)}</div>${periods(s)}</div></div></div>${footer(s)}`;}
+function diagnostics(s){return `<div class="heading"><div><div class="eyebrow">Инструменты</div><h1>Проверка соединения</h1><p>Узнайте, на каком этапе нет ответа.</p></div><span class="badge">Результаты в макете — пример</span></div><div class="stack"><section class="panel"><div class="panelbody"><label>Сайт или IP-адрес<div class="row" style="align-items:stretch"><input data-input="target" placeholder="Например, github.com" value="github.com" style="flex:1;min-width:160px">${act('run-check','Проверить','primary','scan-line')}</div></label><p class="route-note">Проверка DNS, подключения, сертификата и пути до сервера.</p><div data-result="check" hidden style="margin-top:20px"><div class="insight" style="background:var(--soft);color:var(--ink)">В примере сайт отвечает. Ошибок DNS и сертификата не найдено.</div>${[['DNS','Имя определено · 140.82.121.3'],['Подключение','Ответ получен · TCP 443'],['Сертификат','Соответствует имени сайта'],['Путь до сервера','35 мс · 10 проб на узел']].map(([n,v])=>`<div class="step"><h3>${n}</h3><span class="ok">${v}</span></div>`).join('')}<div class="row" style="margin-top:16px">${act('copy-report','Копировать отчёт','','copy')}${act('trace','Показать путь по узлам','ghost','route')}</div></div></div></section><section class="panel"><div class="paneltop"><h2>Качество подключения</h2><span class="small muted">Наблюдение без дополнительной нагрузки</span></div><div class="panelbody"><div class="appstats"><div class="muted small">До роутера<strong style="color:var(--ink)">2 мс</strong></div><div class="muted small">До интернета<strong style="color:var(--ink)">42 мс</strong></div><div class="muted small">Разброс задержки<strong style="color:var(--ink)">6 мс</strong></div></div><p class="muted">Проверьте, как меняется задержка при скачивании и отправке.</p><div class="row" style="margin-top:18px">${act('loadtest','Проверить под нагрузкой','','gauge')}<span class="small muted">До 350 МБ трафика · около 20 секунд</span></div></div></section></div>${footer(s)}`;}
+function rules(s){return `<div class="heading"><div><h1>Блокировки</h1><p>Правила исходящих соединений в брандмауэре Windows.</p></div><span class="badge">2 правила в примере</span></div><section class="panel"><div class="paneltop"><h2>Действующие правила</h2><span class="small muted">Сохраняются после закрытия NetWatcher</span></div><div class="tablewrap"><table><thead><tr><th>Что заблокировано</th><th>Для кого</th><th>Действие</th></tr></thead><tbody><tr data-rule><td><h3>example-tracker.test</h3><div class="table-sub">По известным IP-адресам домена</div></td><td>Google Chrome</td><td>${act('unblock','Снять блокировку','ghost','shield-off')}</td></tr><tr data-rule><td><h3>203.0.113.42</h3><div class="table-sub">Один IP-адрес</div></td><td>Все программы</td><td>${act('unblock','Снять блокировку','ghost','shield-off')}</td></tr></tbody></table></div><div class="panelbody muted small">Чтобы создать правило, выберите программу или адрес и откройте «Действия». Перед блокировкой вы увидите её область и последствия.</div></section>${footer(s)}`;}
+function settings(s){return `<div class="heading"><div><h1>Настройки</h1><p>Хранение журнала, уведомления и оформление.</p></div></div><section class="panel"><div class="panelbody stack"><div class="formgrid"><label>Тема<select data-select="theme"><option value="system">Как в системе</option><option value="light">Светлая тема</option><option value="dark">Тёмная тема</option></select></label><label>Хранить журнал<select><option>7 дней</option><option>30 дней</option><option>1 день</option></select></label></div><label class="checkline"><input type="checkbox" checked>Сообщать о новых программах в сети</label><label class="checkline"><input type="checkbox">Сообщать о первой стране или сети у программы</label><p class="small muted">Уведомления о пропаже ответов включаются отдельно для выбранной программы.</p><div class="step"><div><h3>Справочники</h3><span class="muted small">Владельцы сетей, страны и категории доменов</span></div>${act('update-db','Обновить')}</div><div class="step"><div><h3>Обновления NetWatcher</h3><span class="muted small">Проверка при запуске и раз в сутки</span></div>${act('update-app','Проверить')}</div><div>${act('save-settings','Сохранить настройки','primary')}</div></div></section>${footer(s)}`;}
+function shellA(s){const nav=[['overview','Обзор','layout-dashboard'],['apps','Программы','app-window'],['connections','Все соединения','network'],['diagnostics','Проверки','scan-line'],['rules','Блокировки','shield']];const navbutton=(v,n,i)=>`<button type="button" data-act="route:${v}" class="${s.route===v?'selected':''}" aria-label="${n}" ${s.navCollapsed?`data-tooltip="${n}" data-tooltip-placement="right"`:''}>${icon(i)}<span class="navtext">${n}</span></button>`;return `<div class="titlebar"><span>NetWatcher <span class="titlepath">/ ${nav.find(n=>n[0]===s.route)?.[1]||'Настройки'}</span></span><span>Макет · демонстрационные данные</span><div class="row"><select data-select="theme" aria-label="Тема оформления"><option value="system" ${s.theme==='system'?'selected':''}>Как в системе</option><option value="light" ${s.theme==='light'?'selected':''}>Светлая тема</option><option value="dark" ${s.theme==='dark'?'selected':''}>Тёмная тема</option></select><span class="windowmarks">— □ ×</span></div></div><div class="a-shell ${s.navCollapsed?'nav-collapsed':''}"><aside class="a-sidebar"><div class="brand"><span class="brandmark">${icon('activity')}</span><span class="brandtext">NetWatcher</span></div><button type="button" class="nav-toggle" data-act="toggle-nav" aria-label="${s.navCollapsed?'Развернуть меню':'Свернуть меню'}" aria-expanded="${!s.navCollapsed}" data-tooltip="${s.navCollapsed?'Развернуть меню':'Свернуть меню'}">${icon(s.navCollapsed?'panel-left-open':'panel-left-close')}<span class="navtext">Свернуть меню</span></button><nav class="navgroup" aria-label="Разделы NetWatcher"><div class="navlabel">Наблюдение</div>${nav.map(([v,n,i])=>navbutton(v,n,i)).join('')}</nav><div class="spacer"></div><div class="navgroup">${navbutton('settings','Настройки','settings')}<button type="button" data-act="help" aria-label="Как пользоваться" ${s.navCollapsed?'data-tooltip="Как пользоваться"':''}>${icon('circle-help')}<span class="navtext">Как пользоваться</span></button></div><div class="sidebar-foot"><span class="dot"></span><span class="navtext">На этом компьютере<br>Журнал хранится 7 дней</span></div></aside><main class="a-main">${s.route==='overview'?overview(s):s.route==='apps'?appsPage(s):s.route==='connections'?connectionsPage(s):s.route==='diagnostics'?diagnostics(s):s.route==='rules'?rules(s):settings(s)}</main></div>`;}
+function render(id='a'){const el=document.getElementById('nw-a'),s=state.a;el.dataset.theme=s.theme;if(s.theme==='system')el.style.removeProperty('color-scheme');else el.style.colorScheme=s.theme;el.innerHTML=shellA(s);el.querySelectorAll('[data-select="theme"]').forEach(v=>v.value=s.theme);icons();}
+function icons(){if(globalThis.lucide)lucide.createIcons({attrs:{width:17,height:17}});}
+function toast(el,text){el.querySelector('.toast')?.remove();const t=document.createElement('div');t.className='toast';t.setAttribute('role','status');t.textContent=text;el.append(t);setTimeout(()=>t.remove(),4200);}
+function sheet(el,title,body){el.querySelector('.overlay')?.remove();const ov=document.createElement('div');ov.className='overlay';ov.innerHTML=`<section class="sheet" role="dialog" aria-modal="true" aria-label="${title}"><div class="row between"><h2>${title}</h2>${act('close-sheet','Закрыть','ghost','x')}</div>${body}</section>`;ov.addEventListener('click',e=>{if(e.target===ov)ov.remove()});el.append(ov);icons();ov.querySelector('button')?.focus();}
+function details(el,s){const r=selectedRow(s),a=apps[r.appIndex];sheet(el,'Сведения о соединении',`<div class="row between"><span class="badge ${r.bad?'warn':''}">${r.status}</span><span class="small muted">${a.name}</span></div><h2 class="mono">${r.ip}</h2><div class="keyvals"><div class="keyval"><span class="key">Домен</span><div class="row"><span>${r.domain===r.ip?'Не определён':r.domain}</span>${r.domain!==r.ip?copyButton('row-copy:domains:'+r.id,'Копировать домен'):''}</div></div><div class="keyval"><span class="key">Владелец</span><span>${r.owner}</span></div><div class="keyval"><span class="key">Протокол и порт</span><span>${r.port}</span></div><div class="keyval"><span class="key">Сеть и страна</span><span>${r.network} · ${r.country}</span><span class="small muted">Страна по IP · справочник может ошибаться</span></div><div class="keyval"><span class="key">Первое / последнее обращение</span><span>Сегодня, 13:48 / 14:32</span></div></div><div class="row">${act('row-copy:ip:'+r.id,'Копировать IP','','copy')}${act('check-address','Проверить','primary','scan-line')}${act('row-menu','Действия','','ellipsis')}</div><div class="row">${act('rdap','Данные реестра','ghost','database')}${act('peering','Уточнить владельца','ghost','building-2')}</div>`);}
+function exportSheet(el,s){sheet(el,'Экспорт списка',`<p class="muted">${s.route==='connections'?'Все программы и службы':apps[s.app].name} · ${s.period}. Только найденные соединения.</p><div class="formgrid"><label>Что сохранить<select data-select="export-kind"><option value="ip">IP-адреса</option><option value="domains">Домены</option><option value="subnets">Подсети</option><option value="owners">Сети владельцев</option></select></label><label>Формат<select data-select="export-format"><option value="lines">Список по строкам</option><option value="wg">WireGuard / AmneziaWG</option><option value="fw">Брандмауэр Windows</option><option value="mask">Для роутера · с маской</option></select></label></div><label>Насколько укрупнять<select data-select="export-prefix"><option value="32">Точные адреса</option><option value="28">/28</option><option value="24">/24</option><option value="20">/20</option><option value="16">/16</option></select></label><p class="small muted">Чем шире сеть, тем больше соседних адресов попадёт в список.</p><div class="row"><label class="checkline"><input type="checkbox" checked data-input="export-ipv4">Только IPv4</label><label class="checkline"><input type="checkbox" data-input="export-comments">Комментарии с доменами</label></div><div><h3>Предпросмотр</h3><pre class="preview" data-export-preview style="margin-top:9px"></pre><p class="small muted" data-export-summary style="margin-top:8px"></p></div><div class="row">${act('copy-export','Копировать','primary','copy')}${act('save-export','Сохранить .txt','','download')}</div>`);updateExport(el,s);}
+function updateExport(el,s){const kind=el.querySelector('[data-select="export-kind"]')?.value;if(!kind)return;const fmt=el.querySelector('[data-select="export-format"]').value;const prefix=Number(el.querySelector('[data-select="export-prefix"]').value);let rows=filteredRows(s),values=[];if(kind==='domains')values=rows.filter(r=>r.domain!==r.ip).map(r=>r.domain);else values=rows.map(r=>{if(kind==='owners')return r.network;let p=kind==='subnets'&&prefix===32?24:prefix;let oct=r.ip.split('.').map(Number),n=((oct[0]*16777216)+(oct[1]*65536)+(oct[2]*256)+oct[3])>>>0;let base=p===32?n:Math.floor(n/2**(32-p))*2**(32-p);let ip=[(base>>>24)&255,(base>>>16)&255,(base>>>8)&255,base&255].join('.');return kind==='ip'&&p===32?ip:ip+'/'+p;});values=[...new Set(values)];let compatible=kind!=='domains'||fmt==='lines';let text=!compatible?'Этот формат использует IP-адреса и сети. Выберите другой тип данных.':!values.length?'Известных доменов для выбранной программы нет.':fmt==='wg'?'AllowedIPs = '+values.map(v=>v.includes('/')?v:v+'/32').join(', '):fmt==='fw'?values.join(', '):fmt==='mask'?values.map(v=>{let [ip,p='32']=v.split('/');let m=Number(p)===0?0:(0xffffffff<<(32-Number(p)))>>>0;return ip+' '+[(m>>>24)&255,(m>>>16)&255,(m>>>8)&255,m&255].join('.')}).join('\n'):values.join('\n');if(compatible&&values.length&&el.querySelector('[data-input="export-comments"]').checked&&fmt==='lines')text='# '+(s.route==='connections'?'Все программы и службы':apps[s.app].name)+'\n'+text;el.querySelector('[data-export-preview]').textContent=text;el.querySelector('[data-export-summary]').textContent=values.length+' строк · примеры данных';el.dataset.exportText=text;el.dataset.exportValid=String(compatible&&values.length>0);el.querySelector('[data-act="copy-export"]').disabled=!(compatible&&values.length);el.querySelector('[data-act="save-export"]').disabled=!(compatible&&values.length);}
+function filterSheet(el,s){sheet(el,'Фильтры соединений',`<div class="formgrid"><label>Протокол<select data-filter="protocol"><option value="all">TCP и UDP</option><option value="TCP" ${s.protocol==='TCP'?'selected':''}>TCP</option><option value="UDP" ${s.protocol==='UDP'?'selected':''}>UDP</option></select></label><label>Домены<select data-filter="domains"><option value="all">Все</option><option value="known" ${s.domainMode==='known'?'selected':''}>Домен определён</option><option value="unknown" ${s.domainMode==='unknown'?'selected':''}>Без домена</option></select></label></div><label class="checkline"><input type="checkbox" data-filter="bad" ${s.onlybad?'checked':''}>Только без ответа</label><p class="small muted">Поиск, тип программы и фильтры применяются вместе.</p><div class="row">${act('apply-filter','Применить','primary')}${act('reset-filters','Сбросить всё','ghost')}</div>`);}
+function menu(el,s,isApp){sheet(el,isApp?'Действия с программой':'Действия с адресом',`<p class="muted">${isApp?apps[s.app].name:selectedRow(s).ip}</p><div class="stack">${act('copy-ip','Копировать IP','','copy')}${act('copy-row','Копировать строки','','copy')}${act('copy-domain','Копировать домены','','copy')}${act('copy-network','Копировать сеть','','copy')}${act('find-ip','Найти все обращения к IP','','search')}${act('find-domain','Найти по домену','','search')}${act('check-address','Проверить соединение','','scan-line')}${isApp?act('folder','Открыть папку программы','','folder-open'):''}${act('block','Заблокировать…','','shield')}${act('disconnect','Разорвать соединение…','','unplug')}</div>`);}
+async function copy(el,text){try{await navigator.clipboard.writeText(text);toast(el,'Скопировано');return true;}catch{sheet(el,'Текст для копирования',`<p class="muted">Выделите текст и нажмите Ctrl+C.</p><textarea rows="6" aria-label="Текст для копирования" style="width:100%;background:var(--bg);color:var(--ink);padding:12px">${esc(text)}</textarea>`);el.querySelector('textarea').select();return false;}}
+function currentRows(s){return s.route==='connections'?connections:connections.filter(r=>r.appIndex===s.app);}
+function selectedRow(s){return connections.find(r=>r.id===s.selectedId)||selectedRow(s)||currentRows(s)[0];}
+function filteredRows(s){return currentRows(s).filter(r=>{
+ const a=apps[r.appIndex];
+ if(s.onlybad&&!r.bad)return false;
+ if(s.route==='connections'&&s.scope!=='all'&&a.type!==s.scope)return false;
+ if(s.protocol&&s.protocol!=='all'&&r.protocol!==s.protocol)return false;
+ if(s.domainMode==='known'&&r.domain===r.ip)return false;
+ if(s.domainMode==='unknown'&&r.domain!==r.ip)return false;
+ const hay=[r.domain,r.ip,r.owner,r.protocol,r.rawPort,r.country,r.network,a.name,a.exe].join(' ').toLowerCase();
+ return s.query.trim().toLowerCase().split(/\s+/).filter(Boolean).every(t=>/^\d+$/.test(t)?String(r.rawPort)===t:hay.includes(t));
+});}
+function searchBar(s,global=false){return `<div class="filters"><div class="search">${icon('search')}<input data-input="query" aria-label="Поиск по домену, IP, владельцу, протоколу и порту" placeholder="Домен, IP, владелец, UDP или 443" value="${esc(s.query)}">${s.query?act('clear-query','Сбросить поиск','iconbtn','x'):''}</div>${global?`<select data-select="scope" aria-label="Тип программы"><option value="all" ${s.scope==='all'?'selected':''}>Программы и службы</option><option value="app" ${s.scope==='app'?'selected':''}>Приложения</option><option value="service" ${s.scope==='service'?'selected':''}>Службы Windows</option></select>`:''}<select data-select="group" aria-label="Вид соединений"><option value="domains" ${s.group==='domains'?'selected':''}>Домены и IP</option><option value="addresses" ${s.group==='addresses'?'selected':''}>Только IP</option></select>${act('filter','Фильтры',(s.onlybad||s.protocol!=='all'||s.domainMode!=='all')?'selected':'','sliders-horizontal')}</div><div class="search-hint"><span>Можно сочетать условия: <button type="button" data-act="example:UDP 443">UDP 443</button></span><span data-result-count aria-live="polite">${resultCount(s)}</span></div>`;}
+function resultCount(s){return `Найдено ${filteredRows(s).length} из ${currentRows(s).length} соединений`;}
+function copyButton(action,label,ico='copy'){return `<button type="button" class="iconbtn rowcopy" data-act="${action}" aria-label="${label}" data-tooltip="${label}">${icon(ico)}</button>`;}
+function connectionsPage(s){return `<div class="heading compact-heading"><div><h1>Все соединения</h1><p>Общий список приложений и служб Windows.</p></div>${act('export','Экспорт списка','primary','arrow-up-from-line')}</div><div class="contextbar"><span class="scope-info">${connections.length} соединений · ${apps.length} программ и служб</span>${periods(s)}</div><section class="panel all-connections">${searchBar(s,true)}${addressTable(s)}</section><div class="contextbar bottom-context"><div class="row">${live(s)}</div><span class="small muted">Нажмите на программу, чтобы перейти к её соединениям</span></div>${footer(s)}`;}
+function refreshTable(el,s){const table=el.querySelector('.connection-table');if(table)table.outerHTML=addressTable(s);const count=el.querySelector('[data-result-count]');if(count)count.textContent=resultCount(s);icons();}
+function copyRowsText(rows,kind){if(kind==='ip')return [...new Set(rows.map(r=>r.ip))].join('\n');if(kind==='domains')return [...new Set(rows.filter(r=>r.domain!==r.ip).map(r=>r.domain))].join('\n');return rows.map(r=>[apps[r.appIndex].name,apps[r.appIndex].exe,r.domain===r.ip?'':r.domain,r.ip,r.protocol,r.rawPort,r.owner,r.traffic,r.status].join('\t')).join('\n');}
+function remember(){const s=state.a;if(window.openai?.setWidgetState)window.openai.setWidgetState({modelContent:{direction:'Панель наблюдения',theme:s.theme},privateContent:{theme:s.theme,programWidth:s.programWidth}}).catch(()=>{});}
+root.addEventListener('click',async e=>{const btn=e.target.closest('[data-act]');if(!btn)return;const el=btn.closest('.nw');const id=el.id.endsWith('a')?'a':'b';const s=state[id];const [action,...args]=btn.dataset.act.split(':');const val=args.join(':');
+ if(action==='toggle-nav'){s.navCollapsed=!s.navCollapsed;render(id);return;}
+ if(action==='toggle-list'){s.listHidden=!s.listHidden;render(id);return;}
+ if(action==='narrow-list'||action==='widen-list'){const layout=el.querySelector('.data-layout');const max=Math.max(190,Math.min(330,layout.clientWidth-365));s.programWidth=Math.max(190,Math.min(max,s.programWidth+(action==='widen-list'?30:-30)));render(id);remember();return;}
+ if(action==='example'){s.query=val;s.checked=[];render(id);return;}
+ if(action==='clear-query'){s.query='';s.checked=[];render(id);el.querySelector('[data-input="query"]')?.focus();return;}
+ if(action==='reset-filters'){s.query='';s.onlybad=false;s.protocol='all';s.domainMode='all';s.scope='all';s.checked=[];render(id);return;}
+ if(action==='clear-selection'){s.checked=[];refreshTable(el,s);return;}
+ if(action==='detail-id'||action==='actions-id'){const r=connections.find(r=>r.id===Number(val));s.selectedId=r.id;s.app=r.appIndex;s.selected=currentRows(s).indexOf(r);if(action==='detail-id')details(el,s);else menu(el,s,false);return;}
+ if(action==='row-copy'){const [kind,rowId]=args;const r=connections.find(r=>r.id===Number(rowId));const text=copyRowsText([r],kind);if(!text){toast(el,'Для этого соединения домен не определён');return;}if(await copy(el,text))toast(el,kind==='ip'?'IP скопирован: '+text:kind==='domains'?'Домен скопирован: '+text:'Соединение скопировано');return;}
+ if(action==='copy-selected'){const rows=filteredRows(s).filter(r=>s.checked.includes(r.id));const text=copyRowsText(rows,val);if(!text){toast(el,'У выбранных соединений домены не определены');return;}if(await copy(el,text))toast(el,val==='ip'?'Скопированы IP: '+text.split('\n').length:val==='domains'?'Скопированы домены: '+text.split('\n').length:'Скопировано соединений: '+rows.length);return;}
+
+ if(action==='route'){s.route=val;s.navCollapsed=['apps','connections'].includes(val);s.query='';s.checked=[];s.selected=0;s.selectedId=null;s.protocol='all';s.domainMode='all';s.onlybad=false;render(id);return;}
+ if(action==='app'){s.app=Number(val);s.navCollapsed=true;s.checked=[];s.selectedId=null;s.protocol='all';s.domainMode='all';s.selected=0;s.query='';s.onlybad=false;s.tab=id==='a'?'addresses':'link';s.route=id==='a'?'apps':'workspace';render(id);return;}
+ if(action==='tab'){s.tab=val;render(id);return;}
+ if(action==='period'){s.period=val;render(id);toast(el,'Выбран период «'+val+'». В макете данные не пересчитываются.');return;}
+ if(action==='pause'){s.paused=!s.paused;render(id);return;}
+ if(action==='close-sheet'){el.querySelector('.overlay')?.remove();return;}
+ if(action==='detail'){s.selected=Number(val);if(id==='b')render(id);details(el,s);return;}
+ if(action==='export'){exportSheet(el,s);return;}
+ if(action==='filter'){filterSheet(el,s);return;}
+ if(action==='apply-filter'){s.onlybad=!!el.querySelector('[data-filter="bad"]')?.checked;s.protocol=el.querySelector('[data-filter="protocol"]').value;s.domainMode=el.querySelector('[data-filter="domains"]').value;s.checked=[];render(id);return;}
+ if(action==='app-menu'||action==='row-menu'){menu(el,s,action==='app-menu');return;}
+ if(action==='copy-export'){await copy(el,el.dataset.exportText);return;}
+ if(action==='save-export'){const a=document.createElement('a');const u=URL.createObjectURL(new Blob([el.dataset.exportText],{type:'text/plain;charset=utf-8'}));a.href=u;a.download='netwatcher-example.txt';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);toast(el,'Сохранён список с примерами адресов');return;}
+ if(['copy-ip','copy-row','copy-domain','copy-network'].includes(action)){const r=selectedRow(s);if(action==='copy-domain'&&r.domain===r.ip){toast(el,'Для этого соединения домен не определён');return;}await copy(el,action==='copy-ip'?r.ip:action==='copy-domain'?r.domain:action==='copy-network'?r.network:copyRowsText([r],'rows'));return;}
+ if(action==='find-ip'||action==='find-domain'){const r=selectedRow(s);s.route='connections';s.navCollapsed=true;s.query=action==='find-domain'&&r.domain!==r.ip?r.domain:r.ip;s.tab=id==='a'?'addresses':'link';render(id);return;}
+ if(action==='check-address'){s.selectedId=selectedRow(s).id;s.route='diagnostics';render(id);el.querySelector('[data-input="target"]').value=selectedRow(s).ip;return;}
+ if(action==='run-check'){const target=el.querySelector('[data-input="target"]').value.trim();if(!target){toast(el,'Введите сайт или IP-адрес');return;}el.querySelector('[data-result="check"]').hidden=false;toast(el,'Показан пример результата. Сетевые запросы не выполняются.');return;}
+ if(action==='copy-report'){await copy(el,'NetWatcher — пример отчёта\nЦель: '+el.querySelector('[data-input="target"]').value+'\nDNS: имя определено\nTCP 443: ответ получен\nСертификат: соответствует имени\nЗадержка: 35 мс\nЭто демонстрационные данные.');return;}
+ if(action==='trace'){sheet(el,'Путь до сервера',`<p class="muted">Пример · 10 проб на узел</p><table><thead><tr><th>Узел</th><th>Адрес</th><th>Средняя</th></tr></thead><tbody><tr><td>1</td><td class="mono">192.168.1.1</td><td>2 мс</td></tr><tr><td>2</td><td class="mono">10.0.0.1</td><td>8 мс</td></tr><tr><td>3</td><td class="mono">140.82.121.3</td><td>35 мс</td></tr></tbody></table><p class="small muted">Отсутствие ответа промежуточного узла само по себе не доказывает обрыв пути.</p>`);return;}
+ if(action==='loadtest'){sheet(el,'Проверка под нагрузкой',`<p>Тест измеряет скорость скачивания, отправки и рост задержки.</p><div class="insight">Расход трафика — до 350 МБ плюс данные, которые уже передаются.</div><p class="small muted">Макет показывает результат без загрузки данных.</p>${act('load-result','Показать пример результата','primary')}`);return;}
+ if(action==='load-result'){sheet(el,'Результат под нагрузкой',`<span class="badge">Пример</span><div class="keyvals"><div class="keyval"><span class="key">Скачивание / отправка</span><h2>94 / 48 Мбит/с</h2></div><div class="keyval"><span class="key">Задержка без нагрузки / под нагрузкой</span><h2>42 / 86 мс</h2></div></div><p class="muted">При загрузке задержка выросла на 44 мс.</p><p class="small muted">В полном интерфейсе: оценки для игр, звонков и видео, потери и разброс задержки.</p>`);return;}
+ if(action==='notify'){sheet(el,'Уведомления о связи',`<p>${apps[s.app].name}</p><label class="checkline"><input type="checkbox" checked>Сообщать, когда сервер перестал отвечать и когда ответы вернулись</label><label class="checkline"><input type="checkbox">Применить ко всем программам</label><p class="small muted">Уведомления Windows. Настройки в макете не меняют систему.</p>${act('save-demo','Сохранить','primary')}`);return;}
+ if(action==='block'){sheet(el,'Блокировка соединений',`<p>Выберите, что ограничить.</p><label>Что заблокировать<select><option>IP ${selectedRow(s).ip}</option><option>Программу ${apps[s.app].name}</option><option>Домен</option><option>Сеть владельца</option><option>Службу Windows</option></select></label><label>Для кого<select><option>Только для ${apps[s.app].name}</option><option>Для всех программ</option></select></label><div class="insight">Правило останется после закрытия NetWatcher. Общий IP может использоваться другими сайтами.</div><p class="small muted">В макете правила брандмауэра не создаются.</p>${act('block-preview','Посмотреть правило','primary')}`);return;}
+ if(action==='block-preview'){sheet(el,'Правило перед блокировкой',`<p>Пример: запрет исходящих соединений ${apps[s.app].name} с ${selectedRow(s).ip}.</p><pre class="preview">Направление: исходящие\nДействие: запретить\nУдалённый IP: ${selectedRow(s).ip}\nПрограмма: ${apps[s.app].exe}</pre><p class="small muted">Следующий шаг в программе — подтверждение с командой брандмауэра. Здесь показан только макет.</p>${act('save-demo','Готово','primary')}`);return;}
+ if(action==='disconnect'){sheet(el,'Разорвать соединение?',`<p>Программа может подключиться снова. Действие доступно для TCP по IPv4.</p><p class="small muted">В макете соединения не закрываются.</p>${act('save-demo','Понятно','primary')}`);return;}
+ if(action==='unblock'){btn.closest('[data-rule]').remove();toast(el,'Правило скрыто в макете. Брандмауэр Windows не изменён.');return;}
+ if(action==='rdap'||action==='peering'){sheet(el,action==='rdap'?'Данные реестра IP':'Владелец сети',`<span class="badge">Пример данных</span><p>${action==='rdap'?'Здесь появятся диапазон адресов, организация и контакты регистратора.':'Здесь появятся название и тип сети из PeeringDB.'}</p><p class="small muted">Это разные источники сведений. Запрос выполняется по вашей команде в программе.</p>`);return;}
+ if(action==='windows-history'){sheet(el,'Трафик по данным Windows',`<p class="muted">${apps[s.app].name} · отдельный источник</p><label>Период<select><option>30 дней</option><option>7 дней</option><option>Сутки</option></select></label><h2>12,4 ГБ <span class="small muted">в примере</span></h2><p class="small muted">Включает время до установки NetWatcher. Экспериментальная функция.</p>`);return;}
+ if(action==='program-filter'){sheet(el,'Список программ',`<label>Порядок<select><option>По активности</option><option>По имени</option><option>По трафику</option></select></label><label>Показывать<select><option>Программы и службы</option><option>Приложения</option><option>Службы Windows</option></select></label><p class="small muted">Поля показывают настройки будущего списка. В макете поиск программ работает в левой панели.</p>${act('close-sheet','Готово','primary')}`);return;}
+ if(action==='help'){sheet(el,'Что можно сделать',`<div class="stack"><p>В «Программах» выберите приложение или службу. На вкладке «Связь» видны задержки и пропуски ответов.</p><p>Нажмите на адрес, чтобы узнать владельца, проверить соединение или открыть действия.</p><p>«Экспорт списка» сохраняет адреса для VPN, роутера или брандмауэра.</p><p class="small muted">Все значения в этих макетах приведены для примера.</p></div>`);return;}
+ if(action==='folder'){toast(el,'В программе откроется папка '+apps[s.app].exe);return;}
+ if(['save-demo','save-settings'].includes(action)){el.querySelector('.overlay')?.remove();toast(el,'Выбор сохранён только в макете');return;}
+ if(action==='update-db'||action==='update-app'){toast(el,'Показан макет. Загрузка и проверка обновлений не запускаются.');return;}
+});
+root.addEventListener('change',e=>{
+ const el=e.target.closest('.nw');if(!el)return;const s=state.a;const field=e.target.dataset.select;
+ if(field==='theme'){s.theme=e.target.value;render('a');remember();return;}
+ if(field==='group'){s.group=e.target.value;render('a');return;}
+ if(field==='scope'){s.scope=e.target.value;s.checked=[];render('a');return;}
+ if(field==='period'&&e.target.value){s.period=e.target.value;render('a');toast(el,'Период изменён. Данные в макете приведены для примера.');return;}
+ if(field?.startsWith('export-')||e.target.dataset.input?.startsWith('export-')){updateExport(el,s);return;}
+ if(e.target.hasAttribute('data-check-row')){const id=Number(e.target.dataset.checkRow);s.checked=e.target.checked?[...new Set([...s.checked,id])]:s.checked.filter(x=>x!==id);refreshTable(el,s);return;}
+ if(e.target.hasAttribute('data-check-all')){s.checked=e.target.checked?filteredRows(s).map(r=>r.id):[];refreshTable(el,s);}
+});
+root.addEventListener('input',e=>{
+ const el=e.target.closest('.nw');if(!el)return;const s=state.a;
+ if(e.target.dataset.input==='query'){s.query=e.target.value;s.checked=[];refreshTable(el,s);}
+ if(e.target.dataset.input==='program'){el.querySelectorAll('[data-app-name]').forEach(b=>b.hidden=!b.dataset.appName.toLowerCase().includes(e.target.value.toLowerCase()));}
+});
+root.addEventListener('pointerdown',e=>{
+ const handle=e.target.closest('[data-resize-programs]');if(!handle)return;
+ const layout=handle.closest('.data-layout');if(window.innerWidth<=850)return;
+ const start=e.clientX,initial=layout.querySelector('.program-panel').getBoundingClientRect().width;
+ const max=Math.max(190,Math.min(330,layout.clientWidth-365));
+ const move=ev=>{state.a.programWidth=Math.max(190,Math.min(max,Math.round(initial+ev.clientX-start)));layout.style.setProperty('--program-width',state.a.programWidth+'px');};
+ const end=()=>{document.removeEventListener('pointermove',move);document.removeEventListener('pointerup',end);document.removeEventListener('pointercancel',end);remember();};
+ document.addEventListener('pointermove',move);document.addEventListener('pointerup',end);document.addEventListener('pointercancel',end);e.preventDefault();
+});
+root.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='f'){const input=root.querySelector('[data-input="query"]');if(input){e.preventDefault();input.focus();}}});
+
+root.addEventListener('keydown',e=>{if(e.key==='Escape'){e.target.closest('.nw')?.querySelector('.overlay')?.remove();}});
+render('a');
+if(globalThis.Tweak){for(const id of ['a']){const el=document.getElementById('nw-'+id);const design={accent:id==='a'?'#7644c2':'#67dcdb',radius:id==='a'?12:6};const apply=()=>{el.style.setProperty('--accent',design.accent);el.querySelectorAll('.panel').forEach(p=>p.style.borderRadius=design.radius+'px');};const tweak=new Tweak({container:el,onChange:apply});tweak.addColorPicker(design,'accent',{label:'Акцент',reference:'--accent'});tweak.addSlider(design,'radius',{label:'Скругление панелей',min:0,max:20,unit:'px'});}}
+})();
+</script>

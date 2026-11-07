@@ -1,0 +1,86 @@
+{
+  "created": "2026-11-06",
+  "design": "Утверждённая обновлённая Панель наблюдения",
+  "assets": [
+    {
+      "file": "prototype/approved.html",
+      "bytes": 679567,
+      "sha256": "be750f61b2da14db25f2e50fa4b78eb1db285f3f193b448a58b65058a22cc78d"
+    },
+    {
+      "file": "prototype/approved-fragment.html",
+      "bytes": 84055,
+      "sha256": "d233c902596345ac147f089f1f1590cd9e21aed5b9f43b834be6b7e7b4d92933"
+    },
+    {
+      "file": "images/programs-light.png",
+      "bytes": 95580,
+      "sha256": "98036afd75be8558c885d74f10f63c3505d2d579d8c4453100de8e4a523e435b"
+    },
+    {
+      "file": "images/programs-dark.png",
+      "bytes": 96362,
+      "sha256": "a920bc08e04ba5f43acd317785c2d24c9afa2f141b0a6993e21c72dabdecc704"
+    },
+    {
+      "file": "images/connections-light.png",
+      "bytes": 147258,
+      "sha256": "64060f4e76409023d36080ab9c4c312d1a1ac9e14c3e6395b9c70651ae2807ea"
+    },
+    {
+      "file": "images/connections-dark.png",
+      "bytes": 148974,
+      "sha256": "3afc189b1ab2474fa395f166c65bd722e340485f0c0ce5c930ac6325f10c3999"
+    },
+    {
+      "file": "images/overview-light.png",
+      "bytes": 102250,
+      "sha256": "a29bb54a29910cf5d08758bea8f702753bdf54b62d7f29e97acc09028dc877ca"
+    },
+    {
+      "file": "reference.png",
+      "bytes": 1554012,
+      "sha256": "96463a18e20e8cccf2f5332d2cf3123c4b34dad7ea4770c3d44f378fd07a73db"
+    },
+    {
+      "file": "LUCIDE-LICENSE.txt",
+      "bytes": 3208,
+      "sha256": "b495047bd93a9b06913511076f504daba17d5bbeb3e0650f3bb53a4220329c57"
+    },
+    {
+      "file": "prototype/draft-v2.html",
+      "bytes": 709968,
+      "sha256": "6075cc97bc3377c0ab505dc6df45c193786a88b7596902343c1732d6e28c9e4b"
+    },
+    {
+      "file": "prototype/draft-v2-fragment.html",
+      "bytes": 114402,
+      "sha256": "f0783066f30dfa3864815c12abe39760c6f0ca5a78683334a5c0a7114005e27e"
+    },
+    {
+      "file": "images/v2-programs-light.png",
+      "bytes": 117103,
+      "sha256": "7aa15f87732b8a20d39547baccef41757067a0e23844c971ffbd5b199efd9f47"
+    },
+    {
+      "file": "images/v2-link-dark.png",
+      "bytes": 118460,
+      "sha256": "92f5e34f20a11ca84d53fb13adadec89fb81afa869a54dc15db26ad5194d7eb1"
+    },
+    {
+      "file": "images/v2-connections-light.png",
+      "bytes": 97716,
+      "sha256": "4a582a0f45e742bea8f6b92c7f67e67406a06b3d52e4dcabda18d270f881932a"
+    },
+    {
+      "file": "images/v2-link-all-light.png",
+      "bytes": 61326,
+      "sha256": "9ad7c9af1b984a1ea24265c0de3b591708cf1a50902d667c4a2584fd1b1e1929"
+    },
+    {
+      "file": "interaction-spec.md",
+      "bytes": 9257,
+      "sha256": "bd37aa7d99d751eb1d17d8707794980f28d0368c51619017b3a0352362e90011"
+    }
+  ]
+}
