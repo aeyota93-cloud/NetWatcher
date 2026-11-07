@@ -24,6 +24,22 @@ internal sealed partial class MainViewModel
     public string QualityInternetLabel { get => _qInternetLabel; private set => Set(ref _qInternetLabel, value); }
     public string QualityInternet { get => _qInternet; private set => Set(ref _qInternet, value); }
     public string QualityLoad { get => _qLoad; private set => Set(ref _qLoad, value); }
+
+    /// <summary>The tiles of «Проверки»: the delay large, the spread and losses under it.</summary>
+    public string QualityGatewayValue => Split(QualityGateway).Value;
+    public string QualityGatewayNote => Split(QualityGateway).Note;
+    public string QualityInternetValue => Split(QualityInternet).Value;
+    public string QualityInternetNote => Split(QualityInternet).Note;
+    public string QualityLoadNote => "Тест под нагрузкой: до 350 МБ трафика, около 20 секунд";
+
+    /// <summary>"42 мс ±3 · потерь нет" → "42 мс" and "±3 · потерь нет"; a text without a delay stays whole.</summary>
+    internal static (string Value, string Note) Split(string text)
+    {
+        var cut = text.IndexOf(" мс", StringComparison.Ordinal);
+        if (cut < 0) return (text, "");
+        cut += " мс".Length;
+        return (text[..cut], text[cut..].TrimStart(' ', '·').Trim());
+    }
     public string QualityHint { get => _qHint; private set => Set(ref _qHint, value); }
     public string QualityTest { get => _qTest; private set => Set(ref _qTest, value); }
     public string QualityProgress { get => _qProgress; private set => Set(ref _qProgress, value); }
@@ -74,6 +90,8 @@ internal sealed partial class MainViewModel
         QualityGateway = gateway == null ? "роутер не найден" : PathText(r.Gateway);
         QualityInternetLabel = viaVpn ? $"До интернета через VPN ({internet})" : $"До интернета ({internet})";
         QualityInternet = PathText(r.Internet);
+        foreach (var n in new[] { nameof(QualityGatewayValue), nameof(QualityGatewayNote), nameof(QualityInternetValue), nameof(QualityInternetNote) })
+            OnPropertyChanged(n);
 
         var load = r.Load;
         if (!trafficAvailable)

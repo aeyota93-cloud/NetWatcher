@@ -261,6 +261,7 @@ internal sealed partial class MainViewModel : ObservableObject
     {
         foreach (var c in Chips) c.IsOn = false;
         SearchText = "";
+        ProgramSearch = "";
     }
 
     /// <summary>Esc: close the export panel, else clear search and filters.</summary>

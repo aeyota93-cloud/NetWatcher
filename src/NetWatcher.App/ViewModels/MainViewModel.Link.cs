@@ -205,9 +205,11 @@ internal sealed partial class MainViewModel
             }
         }
 
+        ApplyProgramFigures(SelectedNav, SelectedNav != null ? recent.GetValueOrDefault(SelectedNav.Key) : null);
         NotifyServerFilter();
         PrepareServerLookups();
         if (IsOverviewPage) ApplyOverviewPage(programs, now);
+        else if (IsChecksPage) ApplyQuality();
         if (SelectedNav is null or { IsAll: true })
         {
             LinkShowAll = true;

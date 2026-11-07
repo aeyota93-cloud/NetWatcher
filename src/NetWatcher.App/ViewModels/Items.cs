@@ -63,6 +63,12 @@ public sealed class NavItem : ObservableObject
     public string Key { get; }
     public bool IsAll => Key == "";
 
+    /// <summary>The search over the programs list: name, process and path, any case.</summary>
+    public bool Matches(string query) => query.Trim() is not { Length: > 0 } q
+        || Title.Contains(q, StringComparison.OrdinalIgnoreCase)
+        || Subtitle.Contains(q, StringComparison.OrdinalIgnoreCase)
+        || Path.Contains(q, StringComparison.OrdinalIgnoreCase);
+
     /// <summary>"" for "all", then "Приложения" or "Службы Windows"; the list is grouped by it.</summary>
     public string Section { get; }
     public string Path { get; }

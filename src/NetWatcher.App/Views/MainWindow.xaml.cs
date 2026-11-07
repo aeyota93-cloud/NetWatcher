@@ -22,6 +22,14 @@ internal partial class MainWindow : Window
         // Programs list: "Приложения" and "Службы Windows" sections.
         var nav = CollectionViewSource.GetDefaultView(_vm.Nav);
         nav.GroupDescriptions.Add(new PropertyGroupDescription(nameof(NavItem.Section)));
+        nav.Filter = o => o is NavItem item && (item.IsAll || item.Matches(_vm.ProgramSearch));
+        _vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName != nameof(MainViewModel.ProgramSearch)) return;
+            nav.Refresh();
+            // A filtered-out program loses its highlight in the list; it comes back with the program.
+            NavList.SelectedItem = _vm.SelectedNav;
+        };
 
         // The domain tree has its own order; drop any column sort when going back to it.
         _vm.PropertyChanged += (_, e) =>
@@ -76,6 +84,26 @@ internal partial class MainWindow : Window
         ProgramPanel.Visibility = ProgramSplitter.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         NavColumn.MinWidth = show ? 200 : 0;
         NavColumn.Width = new GridLength(show ? Math.Clamp(_state.Settings.NavWidth, 200, NavColumn.MaxWidth) : 0);
+    }
+
+    private void OnProgramActions(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { ContextMenu: { } menu } button) return;
+        menu.PlacementTarget = button;
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        menu.IsOpen = true;
+    }
+
+    private void OnNarrowList(object sender, RoutedEventArgs e) => StepList(-30);
+
+    private void OnWidenList(object sender, RoutedEventArgs e) => StepList(30);
+
+    /// <summary>The list width without dragging: these buttons work from the keyboard.</summary>
+    private void StepList(double by)
+    {
+        NavColumn.Width = new GridLength(Math.Clamp(NavColumn.ActualWidth + by, NavColumn.MinWidth, NavColumn.MaxWidth));
+        _state.Settings.NavWidth = NavColumn.Width.Value;
+        _state.SaveSettings();
     }
 
     private void OnPanelsResized(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
@@ -157,13 +185,6 @@ internal partial class MainWindow : Window
     {
         if (e.OriginalSource is not DependencyObject source ||
             ItemsControl.ContainerFromElement(Grid, source) is not DataGridRow row) return;
-        if (e.ChangedButton == MouseButton.Left && FindParent<CheckBox>(source) != null)
-        {
-            // Without this the grid would treat the click as "select only this row".
-            row.IsSelected = !row.IsSelected;
-            e.Handled = true;
-            return;
-        }
         if (e.ChangedButton == MouseButton.Right)
         {
             if (!row.IsSelected) Grid.SelectedItem = row.Item;
@@ -205,17 +226,7 @@ internal partial class MainWindow : Window
         return null;
     }
 
-    private void OnTableSelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        _vm.SelectedCount = Grid.SelectedItems.Count;
-        AllRowsCheck.IsChecked = Grid.Items.Count > 0 && Grid.SelectedItems.Count == Grid.Items.Count;
-    }
-
-    private void OnCheckAllRows(object sender, RoutedEventArgs e)
-    {
-        if (AllRowsCheck.IsChecked == true) Grid.SelectAll();
-        else Grid.UnselectAll();
-    }
+    private void OnTableSelectionChanged(object sender, SelectionChangedEventArgs e) => _vm.SelectedCount = Grid.SelectedItems.Count;
 
     private void OnClearSelection(object sender, RoutedEventArgs e) => Grid.UnselectAll();
 
