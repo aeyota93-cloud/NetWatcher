@@ -211,28 +211,35 @@
                                        Visibility="{Binding MenuExpanded, Converter={StaticResource BoolToVis}}" />
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource MenuItem}" Command="{Binding ShowProgramsCommand}" Tag="{Binding IsProgramsSection}" ToolTip="Программы" AutomationProperties.Name="Программы">
+                    <Button Style="{StaticResource MenuItem}" Command="{Binding ShowOverviewCommand}" Tag="{Binding IsOverviewPage}" ToolTip="Обзор" AutomationProperties.Name="Обзор">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE80A;" Style="{StaticResource Icon}" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" FontSize="16" Width="18" />
+                            <TextBlock Text="Обзор" Margin="12,0,0,0" VerticalAlignment="Center" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                       Visibility="{Binding MenuExpanded, Converter={StaticResource BoolToVis}}" />
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource MenuItem}" Command="{Binding ShowProgramsCommand}" Tag="{Binding MenuPrograms}" ToolTip="Программы" AutomationProperties.Name="Программы">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE71D;" Style="{StaticResource Icon}" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" FontSize="16" Width="18" />
                             <TextBlock Text="Программы" Margin="12,0,0,0" VerticalAlignment="Center" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
                                        Visibility="{Binding MenuExpanded, Converter={StaticResource BoolToVis}}" />
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource MenuItem}" Command="{Binding ShowAllCommand}" Tag="{Binding IsAllSection}" ToolTip="Все соединения" AutomationProperties.Name="Все соединения">
+                    <Button Style="{StaticResource MenuItem}" Command="{Binding ShowAllCommand}" Tag="{Binding MenuAll}" ToolTip="Все соединения" AutomationProperties.Name="Все соединения">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE774;" Style="{StaticResource Icon}" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" FontSize="16" Width="18" />
                             <TextBlock Text="Все соединения" Margin="12,0,0,0" VerticalAlignment="Center" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
                                        Visibility="{Binding MenuExpanded, Converter={StaticResource BoolToVis}}" />
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource MenuItem}" Command="{Binding OpenEmptyCheckCommand}" ToolTip="Проверки" AutomationProperties.Name="Проверки">
+                    <Button Style="{StaticResource MenuItem}" Command="{Binding OpenEmptyCheckCommand}" Tag="{Binding IsChecksPage}" ToolTip="Проверки" AutomationProperties.Name="Проверки">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE9D9;" Style="{StaticResource Icon}" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" FontSize="16" Width="18" />
                             <TextBlock Text="Проверки" Margin="12,0,0,0" VerticalAlignment="Center" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
                                        Visibility="{Binding MenuExpanded, Converter={StaticResource BoolToVis}}" />
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource MenuItem}" Command="{Binding OpenBlocksCommand}" ToolTip="{Binding BlocksText}" AutomationProperties.Name="Блокировки">
+                    <Button Style="{StaticResource MenuItem}" Command="{Binding OpenBlocksCommand}" Tag="{Binding IsBlocksPage}" ToolTip="{Binding BlocksText}" AutomationProperties.Name="Блокировки">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE72E;" Style="{StaticResource Icon}" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" FontSize="16" Width="18" />
                             <TextBlock Text="{Binding BlocksText}" Margin="12,0,0,0" VerticalAlignment="Center" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
@@ -241,7 +248,7 @@
                     </Button>
                 </StackPanel>
                 <StackPanel DockPanel.Dock="Bottom">
-                    <Button Style="{StaticResource MenuItem}" Click="OnSettings" ToolTip="Настройки" AutomationProperties.Name="Настройки">
+                    <Button Style="{StaticResource MenuItem}" Click="OnSettings" Tag="{Binding IsSettingsPage}" ToolTip="Настройки" AutomationProperties.Name="Настройки">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE713;" Style="{StaticResource Icon}" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" FontSize="16" Width="18" />
                             <TextBlock Text="Настройки" Margin="12,0,0,0" VerticalAlignment="Center" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
@@ -274,14 +281,22 @@
         <DockPanel Margin="16,12,16,10">
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                 <Button Style="{StaticResource Btn}" Height="36" Margin="0,0,8,0" Command="{Binding ToggleListCommand}"
-                        Visibility="{Binding IsProgramsSection, Converter={StaticResource BoolToVis}}">
+                        Visibility="{Binding ShowListButton, Converter={StaticResource BoolToVis}}">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#xE89F;" Style="{StaticResource Icon}" Margin="0,0,8,0" />
                         <TextBlock Text="{Binding ProgramListText}" />
                     </StackPanel>
                 </Button>
-                <Button Style="{StaticResource FiltersButton}" Margin="0,0,8,0" Visibility="{Binding ShowSearchBox, Converter={StaticResource NotVis}}" />
-                <Button Style="{StaticResource BtnPrimary}" Height="36" Command="{Binding OpenExportCommand}" ToolTip="Ctrl+E">
+                <Button Style="{StaticResource FiltersButton}" Margin="0,0,8,0" Visibility="{Binding ShowHeadingFilters, Converter={StaticResource BoolToVis}}" />
+                <Button Style="{StaticResource BtnPrimary}" Height="36" Command="{Binding OpenEmptyCheckCommand}" ToolTip="Ctrl+D"
+                        Visibility="{Binding IsOverviewPage, Converter={StaticResource BoolToVis}}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE9D9;" Style="{StaticResource Icon}" Foreground="{DynamicResource OnAccentBrush}" Margin="0,0,8,0" />
+                        <TextBlock Text="Проверить сайт" />
+                    </StackPanel>
+                </Button>
+                <Button Style="{StaticResource BtnPrimary}" Height="36" Command="{Binding OpenExportCommand}" ToolTip="Ctrl+E"
+                        Visibility="{Binding IsMainPage, Converter={StaticResource BoolToVis}}">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#xE898;" Style="{StaticResource Icon}" Foreground="{DynamicResource OnAccentBrush}" Margin="0,0,8,0" />
                         <TextBlock Text="Экспорт списка" />
@@ -295,7 +310,7 @@
         </DockPanel>
 
         <!-- ============ Search and quick filters ============ -->
-        <DockPanel Grid.Row="1" Margin="16,0,16,8">
+        <DockPanel Grid.Row="1" Margin="16,0,16,8" Visibility="{Binding IsMainPage, Converter={StaticResource BoolToVis}}">
             <!-- Wraps to a second line in a narrow window instead of cutting chips off. -->
             <ItemsControl DockPanel.Dock="Bottom" ItemsSource="{Binding Chips}" Margin="0,8,0,0"
                           Visibility="{Binding ChipsVisible, Converter={StaticResource BoolToVis}}">
@@ -408,8 +423,176 @@
         </Border>
         </StackPanel>
 
+        <!-- ============ Overview ============ -->
+        <ScrollViewer Grid.Row="3" Margin="16,0,16,6" VerticalScrollBarVisibility="Auto" Visibility="{Binding IsOverviewPage, Converter={StaticResource BoolToVis}}">
+            <StackPanel>
+                <UniformGrid Columns="4" Margin="0,0,-10,12">
+                    <Border Style="{StaticResource PagePanel}" Padding="14" Margin="0,0,10,0">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE71D;" Style="{StaticResource Icon}" Foreground="{DynamicResource Text3Brush}" Margin="0,0,8,0" />
+                                <TextBlock Text="Программ в сети" Style="{StaticResource Muted}" FontSize="12" />
+                            </StackPanel>
+                            <TextBlock Text="{Binding OvPrograms}" FontSize="26" FontWeight="SemiBold" Margin="0,8,0,2"></TextBlock>
+                            <TextBlock Text="{Binding OvProgramsHint}" Style="{StaticResource Muted}" FontSize="11.5" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource PagePanel}" Padding="14" Margin="0,0,10,0">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE8AB;" Style="{StaticResource Icon}" Foreground="{DynamicResource Text3Brush}" Margin="0,0,8,0" />
+                                <TextBlock Text="Передано" Style="{StaticResource Muted}" FontSize="12" />
+                            </StackPanel>
+                            <TextBlock Text="{Binding OvTraffic}" FontSize="26" FontWeight="SemiBold" Margin="0,8,0,2"></TextBlock>
+                            <TextBlock Text="{Binding OvTrafficHint}" Style="{StaticResource Muted}" FontSize="11.5" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource PagePanel}" Padding="14" Margin="0,0,10,0">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE774;" Style="{StaticResource Icon}" Foreground="{DynamicResource Text3Brush}" Margin="0,0,8,0" />
+                                <TextBlock Text="Адресов замечено" Style="{StaticResource Muted}" FontSize="12" />
+                            </StackPanel>
+                            <TextBlock Text="{Binding OvAddresses}" FontSize="26" FontWeight="SemiBold" Margin="0,8,0,2"></TextBlock>
+                            <TextBlock Text="{Binding OvAddressesHint}" Style="{StaticResource Muted}" FontSize="11.5" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource PagePanel}" Padding="14" Margin="0,0,10,0">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE7BA;" Style="{StaticResource Icon}" Foreground="{DynamicResource Text3Brush}" Margin="0,0,8,0" />
+                                <TextBlock Text="Адресов с проблемами" Style="{StaticResource Muted}" FontSize="12" />
+                            </StackPanel>
+                            <TextBlock Text="{Binding OvProblems}" FontSize="26" FontWeight="SemiBold" Margin="0,8,0,2">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding OvHasProblems}" Value="True">
+                                                <Setter Property="Foreground" Value="{DynamicResource WarnBrush}" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <TextBlock Text="{Binding OvProblemsHint}" Style="{StaticResource Muted}" FontSize="11.5" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </Border>
+                </UniformGrid>
+                <Grid Margin="0,0,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="1.27*" />
+                        <ColumnDefinition Width="12" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Style="{StaticResource PagePanel}" Padding="16,12">
+                        <DockPanel>
+                            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+                                <TextBlock DockPanel.Dock="Right" Text="{Binding OvLinkText}" VerticalAlignment="Center" FontSize="12">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource Muted}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding OvLinkLevel}" Value="Ok">
+                                                    <Setter Property="Foreground" Value="{DynamicResource OkBrush}" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding OvLinkLevel}" Value="Warn">
+                                                    <Setter Property="Foreground" Value="{DynamicResource WarnBrush}" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding OvLinkLevel}" Value="Fail">
+                                                    <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                                <TextBlock Text="Связь с интернетом" FontSize="15" FontWeight="SemiBold" />
+                            </DockPanel>
+                            <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition />
+                                    <RowDefinition />
+                                </Grid.RowDefinitions>
+                                <TextBlock Text="{Binding QualityInternetLabel}" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,14,2" />
+                                <TextBlock Grid.Column="1" Text="{Binding QualityInternet}" FontSize="12" />
+                                <TextBlock Grid.Row="1" Text="{Binding QualityGatewayLabel}" Style="{StaticResource Muted}" FontSize="12" Margin="0,0,14,0" />
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding QualityGateway}" FontSize="12" />
+                            </Grid>
+                            <v:LinkChart Height="170" Points="{Binding OvChart}" />
+                        </DockPanel>
+                    </Border>
+                    <Border Grid.Column="2" Style="{StaticResource PagePanel}" Padding="10,12">
+                        <DockPanel>
+                            <DockPanel DockPanel.Dock="Top" Margin="6,0,6,8">
+                                <Button DockPanel.Dock="Right" Style="{StaticResource BtnSmall}" Content="Все соединения" Command="{Binding ShowAllCommand}" />
+                                <TextBlock Text="Программы" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            </DockPanel>
+                            <ItemsControl ItemsSource="{Binding OvTopPrograms}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:NavItem}">
+                                        <Button Style="{StaticResource PageRow}" ToolTip="{Binding Path}"
+                                                Command="{Binding DataContext.OpenProgramCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding Key}">
+                                            <DockPanel>
+                                                <TextBlock DockPanel.Dock="Right" Text="{Binding Count}" Style="{StaticResource Muted}" FontSize="12" VerticalAlignment="Center" Margin="8,0,0,0" />
+                                                <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource Avatar}" Margin="0,0,10,0" />
+                                                <StackPanel VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Muted}" FontSize="11.5" TextTrimming="CharacterEllipsis" />
+                                                </StackPanel>
+                                            </DockPanel>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </DockPanel>
+                    </Border>
+                </Grid>
+                <Border Style="{StaticResource PagePanel}" Padding="16,12">
+                    <StackPanel>
+                        <TextBlock Text="Что изменилось" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,8" />
+                        <TextBlock Text="За этот период изменений не замечено." Style="{StaticResource Muted}"
+                                   Visibility="{Binding HasOvEvents, Converter={StaticResource NotVis}}" />
+                        <ItemsControl ItemsSource="{Binding OvEvents}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:OverviewEvent}">
+                                    <Button Style="{StaticResource PageRow}" ToolTip="Открыть программу"
+                                            Command="{Binding DataContext.OpenProgramCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding Key}">
+                                        <DockPanel>
+                                            <TextBlock Text="{Binding Time}" Style="{StaticResource Muted}" FontFamily="{StaticResource MonoFont}" FontSize="12" Width="48" VerticalAlignment="Center" />
+                                            <Ellipse Width="7" Height="7" Margin="0,0,10,0" VerticalAlignment="Center">
+                                                <Ellipse.Style>
+                                                    <Style TargetType="Ellipse">
+                                                        <Setter Property="Fill" Value="{DynamicResource AccentBrush}" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Level}" Value="Fail">
+                                                                <Setter Property="Fill" Value="{DynamicResource WarnBrush}" />
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding Level}" Value="Ok">
+                                                                <Setter Property="Fill" Value="{DynamicResource OkBrush}" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Ellipse.Style>
+                                            </Ellipse>
+                                            <StackPanel VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{Binding Detail}" Style="{StaticResource Muted}" FontSize="11.5"
+                                                           Visibility="{Binding Detail, Converter={StaticResource TextVis}}" />
+                                            </StackPanel>
+                                        </DockPanel>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
         <!-- ============ Body ============ -->
-        <Border Grid.Row="3" Margin="16,0,16,6">
+        <Border Grid.Row="3" Margin="16,0,16,6" Visibility="{Binding IsMainPage, Converter={StaticResource BoolToVis}}">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition x:Name="NavColumn" Width="280" MinWidth="200" MaxWidth="520" />
@@ -1600,10 +1783,31 @@
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16,12">
                     <Grid>
                         <!-- Selected address or domain -->
-                        <WrapPanel Visibility="{Binding HasSelection, Converter={StaticResource BoolToVis}}">
-                            <StackPanel Width="330" Margin="0,0,24,0">
-                                <DockPanel Margin="0,0,0,14">
+                        <StackPanel Visibility="{Binding HasSelection, Converter={StaticResource BoolToVis}}">
+<DockPanel Margin="0,0,0,10">
                                     <Button DockPanel.Dock="Right" Style="{StaticResource BtnGhost}" Content="&#xE711;" ToolTip="Закрыть" Click="OnCloseDetails" VerticalAlignment="Top" />
+<WrapPanel DockPanel.Dock="Right" Margin="12,0,6,0" VerticalAlignment="Center">
+                                    <Button Style="{StaticResource BtnPrimarySmall}" Margin="0,0,8,8" Command="{Binding OpenCheckCommand}"
+                                            ToolTip="Почему не работает: DNS, подключение, блокировка по имени, задержка, трасса (Ctrl+D)">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="&#xE9D9;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,6,0" />
+                                            <TextBlock Text="Проверить соединение" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Style="{StaticResource BtnSmall}" Margin="0,0,8,8" Command="{Binding PeeringDbCommand}"
+                                            ToolTip="Кто владелец сети: название и тип по открытому справочнику PeeringDB">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="&#xE779;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,6,0" />
+                                            <TextBlock Text="Владелец (PeeringDB)" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Style="{StaticResource BtnSmall}" Margin="0,0,8,8" Command="{Binding RdapCommand}" ToolTip="Спросить у реестра IP-адресов (RIPE, ARIN…) точный блок и организацию">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="&#xE774;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,6,0" />
+                                            <TextBlock Text="Подробно о сети (RDAP)" />
+                                        </StackPanel>
+                                    </Button>
+                                </WrapPanel>
                                     <Border Width="32" Height="32" CornerRadius="8" Background="{DynamicResource AccentSoftBrush}" Margin="0,0,10,0" VerticalAlignment="Top">
                                         <TextBlock Text="&#xE774;" Style="{StaticResource Icon}" Foreground="{DynamicResource AccentBrush}" />
                                     </Border>
@@ -1617,6 +1821,8 @@
                                         <TextBlock Text="{Binding D[Subtitle]}" Style="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" />
                                     </StackPanel>
                                 </DockPanel>
+<WrapPanel>
+                            <StackPanel Width="300" Margin="0,0,20,0">
 
                                 <TextBlock Text="{Binding D[IpLabel], Converter={StaticResource Upper}}" Style="{StaticResource Caption}" />
                                 <Border Style="{StaticResource Field}" Margin="0,0,0,12">
@@ -1638,7 +1844,7 @@
                                     </DockPanel>
                                 </Border>
                             </StackPanel>
-                            <StackPanel Width="330" Margin="0,0,24,0">
+                            <StackPanel Width="300" Margin="0,0,20,0">
                                 <DockPanel Margin="0,0,0,4">
                                     <Border DockPanel.Dock="Right" Style="{StaticResource SegmentHost}" Padding="1">
                                         <StackPanel Orientation="Horizontal">
@@ -1715,7 +1921,7 @@
                                     </Grid>
                                 </Border>
                             </StackPanel>
-                            <StackPanel Width="330" Margin="0,0,24,0">
+                            <StackPanel Width="300" Margin="0,0,20,0">
                                 <StackPanel Visibility="{Binding D[WhatAny], Converter={StaticResource TextVis}}">
                                     <TextBlock Text="ЧТО ЭТО" Style="{StaticResource Caption}" />
                                     <Border Style="{StaticResource Card}" Margin="0,0,0,12">
@@ -1733,31 +1939,8 @@
                                         </StackPanel>
                                     </Border>
                                 </StackPanel>
-
-                                <WrapPanel Margin="0,0,0,12">
-                                    <Button Style="{StaticResource BtnPrimarySmall}" Margin="0,0,8,8" Command="{Binding OpenCheckCommand}"
-                                            ToolTip="Почему не работает: DNS, подключение, блокировка по имени, задержка, трасса (Ctrl+D)">
-                                        <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="&#xE9D9;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,6,0" />
-                                            <TextBlock Text="Проверить соединение" />
-                                        </StackPanel>
-                                    </Button>
-                                    <Button Style="{StaticResource BtnSmall}" Margin="0,0,8,8" Command="{Binding PeeringDbCommand}"
-                                            ToolTip="Кто владелец сети: название и тип по открытому справочнику PeeringDB">
-                                        <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="&#xE779;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,6,0" />
-                                            <TextBlock Text="Владелец (PeeringDB)" />
-                                        </StackPanel>
-                                    </Button>
-                                    <Button Style="{StaticResource BtnSmall}" Margin="0,0,8,8" Command="{Binding RdapCommand}" ToolTip="Спросить у реестра IP-адресов (RIPE, ARIN…) точный блок и организацию">
-                                        <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="&#xE774;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,6,0" />
-                                            <TextBlock Text="Подробно о сети (RDAP)" />
-                                        </StackPanel>
-                                    </Button>
-                                </WrapPanel>
                             </StackPanel>
-                            <StackPanel Width="330" Margin="0,0,24,0">
+                            <StackPanel Width="300" Margin="0,0,20,0">
                                 <Border Style="{StaticResource Card}" Margin="0,0,0,12" Visibility="{Binding HasPdb, Converter={StaticResource BoolToVis}}">
                                     <DockPanel>
                                         <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
@@ -1787,51 +1970,46 @@
                                 </TextBlock>
                             </StackPanel>
                         </WrapPanel>
+</StackPanel>
 
                         <!-- Nothing selected: summary of the program -->
-                        <WrapPanel Visibility="{Binding NoSelection, Converter={StaticResource BoolToVis}}">
-                            <StackPanel Width="330" Margin="0,0,24,0">
-                                <TextBlock Text="{Binding D[SumTitle], Converter={StaticResource Upper}}" Style="{StaticResource Caption}" TextWrapping="Wrap" />
-                                <Border Style="{StaticResource Card}" Margin="0,0,0,16">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
-                                        </Grid.RowDefinitions>
-                                        <Grid.Resources>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="FontSize" Value="12" />
-                                                <Setter Property="Margin" Value="0,3,14,3" />
-                                                <Setter Property="TextWrapping" Value="Wrap" />
-                                            </Style>
-                                        </Grid.Resources>
-                                        <TextBlock Text="Адресов" Foreground="{DynamicResource Text3Brush}" />
-                                        <TextBlock Grid.Column="1" Text="{Binding D[SumAddresses]}" />
-                                        <TextBlock Grid.Row="1" Text="Сетей владельцев" Foreground="{DynamicResource Text3Brush}" />
-                                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding D[SumNetworks]}" />
-                                        <TextBlock Grid.Row="2" Text="Страны" Foreground="{DynamicResource Text3Brush}" />
-                                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding D[SumCountries]}" />
-                                        <TextBlock Grid.Row="3" Text="Без домена" Foreground="{DynamicResource Text3Brush}" />
-                                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding D[SumNoDomain]}" />
-                                        <TextBlock Grid.Row="4" Text="Трафик" Foreground="{DynamicResource Text3Brush}" />
-                                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding D[SumTraffic]}"
-                                                   ToolTip="За выбранный период: получено ↓ и отправлено ↑. Полезные данные без заголовков пакетов" />
-                                        <TextBlock Grid.Row="5" Text="Скорость" Foreground="{DynamicResource Text3Brush}" />
-                                        <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding D[SumSpeed]}" ToolTip="Средняя за последние 10 секунд" />
-                                        <TextBlock Grid.Row="6" Text="Трекеры" Foreground="{DynamicResource Text3Brush}" />
-                                        <TextBlock Grid.Row="7" Grid.ColumnSpan="2" Margin="0,6,0,0">
-                                            <Hyperlink Command="{Binding OpenHistoryCommand}">Трафик за 30 дней по данным Windows…</Hyperlink>
-                                        </TextBlock>
-                                        <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding D[SumMarked]}"
-                                                   ToolTip="По каталогу DuckDuckGo и WindowsSpyBlocker; фильтры «Трекеры» и «Телеметрия» покажут их" />
-                                    </Grid>
-                                </Border>
-                            </StackPanel>
-                            <StackPanel Width="330" Margin="0,0,24,0">
-                                <StackPanel Visibility="{Binding D[SumAny], Converter={StaticResource TextVis}}">
+                        <StackPanel Visibility="{Binding NoSelection, Converter={StaticResource BoolToVis}}">
+            <TextBlock Text="{Binding D[SumTitle], Converter={StaticResource Upper}}" Style="{StaticResource Caption}" Margin="0,0,0,8" />
+            <WrapPanel>
+                <StackPanel Width="190" Margin="0,0,14,10">
+                    <TextBlock Text="Адресов" Foreground="{DynamicResource Text3Brush}" FontSize="12" />
+                    <TextBlock Text="{Binding D[SumAddresses]}" FontSize="12.5" TextWrapping="Wrap" />
+                </StackPanel>
+                <StackPanel Width="190" Margin="0,0,14,10">
+                    <TextBlock Text="Сетей владельцев" Foreground="{DynamicResource Text3Brush}" FontSize="12" />
+                    <TextBlock Text="{Binding D[SumNetworks]}" FontSize="12.5" TextWrapping="Wrap" />
+                </StackPanel>
+                <StackPanel Width="190" Margin="0,0,14,10">
+                    <TextBlock Text="Страны" Foreground="{DynamicResource Text3Brush}" FontSize="12" />
+                    <TextBlock Text="{Binding D[SumCountries]}" FontSize="12.5" TextWrapping="Wrap" />
+                </StackPanel>
+                <StackPanel Width="190" Margin="0,0,14,10">
+                    <TextBlock Text="Без домена" Foreground="{DynamicResource Text3Brush}" FontSize="12" />
+                    <TextBlock Text="{Binding D[SumNoDomain]}" FontSize="12.5" TextWrapping="Wrap" />
+                </StackPanel>
+                <StackPanel Width="190" Margin="0,0,14,10" ToolTip="За выбранный период: получено ↓ и отправлено ↑. Полезные данные без заголовков пакетов">
+                    <TextBlock Text="Трафик" Foreground="{DynamicResource Text3Brush}" FontSize="12" />
+                    <TextBlock Text="{Binding D[SumTraffic]}" FontSize="12.5" TextWrapping="Wrap" />
+                </StackPanel>
+                <StackPanel Width="190" Margin="0,0,14,10" ToolTip="Средняя за последние 10 секунд">
+                    <TextBlock Text="Скорость" Foreground="{DynamicResource Text3Brush}" FontSize="12" />
+                    <TextBlock Text="{Binding D[SumSpeed]}" FontSize="12.5" TextWrapping="Wrap" />
+                </StackPanel>
+                <StackPanel Width="190" Margin="0,0,14,10" ToolTip="По каталогу DuckDuckGo и WindowsSpyBlocker; фильтры «Трекеры» и «Телеметрия» покажут их">
+                    <TextBlock Text="Трекеры" Foreground="{DynamicResource Text3Brush}" FontSize="12" />
+                    <TextBlock Text="{Binding D[SumMarked]}" FontSize="12.5" TextWrapping="Wrap" />
+                </StackPanel>
+            </WrapPanel>
+            <WrapPanel Margin="0,0,0,10">
+                <Button Style="{StaticResource BtnSmall}" Content="Трафик за 30 дней по данным Windows…" Command="{Binding OpenHistoryCommand}" Margin="0,0,12,0" />
+                <TextBlock Text="Выберите строку в таблице, чтобы увидеть подробности: домены, сеть, владельца и данные реестра." Style="{StaticResource Muted}" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap" />
+            </WrapPanel>
+            <StackPanel Visibility="{Binding D[SumAny], Converter={StaticResource TextVis}}">
                                     <TextBlock Text="ЧТО ЭТО" Style="{StaticResource Caption}" />
                                     <Border Style="{StaticResource Card}" Margin="0,0,0,16">
                                         <StackPanel>
@@ -1848,12 +2026,7 @@
                                         </StackPanel>
                                     </Border>
                                 </StackPanel>
-                            </StackPanel>
-                            <StackPanel Width="330" Margin="0,0,24,0">
-                                <TextBlock Style="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap"
-                                           Text="Выберите строку в таблице, чтобы увидеть подробности: домены, сеть, владельца и данные реестра." />
-                            </StackPanel>
-                        </WrapPanel>
+        </StackPanel>
                     </Grid>
                 </ScrollViewer>
                 </Border>
@@ -1942,7 +2115,7 @@
         </Border>
 
         <!-- ============ Toast ============ -->
-        <Border Grid.Row="3" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,18" Padding="14,9" CornerRadius="8"
+        <Border Grid.Row="3" Panel.ZIndex="10" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,18" Padding="14,9" CornerRadius="8"
                 Background="{DynamicResource ToastBrush}" Visibility="{Binding ToastVisible, Converter={StaticResource BoolToVis}}">
             <Border.Effect>
                 <DropShadowEffect BlurRadius="18" ShadowDepth="3" Opacity="0.3" />
@@ -1962,13 +2135,9 @@
             </StackPanel>
         </Border>
 
-        <!-- ============ Connection check side panel ============ -->
+        <!-- ============ Page: connection check ============ -->
         <Grid Grid.RowSpan="5" DataContext="{Binding Diagnostics}" Visibility="{Binding IsOpen, Converter={StaticResource BoolToVis}}">
-            <Border Background="#47000000" MouseLeftButtonDown="OnCheckScrimClick" />
-            <Border Width="660" HorizontalAlignment="Right" Background="{DynamicResource LayerBrush}">
-                <Border.Effect>
-                    <DropShadowEffect BlurRadius="24" ShadowDepth="0" Opacity="0.35" />
-                </Border.Effect>
+            <Border Background="{DynamicResource BgBrush}">
                 <DockPanel>
                     <DockPanel DockPanel.Dock="Top" Margin="20,18,20,12">
                         <Button DockPanel.Dock="Right" Style="{StaticResource BtnGhost}" Content="&#xE711;" ToolTip="Закрыть (Esc)" Command="{Binding CloseCommand}" />
@@ -2201,6 +2370,10 @@
                 </DockPanel>
             </Border>
         </Grid>
+
+        <!-- ============ Pages: blocks and settings ============ -->
+        <v:BlocksPage x:Name="BlocksView" Grid.RowSpan="5" Visibility="{Binding IsBlocksPage, Converter={StaticResource BoolToVis}}" />
+        <v:SettingsPage x:Name="SettingsView" Grid.RowSpan="5" Visibility="{Binding IsSettingsPage, Converter={StaticResource BoolToVis}}" />
 
         <!-- ============ Export side panel ============ -->
         <Grid Grid.RowSpan="5" DataContext="{Binding Export}" Visibility="{Binding IsOpen, Converter={StaticResource BoolToVis}}">

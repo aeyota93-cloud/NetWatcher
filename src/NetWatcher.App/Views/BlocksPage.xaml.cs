@@ -6,17 +6,29 @@ using NetWatcher.Core.Blocking;
 namespace NetWatcher.App.Views;
 
 /// <summary>The list of blocks made from NetWatcher, with "Снять" for each and for all.</summary>
-internal partial class BlocksWindow : Window
+internal partial class BlocksPage : System.Windows.Controls.UserControl
 {
     public sealed record Line(BlockRule Rule, string Title, string Detail, string Problem);
 
-    private readonly AppState _state;
+    private AppState _state = null!;
 
-    public BlocksWindow(AppState state)
+    public BlocksPage()
     {
         InitializeComponent();
+        IsVisibleChanged += (_, e) =>
+        {
+            if (e.NewValue is true && _state != null) Fill();
+        };
+    }
+
+    public void Init(AppState state)
+    {
         _state = state;
-        Fill();
+        // A block made from a row while this page is on screen must show up at once.
+        state.Blocks.Changed += () => Dispatcher.BeginInvoke(() =>
+        {
+            if (IsVisible) Fill();
+        });
     }
 
     private void Fill()
@@ -31,6 +43,7 @@ internal partial class BlocksWindow : Window
             _state.Blocks.IsMissing(r) ? "Правило удалено в брандмауэре — блокировка не действует. «Снять» уберёт её из списка." : "")).ToList();
         Empty.Visibility = rules.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         RemoveAllButton.IsEnabled = rules.Count > 0;
+        Status.Text = "";
         if (BlockService.FirewallOn() == false && rules.Count > 0)
             Status.Text = "Брандмауэр Windows выключен — правила сейчас не действуют.";
     }
@@ -39,16 +52,16 @@ internal partial class BlocksWindow : Window
     {
         if (sender is not FrameworkElement { Tag: BlockRule rule }) return;
         var (ok, message) = _state.Blocks.Remove(rule);
-        Status.Text = ok ? $"Снято: {rule.Describe()}" : message;
         Fill();
+        Status.Text = ok ? $"Снято: {rule.Describe()}" : message;
     }
 
     private void OnRemoveAll(object sender, RoutedEventArgs e)
     {
         var rules = _state.Blocks.Rules;
-        if (MessageBox.Show(this, $"Снять все блокировки ({rules.Count})?", "Блокировки", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+        if (MessageBox.Show(Window.GetWindow(this)!, $"Снять все блокировки ({rules.Count})?", "Блокировки", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
         var failed = rules.Select(r => _state.Blocks.Remove(r)).Count(r => !r.Ok);
-        Status.Text = failed == 0 ? "Все блокировки сняты." : $"Не удалось снять: {failed}.";
         Fill();
+        Status.Text = failed == 0 ? "Все блокировки сняты." : $"Не удалось снять: {failed}.";
     }
 }

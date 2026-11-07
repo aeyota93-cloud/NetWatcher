@@ -5,16 +5,33 @@ using NetWatcher.Core.Asn;
 
 namespace NetWatcher.App.Views;
 
-internal partial class SettingsWindow : Window
+internal partial class SettingsPage : System.Windows.Controls.UserControl
 {
-    private readonly AppState _state;
-    private readonly Func<Task<string>>? _checkUpdates;
+    private AppState _state = null!;
+    private Func<Task<string>>? _checkUpdates;
 
-    public SettingsWindow(AppState state, Func<Task<string>>? checkUpdates = null)
+    public event Action? Saved;
+    public event Action? Cancelled;
+
+    public SettingsPage()
     {
         InitializeComponent();
+        // Every visit starts from what is saved: "Отмена" and leaving by the menu drop the edits.
+        IsVisibleChanged += (_, e) =>
+        {
+            if (e.NewValue is true && _state != null) Load();
+        };
+    }
+
+    public void Init(AppState state, Func<Task<string>> checkUpdates)
+    {
         _state = state;
         _checkUpdates = checkUpdates;
+    }
+
+    private void Load()
+    {
+        var state = _state;
         CheckUpdates.IsChecked = state.Settings.CheckUpdates;
         Retention.Text = state.Settings.RetentionDays.ToString();
         Poll.Text = state.Settings.PollSeconds.ToString();
@@ -46,13 +63,13 @@ internal partial class SettingsWindow : Window
     {
         if (!int.TryParse(Retention.Text.Trim(), out var days) || days is < 1 or > 365)
         {
-            MessageBox.Show(this, "Срок хранения — целое число дней от 1 до 365.", "Настройки", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(Window.GetWindow(this)!, "Срок хранения — целое число дней от 1 до 365.", "Настройки", MessageBoxButton.OK, MessageBoxImage.Warning);
             Retention.Focus();
             return;
         }
         if (!int.TryParse(Poll.Text.Trim(), out var poll) || poll is < 1 or > 60)
         {
-            MessageBox.Show(this, "Интервал опроса — целое число секунд от 1 до 60.", "Настройки", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(Window.GetWindow(this)!, "Интервал опроса — целое число секунд от 1 до 60.", "Настройки", MessageBoxButton.OK, MessageBoxImage.Warning);
             Poll.Focus();
             return;
         }
@@ -72,15 +89,17 @@ internal partial class SettingsWindow : Window
         _state.SaveSettings();
         ThemeService.Apply(s.Theme);
         if (shorter) _state.Collector.PurgeSoon();
-        DialogResult = true;
+        Saved?.Invoke();
     }
+
+    private void OnCancel(object sender, RoutedEventArgs e) => Cancelled?.Invoke();
 
     private void OnOpenFolder(object sender, RoutedEventArgs e) =>
         Process.Start(new ProcessStartInfo("explorer.exe", $"\"{AppPaths.DataDir}\"") { UseShellExecute = true });
 
     private void OnClear(object sender, RoutedEventArgs e)
     {
-        if (MessageBox.Show(this, "Удалить всю историю соединений и DNS? Это нельзя отменить.", "Очистить историю",
+        if (MessageBox.Show(Window.GetWindow(this)!, "Удалить всю историю соединений и DNS? Это нельзя отменить.", "Очистить историю",
                 MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
         _state.Store.Clear();
         _state.Alerts.Reset();
@@ -95,7 +114,7 @@ internal partial class SettingsWindow : Window
             Title = "Файл базы владельцев IP",
             Filter = "База iptoasn (ip2asn-combined.tsv.gz)|*.gz;*.tsv|Все файлы (*.*)|*.*",
         };
-        if (dialog.ShowDialog(this) != true) return;
+        if (dialog.ShowDialog(Window.GetWindow(this)) != true) return;
         try
         {
             _state.Asn = AsnUpdater.Import(dialog.FileName, AppPaths.AsnDatabase);
@@ -122,7 +141,7 @@ internal partial class SettingsWindow : Window
             Title = "Файл базы стран DB-IP",
             Filter = "DB-IP IP to Country Lite (*.csv.gz, *.csv)|*.gz;*.csv|Все файлы (*.*)|*.*",
         };
-        if (dialog.ShowDialog(this) != true) return;
+        if (dialog.ShowDialog(Window.GetWindow(this)) != true) return;
         try
         {
             _state.Geo = Core.Geo.GeoUpdater.Import(dialog.FileName, AppPaths.GeoDatabase);

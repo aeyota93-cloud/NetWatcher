@@ -207,6 +207,7 @@ internal sealed partial class MainViewModel
 
         NotifyServerFilter();
         PrepareServerLookups();
+        if (IsOverviewPage) ApplyOverviewPage(programs, now);
         if (SelectedNav is null or { IsAll: true })
         {
             LinkShowAll = true;

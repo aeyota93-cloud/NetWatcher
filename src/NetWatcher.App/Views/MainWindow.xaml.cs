@@ -35,6 +35,15 @@ internal partial class MainWindow : Window
         NavColumn.Width = new GridLength(Math.Clamp(state.Settings.NavWidth, NavColumn.MinWidth, NavColumn.MaxWidth));
         DetailsRow.Height = new GridLength(Math.Clamp(state.Settings.DetailsHeight, DetailsRow.MinHeight, 600));
         ApplyProgramList();
+        BlocksView.Init(state);
+        SettingsView.Init(state, _vm.CheckUpdatesNowAsync);
+        SettingsView.Saved += () =>
+        {
+            _vm.SettingsChanged();
+            _vm.UpdateStatus();
+            _vm.ShowPage(AppPage.Main);
+        };
+        SettingsView.Cancelled += () => _vm.ShowPage(AppPage.Main);
         _vm.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(MainViewModel.IsProgramListVisible)) ApplyProgramList();
@@ -244,8 +253,6 @@ internal partial class MainWindow : Window
 
     private void OnScrimClick(object sender, MouseButtonEventArgs e) => _vm.Export.IsOpen = false;
 
-    private void OnCheckScrimClick(object sender, MouseButtonEventArgs e) => _vm.Diagnostics.CloseCommand.Execute(null);
-
     private void FocusCheckBox() =>
         Dispatcher.BeginInvoke(() =>
         {
@@ -254,11 +261,5 @@ internal partial class MainWindow : Window
             CheckBox.SelectAll();
         }, System.Windows.Threading.DispatcherPriority.Input);
 
-    /// <summary>The theme button opens its menu on a normal click, under the button.</summary>
-    private void OnSettings(object sender, RoutedEventArgs e)
-    {
-        var window = new SettingsWindow(_state, _vm.CheckUpdatesNowAsync) { Owner = this };
-        if (window.ShowDialog() == true) _vm.SettingsChanged();
-        _vm.UpdateStatus();
-    }
+    private void OnSettings(object sender, RoutedEventArgs e) => _vm.ShowPage(AppPage.Settings);
 }

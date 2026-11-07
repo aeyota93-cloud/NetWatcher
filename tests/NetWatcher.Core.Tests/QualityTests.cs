@@ -35,6 +35,29 @@ public class QualityTests
     }
 
     [Fact]
+    public void Internet_chart_shows_delay_and_missing_replies()
+    {
+        var now = new DateTimeOffset(2026, 11, 7, 12, 0, 0, TimeSpan.Zero);
+        var q = new QualityMonitor(TimeSpan.FromMinutes(20));
+        q.AddPing(false, now.AddMinutes(-9), 40);
+        q.AddPing(false, now.AddMinutes(-9).AddSeconds(2), 60);
+        q.AddPing(false, now.AddMinutes(-1), null);
+        q.AddPing(false, now.AddMinutes(-30), 500);
+        q.AddPing(true, now.AddMinutes(-1), 1);
+
+        var chart = q.InternetChart(now, TimeSpan.FromMinutes(10), 10);
+
+        Assert.Equal(2, chart.Count);
+        Assert.Equal(50, chart[0].LatencyMs);
+        Assert.Equal(0, chart[0].LossPercent);
+        Assert.Null(chart[1].LatencyMs);
+        Assert.Equal(100, chart[1].LossPercent);
+        // No reply to a ping is not a proof of a broken link.
+        Assert.False(chart[1].Down);
+        Assert.Empty(new QualityMonitor(TimeSpan.FromMinutes(20)).InternetChart(now, TimeSpan.FromMinutes(10), 10));
+    }
+
+    [Fact]
     public void Aim_thresholds()
     {
         Assert.Equal(20, Aim.LatencyPoints(9.9));

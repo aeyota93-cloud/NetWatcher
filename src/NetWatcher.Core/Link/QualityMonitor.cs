@@ -87,6 +87,26 @@ public sealed class QualityMonitor(TimeSpan history)
         }
     }
 
+    /// <summary>Reference pings to the internet as chart points: average delay and the share without a reply.</summary>
+    public IReadOnlyList<ChartPoint> InternetChart(DateTimeOffset now, TimeSpan window, int points)
+    {
+        lock (_lock)
+        {
+            var from = now - window;
+            var step = window / points;
+            return _internet.Where(p => p.Time >= from && p.Time <= now)
+                .GroupBy(p => Math.Min(points - 1, (int)((p.Time - from) / step)))
+                .OrderBy(g => g.Key)
+                .Select(g =>
+                {
+                    var replies = g.Where(p => p.Rtt != null).Select(p => p.Rtt!.Value).ToList();
+                    return new ChartPoint(from + step * g.Key, replies.Count > 0 ? replies.Average() : null,
+                        100.0 * (g.Count() - replies.Count) / g.Count(), false, g.Count());
+                })
+                .ToList();
+        }
+    }
+
     public QualityReport Report(DateTimeOffset now, TimeSpan window, double? downloadBps = null, double? uploadBps = null, double? testIncreaseMs = null,
         bool trafficAvailable = true)
     {

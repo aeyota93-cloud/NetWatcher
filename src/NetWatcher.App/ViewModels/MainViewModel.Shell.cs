@@ -2,14 +2,20 @@ using System.Diagnostics;
 
 namespace NetWatcher.App.ViewModels;
 
+/// <summary>What fills the window; "Main" is a program or "Все соединения".</summary>
+internal enum AppPage { Main, Overview, Checks, Blocks, Settings }
+
 /// <summary>The window frame: the menu on the left, the sections, the programs list and the quick filters panel.</summary>
 internal sealed partial class MainViewModel
 {
     private const string GuideUrl = "https://github.com/aeyota93-cloud/NetWatcher/blob/main/docs/guide.md";
 
     private NavItem? _lastProgram;
+    private AppPage _page;
     private bool _filtersOpen;
 
+    public RelayCommand ShowOverviewCommand { get; private set; } = null!;
+    public RelayCommand OpenProgramCommand { get; private set; } = null!;
     public RelayCommand ShowProgramsCommand { get; private set; } = null!;
     public RelayCommand ShowAllCommand { get; private set; } = null!;
     public RelayCommand ToggleRailCommand { get; private set; } = null!;
@@ -20,8 +26,29 @@ internal sealed partial class MainViewModel
     /// <summary>Called from the constructor: the window binds to these commands right after it.</summary>
     private void InitShell()
     {
-        ShowProgramsCommand = new RelayCommand(ShowPrograms);
-        ShowAllCommand = new RelayCommand(() => SelectedNav = Nav[0]);
+        ShowOverviewCommand = new RelayCommand(() => ShowPage(AppPage.Overview));
+        OpenProgramCommand = new RelayCommand(p =>
+        {
+            ShowPage(AppPage.Main);
+            if (Nav.FirstOrDefault(n => n.Key == p as string) is { } program) SelectedNav = program;
+        });
+        ShowProgramsCommand = new RelayCommand(() =>
+        {
+            ShowPage(AppPage.Main);
+            ShowPrograms();
+        });
+        ShowAllCommand = new RelayCommand(() =>
+        {
+            ShowPage(AppPage.Main);
+            SelectedNav = Nav[0];
+        });
+        // The check opens from rows, menus and Ctrl+D: its panel state decides the page.
+        Diagnostics.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName != nameof(DiagnosticsViewModel.IsOpen)) return;
+            if (Diagnostics.IsOpen) ShowPage(AppPage.Checks);
+            else if (_page == AppPage.Checks) ShowPage(AppPage.Main);
+        };
         ToggleRailCommand = new RelayCommand(() =>
         {
             _state.Settings.MenuExpanded = !_state.Settings.MenuExpanded;
@@ -40,11 +67,30 @@ internal sealed partial class MainViewModel
         OpenGuideCommand = new RelayCommand(() => Process.Start(new ProcessStartInfo(GuideUrl) { UseShellExecute = true }));
     }
 
+    public bool IsMainPage => _page == AppPage.Main;
+    public bool IsOverviewPage => _page == AppPage.Overview;
+    public bool IsChecksPage => _page == AppPage.Checks;
+    public bool IsBlocksPage => _page == AppPage.Blocks;
+    public bool IsSettingsPage => _page == AppPage.Settings;
+    public bool MenuPrograms => IsMainPage && IsProgramsSection;
+    public bool MenuAll => IsMainPage && IsAllSection;
+
+    public void ShowPage(AppPage page)
+    {
+        if (_page == page) return;
+        _page = page;
+        // Leaving keeps a running check going: it is there when the user comes back.
+        if (page != AppPage.Checks && Diagnostics.IsOpen) Diagnostics.IsOpen = false;
+        NotifySection();
+        if (page == AppPage.Overview) ApplyLink();
+    }
+
     /// <summary>"Все соединения" is the "Все" item of the programs list; any other item is "Программы".</summary>
     public bool IsAllSection => SelectedNav is null or { IsAll: true };
     public bool IsProgramsSection => !IsAllSection;
-    public string SectionTitle => IsAllSection ? "Все соединения" : "Программы";
-    public string SectionSubtitle => IsAllSection ? "Общий список приложений и служб Windows." : "Соединения и связь выбранной программы.";
+    public string SectionTitle => IsOverviewPage ? "Сеть на виду" : IsAllSection ? "Все соединения" : "Программы";
+    public string SectionSubtitle => IsOverviewPage ? "Какие программы используют интернет и где нет ответов."
+        : IsAllSection ? "Общий список приложений и служб Windows." : "Соединения и связь выбранной программы.";
 
     public bool MenuExpanded => _state.Settings.MenuExpanded;
     public double MenuWidth => MenuExpanded ? 194 : 64;
@@ -68,6 +114,8 @@ internal sealed partial class MainViewModel
     /// A search already typed stays visible: a filter that works must not be hidden.
     /// </summary>
     public bool ShowSearchBox => !IsLinkTab || HasSearch || IsAllSection;
+    public bool ShowHeadingFilters => IsMainPage && !ShowSearchBox;
+    public bool ShowListButton => IsMainPage && IsProgramsSection;
 
     private int _selectedCount;
 
@@ -109,6 +157,9 @@ internal sealed partial class MainViewModel
         OnPropertyChanged(nameof(IsProgramListVisible));
         OnPropertyChanged(nameof(ProgramListText));
         OnPropertyChanged(nameof(ShowSearchBox));
+        foreach (var n in new[] { nameof(IsMainPage), nameof(IsOverviewPage), nameof(IsChecksPage), nameof(IsBlocksPage), nameof(IsSettingsPage),
+                     nameof(MenuPrograms), nameof(MenuAll), nameof(ShowHeadingFilters), nameof(ShowListButton) })
+            OnPropertyChanged(n);
     }
 
     private void ShowPrograms()

@@ -183,6 +183,7 @@ internal sealed partial class MainViewModel : ObservableObject
             if (!Set(ref _searchText, value)) return;
             OnPropertyChanged(nameof(HasSearch));
             OnPropertyChanged(nameof(ShowSearchBox));
+            OnPropertyChanged(nameof(ShowHeadingFilters));
             _searchDelay.Stop();
             _searchDelay.Start();
         }
@@ -267,6 +268,7 @@ internal sealed partial class MainViewModel : ObservableObject
     {
         if (Diagnostics.IsOpen) Diagnostics.CloseCommand.Execute(null);
         else if (Export.IsOpen) Export.IsOpen = false;
+        else if (!IsMainPage) ShowPage(AppPage.Main);
         else ResetFilters();
     }
 
@@ -452,7 +454,7 @@ internal sealed partial class MainViewModel : ObservableObject
         if (_tab == tab) return;
         _tab = tab;
         if (tab is 0 or 1) _lastTableView = tab;
-        foreach (var n in new[] { nameof(IsDomainsTab), nameof(IsAddressesTab), nameof(IsDnsTab), nameof(IsTableTab), nameof(IsLinkTab), nameof(IsConnectionsTab), nameof(TableViewIndex), nameof(ShowSearchBox), nameof(SelectionBarVisible) }) OnPropertyChanged(n);
+        foreach (var n in new[] { nameof(IsDomainsTab), nameof(IsAddressesTab), nameof(IsDnsTab), nameof(IsTableTab), nameof(IsLinkTab), nameof(IsConnectionsTab), nameof(TableViewIndex), nameof(ShowSearchBox), nameof(ShowHeadingFilters), nameof(SelectionBarVisible) }) OnPropertyChanged(n);
         if (tab == 3) ApplyLink();
         SelectedItem = null;
         ApplyTable();
@@ -1145,11 +1147,7 @@ internal sealed partial class MainViewModel : ObservableObject
         else ShowToast(TextFormat.Plural(rules.Count, "блокировка", "блокировки", "блокировок"), false, "Снято:");
     }
 
-    private void OpenBlocks()
-    {
-        new Views.BlocksWindow(_state) { Owner = Application.Current.MainWindow }.ShowDialog();
-        OnPropertyChanged(nameof(BlocksText));
-    }
+    private void OpenBlocks() => ShowPage(AppPage.Blocks);
     public RelayCommand UndoCopyCommand { get; }
     public RelayCommand OpenExportCommand { get; }
     public RelayCommand DownloadAsnCommand { get; }
