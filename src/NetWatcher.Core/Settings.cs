@@ -26,6 +26,12 @@ public sealed class Settings
     /// <summary>Height of the details panel under the table, as the user dragged it.</summary>
     public double DetailsHeight { get; set; } = 240;
 
+    /// <summary>The menu on the left shows names, not only icons.</summary>
+    public bool MenuExpanded { get; set; }
+
+    /// <summary>The user hid the programs list to give the table more room.</summary>
+    public bool ProgramListHidden { get; set; }
+
     /// <summary>Look for a new version at start and once a day; installing always waits for the user.</summary>
     public bool CheckUpdates { get; set; } = true;
 

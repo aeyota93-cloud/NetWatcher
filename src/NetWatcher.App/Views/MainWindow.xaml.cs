@@ -34,6 +34,11 @@ internal partial class MainWindow : Window
         // Panel sizes the user dragged last time; clamped in case the screen got smaller.
         NavColumn.Width = new GridLength(Math.Clamp(state.Settings.NavWidth, NavColumn.MinWidth, NavColumn.MaxWidth));
         DetailsRow.Height = new GridLength(Math.Clamp(state.Settings.DetailsHeight, DetailsRow.MinHeight, 600));
+        ApplyProgramList();
+        _vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.IsProgramListVisible)) ApplyProgramList();
+        };
 
         Loaded += (_, _) =>
         {
@@ -55,9 +60,18 @@ internal partial class MainWindow : Window
         };
     }
 
+    /// <summary>The list gives its place to the table in "Все соединения" and when the user hides it.</summary>
+    private void ApplyProgramList()
+    {
+        var show = _vm.IsProgramListVisible;
+        ProgramPanel.Visibility = ProgramSplitter.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        NavColumn.MinWidth = show ? 200 : 0;
+        NavColumn.Width = new GridLength(show ? Math.Clamp(_state.Settings.NavWidth, 200, NavColumn.MaxWidth) : 0);
+    }
+
     private void OnPanelsResized(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
     {
-        _state.Settings.NavWidth = Math.Round(NavColumn.ActualWidth);
+        if (_vm.IsProgramListVisible) _state.Settings.NavWidth = Math.Round(NavColumn.ActualWidth);
         _state.Settings.DetailsHeight = Math.Round(DetailsRow.ActualHeight);
         _state.SaveSettings();
     }
@@ -69,8 +83,10 @@ internal partial class MainWindow : Window
 
         if (ctrl && e.Key == Key.F)
         {
-            SearchBox.Focus();
-            SearchBox.SelectAll();
+            // A program's "Связь" has no search box: its text filter does that job there.
+            var box = ServerFilterBox.IsVisible ? ServerFilterBox : SearchBox;
+            box.Focus();
+            box.SelectAll();
         }
         else if (e.Key == Key.Escape)
         {
@@ -132,6 +148,13 @@ internal partial class MainWindow : Window
     {
         if (e.OriginalSource is not DependencyObject source ||
             ItemsControl.ContainerFromElement(Grid, source) is not DataGridRow row) return;
+        if (e.ChangedButton == MouseButton.Left && FindParent<CheckBox>(source) != null)
+        {
+            // Without this the grid would treat the click as "select only this row".
+            row.IsSelected = !row.IsSelected;
+            e.Handled = true;
+            return;
+        }
         if (e.ChangedButton == MouseButton.Right)
         {
             if (!row.IsSelected) Grid.SelectedItem = row.Item;
@@ -164,12 +187,28 @@ internal partial class MainWindow : Window
 
     private void OnServerMenuClosing(object sender, ContextMenuEventArgs e) => _vm.HoldServerList = false;
 
-    private static TextBox? FindTextBox(DependencyObject source)
+    private static TextBox? FindTextBox(DependencyObject source) => FindParent<TextBox>(source);
+
+    private static T? FindParent<T>(DependencyObject source) where T : DependencyObject
     {
         for (DependencyObject? current = source; current != null; current = System.Windows.Media.VisualTreeHelper.GetParent(current))
-            if (current is TextBox text) return text;
+            if (current is T found) return found;
         return null;
     }
+
+    private void OnTableSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        _vm.SelectedCount = Grid.SelectedItems.Count;
+        AllRowsCheck.IsChecked = Grid.Items.Count > 0 && Grid.SelectedItems.Count == Grid.Items.Count;
+    }
+
+    private void OnCheckAllRows(object sender, RoutedEventArgs e)
+    {
+        if (AllRowsCheck.IsChecked == true) Grid.SelectAll();
+        else Grid.UnselectAll();
+    }
+
+    private void OnClearSelection(object sender, RoutedEventArgs e) => Grid.UnselectAll();
 
     // «⋯» moves the shared row menu under itself; a right-click must open it at the mouse again.
     private void OnTableMenuOpening(object sender, ContextMenuEventArgs e)

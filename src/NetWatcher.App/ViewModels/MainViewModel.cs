@@ -77,6 +77,7 @@ internal sealed partial class MainViewModel : ObservableObject
             c.Changed = () =>
             {
                 QuickFilterToColumns(c);
+                NotifyChips();
                 _ = RefreshAsync();
             };
 
@@ -135,6 +136,7 @@ internal sealed partial class MainViewModel : ObservableObject
         BlockCommand = new RelayCommand(p => OpenBlock(Rows(p) is { Count: > 0 } r ? r : SelectedItem?.Rows.ToList() ?? []));
         UnblockCommand = new RelayCommand(p => Unblock(Rows(p) is { Count: > 0 } r ? r : SelectedItem?.Rows.ToList() ?? []));
         OpenBlocksCommand = new RelayCommand(OpenBlocks);
+        InitShell();
         OpenHistoryCommand = new RelayCommand(() => new Views.HistoryWindow { Owner = Application.Current.MainWindow }.ShowDialog());
         _state.Blocks.Changed += () => Application.Current?.Dispatcher.BeginInvoke(() =>
         {
@@ -180,6 +182,7 @@ internal sealed partial class MainViewModel : ObservableObject
         {
             if (!Set(ref _searchText, value)) return;
             OnPropertyChanged(nameof(HasSearch));
+            OnPropertyChanged(nameof(ShowSearchBox));
             _searchDelay.Stop();
             _searchDelay.Start();
         }
@@ -287,6 +290,8 @@ internal sealed partial class MainViewModel : ObservableObject
         set
         {
             if (value == null || !Set(ref _selectedNav, value)) return;
+            if (!value.IsAll) _lastProgram = value;
+            NotifySection();
             SelectedItem = null;
             UpdateHeader();
             ApplyTable();
@@ -428,18 +433,26 @@ internal sealed partial class MainViewModel : ObservableObject
     }
 
     // 3 — "Связь", shown first and open by default.
-    private int _tab = 3;
+    private int _tab;
+    private int _lastTableView;
     public bool IsLinkTab { get => _tab == 3; set { if (value) SetTab(3); } }
     public bool IsDomainsTab { get => _tab == 0; set { if (value) SetTab(0); } }
     public bool IsAddressesTab { get => _tab == 1; set { if (value) SetTab(1); } }
     public bool IsDnsTab { get => _tab == 2; set { if (value) SetTab(2); } }
     public bool IsTableTab => _tab is 0 or 1;
 
+    /// <summary>The "Соединения" tab: the domain tree or the flat table, whichever was on screen last.</summary>
+    public bool IsConnectionsTab { get => IsTableTab; set { if (value) SetTab(_lastTableView); } }
+
+    /// <summary>0 — "По доменам", 1 — "Все адреса".</summary>
+    public int TableViewIndex { get => _tab == 1 ? 1 : 0; set => SetTab(value == 1 ? 1 : 0); }
+
     private void SetTab(int tab)
     {
         if (_tab == tab) return;
         _tab = tab;
-        foreach (var n in new[] { nameof(IsDomainsTab), nameof(IsAddressesTab), nameof(IsDnsTab), nameof(IsTableTab), nameof(IsLinkTab) }) OnPropertyChanged(n);
+        if (tab is 0 or 1) _lastTableView = tab;
+        foreach (var n in new[] { nameof(IsDomainsTab), nameof(IsAddressesTab), nameof(IsDnsTab), nameof(IsTableTab), nameof(IsLinkTab), nameof(IsConnectionsTab), nameof(TableViewIndex), nameof(ShowSearchBox), nameof(SelectionBarVisible) }) OnPropertyChanged(n);
         if (tab == 3) ApplyLink();
         SelectedItem = null;
         ApplyTable();

@@ -1,37 +1,50 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:sys="clr-namespace:System;assembly=mscorlib">
-    <!-- Light palette: Fluent 2 / Windows 11 neutrals with the Windows blue accent. -->
-    <SolidColorBrush x:Key="BgBrush" Color="#F3F3F3" />
-    <SolidColorBrush x:Key="LayerBrush" Color="#FBFBFB" />
+    <!-- Light palette: «Панель наблюдения», violet accent; the menu on the left is dark in both themes. -->
+    <SolidColorBrush x:Key="BgBrush" Color="#F6F6F8" />
+    <SolidColorBrush x:Key="LayerBrush" Color="#FFFFFF" />
     <SolidColorBrush x:Key="CardBrush" Color="#FFFFFF" />
-    <SolidColorBrush x:Key="StrokeBrush" Color="#E5E5E5" />
-    <SolidColorBrush x:Key="Stroke2Brush" Color="#D1D1D1" />
-    <SolidColorBrush x:Key="TextBrush" Color="#1B1B1B" />
-    <SolidColorBrush x:Key="Text2Brush" Color="#5F5F5F" />
+    <SolidColorBrush x:Key="StrokeBrush" Color="#E6E6ED" />
+    <SolidColorBrush x:Key="Stroke2Brush" Color="#D6D5E0" />
+    <SolidColorBrush x:Key="TextBrush" Color="#22232A" />
+    <SolidColorBrush x:Key="Text2Brush" Color="#5C5E6B" />
     <!-- #6E6E6E: 5:1 on white, 4.6:1 on the window background (WCAG AA asks 4.5:1 for small text). -->
-    <SolidColorBrush x:Key="Text3Brush" Color="#6E6E6E" />
-    <SolidColorBrush x:Key="AccentBrush" Color="#0F6CBD" />
-    <SolidColorBrush x:Key="AccentHoverBrush" Color="#115EA3" />
-    <SolidColorBrush x:Key="AccentSoftBrush" Color="#EBF3FC" />
+    <SolidColorBrush x:Key="Text3Brush" Color="#6D707D" />
+    <SolidColorBrush x:Key="AccentBrush" Color="#7644C2" />
+    <SolidColorBrush x:Key="AccentHoverBrush" Color="#6537AC" />
+    <SolidColorBrush x:Key="AccentSoftBrush" Color="#F1EAF9" />
     <SolidColorBrush x:Key="OnAccentBrush" Color="#FFFFFF" />
-    <SolidColorBrush x:Key="SelBrush" Color="#C9E2FA" />
-    <SolidColorBrush x:Key="HoverBrush" Color="#F0F0F0" />
-    <SolidColorBrush x:Key="OkBrush" Color="#107C10" />
-    <SolidColorBrush x:Key="OkSoftBrush" Color="#DFF6DD" />
-    <SolidColorBrush x:Key="WarnBrush" Color="#9D5D00" />
-    <SolidColorBrush x:Key="WarnSoftBrush" Color="#FFF4CE" />
-    <SolidColorBrush x:Key="WarnStrokeBrush" Color="#F2D58A" />
-    <SolidColorBrush x:Key="NewBrush" Color="#8764B8" />
-    <SolidColorBrush x:Key="NewSoftBrush" Color="#F1EBFA" />
+    <SolidColorBrush x:Key="SelBrush" Color="#E6DCF6" />
+    <SolidColorBrush x:Key="HoverBrush" Color="#F3F3F7" />
+    <SolidColorBrush x:Key="OkBrush" Color="#24765C" />
+    <SolidColorBrush x:Key="OkSoftBrush" Color="#E3F3EC" />
+    <SolidColorBrush x:Key="WarnBrush" Color="#9D6022" />
+    <SolidColorBrush x:Key="WarnSoftBrush" Color="#FFF7EB" />
+    <SolidColorBrush x:Key="WarnStrokeBrush" Color="#F0D9B5" />
+    <SolidColorBrush x:Key="NewBrush" Color="#7644C2" />
+    <SolidColorBrush x:Key="NewSoftBrush" Color="#F1EAF9" />
     <SolidColorBrush x:Key="MarkBrush" Color="#FFE58F" />
     <SolidColorBrush x:Key="MarkTextBrush" Color="#1B1B1B" />
-    <SolidColorBrush x:Key="ToastBrush" Color="#2B2B2B" />
+    <SolidColorBrush x:Key="ToastBrush" Color="#22232A" />
     <SolidColorBrush x:Key="ToastTextBrush" Color="#FFFFFF" />
-    <SolidColorBrush x:Key="ToastAccentBrush" Color="#9CCBF5" />
-    <SolidColorBrush x:Key="DangerBrush" Color="#C42B1C" />
-    <SolidColorBrush x:Key="DangerSoftBrush" Color="#FDE7E9" />
-    <SolidColorBrush x:Key="LossBrush" Color="#C27C0E" />
+    <SolidColorBrush x:Key="ToastAccentBrush" Color="#CDB6F2" />
+    <SolidColorBrush x:Key="DangerBrush" Color="#AD4449" />
+    <SolidColorBrush x:Key="DangerSoftBrush" Color="#FBEAEA" />
+    <SolidColorBrush x:Key="LossBrush" Color="#B9771A" />
+    <!-- Filled buttons: the accent is too light for white text in the dark theme. -->
+    <SolidColorBrush x:Key="ActionBrush" Color="#7644C2" />
+    <SolidColorBrush x:Key="ActionHoverBrush" Color="#6537AC" />
+    <SolidColorBrush x:Key="NavBrush" Color="#202023" />
+    <SolidColorBrush x:Key="NavLineBrush" Color="#39363F" />
+    <SolidColorBrush x:Key="NavTextBrush" Color="#C7C3CE" />
+    <SolidColorBrush x:Key="NavHoverBrush" Color="#2E2C33" />
+    <SolidColorBrush x:Key="NavSelBrush" Color="#3B304B" />
+    <SolidColorBrush x:Key="NavSelTextBrush" Color="#E7D8FF" />
+    <!-- Standard controls (check boxes, sliders) take the same accent. -->
+    <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#7644C2" />
+    <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="#6537AC" />
+    <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="#6537AC" />
     <!-- Marker: ThemeService finds our palette by this key (Fluent has its own Light/Dark files). -->
     <sys:String x:Key="NetWatcherPalette">Light</sys:String>
 </ResourceDictionary>

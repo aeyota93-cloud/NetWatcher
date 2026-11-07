@@ -224,6 +224,54 @@
         </Style.Triggers>
     </Style>
 
+    <!-- A block of the page: the programs list, the table, the details. -->
+    <Style x:Key="PagePanel" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource LayerBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource StrokeBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="12" />
+    </Style>
+    <!-- An item of the menu on the left. Tag = True marks the section on screen. -->
+    <Style x:Key="MenuItem" TargetType="Button">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource NavTextBrush}" />
+        <Setter Property="MinHeight" Value="40" />
+        <Setter Property="Margin" Value="0,0,0,4" />
+        <Setter Property="Cursor" Value="Hand" />
+        <!-- Shown only for keyboard users, not after a click or a closed dialog. -->
+        <Setter Property="FocusVisualStyle">
+            <Setter.Value>
+                <Style>
+                    <Setter Property="Control.Template">
+                        <Setter.Value>
+                            <ControlTemplate>
+                                <Rectangle RadiusX="7" RadiusY="7" Stroke="{DynamicResource NavSelTextBrush}" StrokeThickness="1" />
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </Setter.Value>
+        </Setter>
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="b" Background="{TemplateBinding Background}" CornerRadius="7">
+                        <ContentPresenter Margin="12,0" VerticalAlignment="Center" HorizontalAlignment="Left" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource NavHoverBrush}" />
+            </Trigger>
+            <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource Self}}" Value="True">
+                <Setter Property="Background" Value="{DynamicResource NavSelBrush}" />
+                <Setter Property="Foreground" Value="{DynamicResource NavSelTextBrush}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
     <Style x:Key="BaseWindow" TargetType="Window">
         <Setter Property="FontFamily" Value="Segoe UI Variable Text, Segoe UI" />
         <Setter Property="FontSize" Value="13" />
@@ -295,7 +343,7 @@
         <Setter Property="FontSize" Value="12" />
     </Style>
     <Style x:Key="BtnPrimary" TargetType="ButtonBase">
-        <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        <Setter Property="Background" Value="{DynamicResource ActionBrush}" />
         <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
         <Setter Property="Height" Value="32" />
         <Setter Property="Padding" Value="14,0" />
@@ -310,7 +358,7 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="b" Property="Background" Value="{DynamicResource AccentHoverBrush}" />
+                            <Setter TargetName="b" Property="Background" Value="{DynamicResource ActionHoverBrush}" />
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter TargetName="b" Property="Opacity" Value="0.45" />
@@ -407,8 +455,8 @@
                             <Setter TargetName="b" Property="Background" Value="{DynamicResource HoverBrush}" />
                         </Trigger>
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="b" Property="Background" Value="{DynamicResource AccentBrush}" />
-                            <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
+                            <Setter TargetName="b" Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
                             <Setter Property="FontWeight" Value="SemiBold" />
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">

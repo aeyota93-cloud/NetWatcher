@@ -195,6 +195,43 @@ public sealed class TableItem : ObservableObject
     public string Ip { get => _ip; private set => Set(ref _ip, value); }
     public string Program { get => _program; private set => Set(ref _program, value); }
     public IReadOnlyList<string> Ports { get => _ports; private set => Set(ref _ports, value); }
+
+    private IReadOnlyList<string> _protocols = [];
+    private string _portsText = "";
+    private int _firstPort;
+    private string _linkText = "";
+    private string _addressTip = "";
+    private string _programKey = "";
+
+    public IReadOnlyList<string> Protocols { get => _protocols; private set => Set(ref _protocols, value); }
+    public string ProtocolText => string.Join(' ', Protocols);
+    public string PortsText { get => _portsText; private set => Set(ref _portsText, value); }
+
+    /// <summary>The port column sorts by number: 80 goes before 443.</summary>
+    public int FirstPort { get => _firstPort; private set => Set(ref _firstPort, value); }
+
+    /// <summary>The "Связь" column in words.</summary>
+    public string LinkText { get => _linkText; private set => Set(ref _linkText, value); }
+
+    /// <summary>The owner is not a column any more: it is in this tooltip and in the details.</summary>
+    public string AddressTip { get => _addressTip; private set => Set(ref _addressTip, value); }
+
+    /// <summary>The program of this line; "" when several programs share it.</summary>
+    public string ProgramKey { get => _programKey; private set => Set(ref _programKey, value); }
+
+    public static string LinkWords(HealthLevel level, string reason, bool udp) => level switch
+    {
+        HealthLevel.Fail or HealthLevel.Warn => reason,
+        HealthLevel.Ok => "сбоев не видно",
+        _ => udp ? "UDP: подтверждений нет" : "нет данных",
+    };
+
+    /// <summary>Up to three ports; the rest are counted in the ellipsis.</summary>
+    public static string PortWords(IEnumerable<int> ports)
+    {
+        var list = ports.Distinct().OrderBy(p => p).ToList();
+        return string.Join(", ", list.Take(3)) + (list.Count > 3 ? ", …" : "");
+    }
     public string Owner { get => _owner; private set => Set(ref _owner, value); }
     public string Country { get => _country; private set => Set(ref _country, value); }
     public bool HasCountry => _country != "";
@@ -266,6 +303,12 @@ public sealed class TableItem : ObservableObject
         var programs = rows.Select(program).Distinct().ToList();
         Program = programs.Count == 1 ? programs[0] : TextFormat.Plural(programs.Count, "программа", "программы", "программ");
         Ports = rows.Select(r => $"{r.RemotePort} {r.Proto}").Distinct().Take(3).ToList();
+        Protocols = rows.Select(r => r.Proto).Distinct().OrderByDescending(x => x).ToList();
+        OnPropertyChanged(nameof(ProtocolText));
+        PortsText = PortWords(rows.Select(r => r.RemotePort));
+        FirstPort = rows.Min(r => r.RemotePort);
+        var keys = rows.Select(r => r.GroupKey).Distinct().ToList();
+        ProgramKey = keys.Count == 1 ? keys[0] : "";
         Owner = first.Asn?.OwnerText ?? "";
         if (Country != first.CountryText)
         {
@@ -291,8 +334,11 @@ public sealed class TableItem : ObservableObject
         var health = Core.Health.Worst(rows.Select(r => r.Health));
         Health = health.Level;
         HealthReason = health.Reason;
+        LinkText = LinkWords(health.Level, health.Reason, first.Proto == "UDP");
         OnPropertyChanged(nameof(Chevron));
         OnPropertyChanged(nameof(OwnerRaw));
+        var where = new[] { DomainText, Owner, Countries.Tip(first.ServerCountry, first.RegisteredCountry) }.Where(x => x != "");
+        AddressTip = string.Join("\n", where);
     }
 
     /// <summary>Tab-separated lines for pasting into a spreadsheet.</summary>
